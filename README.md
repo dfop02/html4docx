@@ -7,6 +7,15 @@ Convert html to docx, this project is a fork from descontinued [pqzx/html2docx](
 
 ### Usage
 
+The basic is
+
+```python
+from html4docx import HtmlToDocx
+
+parser = HtmlToDocx()
+parser.add_html_to_document(html_string, filename_docx)
+```
+
 Take a look on [pqzx/html2docx](https://github.com/pqzx/html2docx) project to see examples of usage.
 
 ### Why
