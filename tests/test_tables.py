@@ -1,5 +1,6 @@
 import os
-from .context import HtmlToDocx, test_dir
+from html4docx import HtmlToDocx
+from .context import test_dir
 
 # Manual test (requires inspection of result) for converting html with nested tables
 

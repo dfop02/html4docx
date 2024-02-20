@@ -44,6 +44,9 @@ def is_url(url):
     parts = urlparse(url)
     return all([parts.scheme, parts.netloc, parts.path])
 
+def px_to_inches(px):
+    return px * 0.0104166667
+
 def rgb_to_hex(rgb):
     return '#' + ''.join(f'{i:02X}' for i in rgb)
 

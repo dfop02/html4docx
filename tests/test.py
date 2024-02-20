@@ -2,7 +2,8 @@ import os
 from pathlib import Path
 import unittest
 from docx import Document
-from .context import HtmlToDocx, test_dir
+from html4docx import HtmlToDocx
+from .context import test_dir
 
 class OutputTest(unittest.TestCase):
     @staticmethod
@@ -74,6 +75,9 @@ class OutputTest(unittest.TestCase):
         )
         self.parser.options['images'] = False
         self.parser.add_html_to_document(self.text1, self.document)
+
+        document = self.parser.parse_html_string(self.text1)
+        assert any(['Graphic' in paragraph._p.xml for paragraph in document.paragraphs]) is False
 
     def test_add_html_with_tables(self):
         self.document.add_heading(
@@ -204,18 +208,61 @@ and blank lines.
         self.parser.add_html_to_document(html, self.document)
 
     def test_handling_hr(self):
+        hr_html_example = '<p>paragraph</p><hr><p>paragraph</p>'
+
         self.document.add_heading(
             'Test: Handling of hr',
             level=1
         )
-        self.parser.add_html_to_document("<p>paragraph</p><hr><p>paragraph</p>", self.document)
+        # Add on document for human validation
+        self.parser.add_html_to_document(hr_html_example, self.document)
+
+        document = self.parser.parse_html_string(hr_html_example)
+        assert '<w:pBdr>' in document._body._body.xml
+
+    def test_external_hyperlink(self):
+        hyperlink_html_example = "<a href=\"https://www.google.com\">Anchor Link</a>"
+
+        self.document.add_heading(
+            'Test: Handling external hyperlink',
+            level=1
+        )
+        # Add on document for human validation
+        self.parser.add_html_to_document(hyperlink_html_example, self.document)
+
+        document = self.parser.parse_html_string(hyperlink_html_example)
+        assert '<w:hyperlink' in document._body._body.xml
 
     def test_image_no_src(self):
         self.document.add_heading(
             'Test: Handling img without src',
             level=1
         )
-        self.parser.add_html_to_document("<img />", self.document)
+        # Add on document for human validation
+        self.parser.add_html_to_document('<img />', self.document)
+
+        document = self.parser.parse_html_string('<img />')
+        assert '<image: no_src>' in document.paragraphs[0].text
+
+    def test_font_size(self):
+        font_size_html_example = (
+            "<p><span style=\"font-size:8px\">paragraph 8px</span></p>"
+            "<p><span style=\"font-size: 1cm\">paragraph 1cm</span></p>"
+            "<p><span style=\"font-size: 12em !important\">paragraph 12em not supported</span></p>"
+            "<p><span style=\"font-size:14pt!important\">paragraph 14pt</span></p>"
+            "<p><span style=\"font-size: 16pt!IMPORTANT\">paragraph 16pt</span></p>"
+        )
+
+        self.document.add_heading(
+            'Test: Font-Size',
+            level=1
+        )
+        # Add on document for human validation
+        self.parser.add_html_to_document(font_size_html_example, self.document)
+
+        document = self.parser.parse_html_string(font_size_html_example)
+        font_sizes = [str(p.runs[1].font.size) for p in document.paragraphs]
+        assert ['76200', '355600', 'None', '177800', '203200'] == font_sizes
 
     def test_color_by_name(self):
         color_html_example = (
@@ -224,6 +271,7 @@ and blank lines.
             "<p><span style=\"color: blue !important\">paragraph blue</span></p>"
             "<p><span style=\"color: green!important\">paragraph green</span></p>"
             "<p><span style=\"color: darkgray!IMPORTANT\">paragraph darkgray</span></p>"
+            "<p><span style=\"color: invalidcolor\">paragraph has default black because of invalid color name</span></p>"
         )
 
         self.document.add_heading(
@@ -241,6 +289,7 @@ and blank lines.
         assert '0000FF' in colors # Blue
         assert '008000' in colors # Green
         assert 'A9A9A9' in colors # Darkgray
+        assert '000000' in colors # Black
 
     def test_unbalanced_table(self):
         # A table with more td elements in latter rows than in the first

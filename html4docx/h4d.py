@@ -21,19 +21,17 @@ import urllib
 from io import BytesIO
 from html.parser import HTMLParser
 
+from bs4 import BeautifulSoup
+
 import docx
-import docx.table
-
-from html4docx import utils
-from html4docx.colors import Color
-
 from docx import Document
 from docx.shared import RGBColor, Pt, Cm, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
-from bs4 import BeautifulSoup
+from html4docx import utils
+from html4docx.colors import Color
 
 # values in inches
 INDENT = 0.25
@@ -65,10 +63,7 @@ class HtmlToDocx(HTMLParser):
             'span': [],
             'list': [],
         }
-        if document:
-            self.doc = document
-        else:
-            self.doc = Document()
+        self.doc = document if document else Document()
         self.bs = self.options['fix-html'] # whether or not to clean with BeautifulSoup
         self.document = self.doc
         self.include_tables = True # TODO add this option back in?
@@ -91,7 +86,8 @@ class HtmlToDocx(HTMLParser):
 
     def add_styles_to_paragraph(self, style):
         if 'text-align' in style:
-            align = style['text-align']
+            align = re.sub('!important', '', style['text-align'], flags=re.IGNORECASE)
+
             if 'center' in align:
                 self.paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
             elif 'right' in align:
@@ -102,10 +98,10 @@ class HtmlToDocx(HTMLParser):
         if 'margin-left' in style and 'margin-right' in style:
             margin_left = style['margin-left']
             margin_right = style['margin-right']
-            if "auto" in margin_left and "auto" in margin_right:
+            if 'auto' in margin_left and 'auto' in margin_right:
                 self.paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
         elif 'margin-left' in style:
-            margin = style['margin-left']
+            margin = re.sub('!important', '', style['margin-left'], flags=re.IGNORECASE)
             units = re.sub(r'[0-9]+', '', margin)
             margin = int(float(re.sub(r'[a-zA-Z\!]+', '', margin)))
 
@@ -113,14 +109,17 @@ class HtmlToDocx(HTMLParser):
                 self.paragraph.paragraph_format.left_indent = Inches(min(margin // 10 * INDENT, MAX_INDENT))
             elif units == 'cm':
                 self.paragraph.paragraph_format.left_indent = Cm(min(margin // 10 * INDENT, MAX_INDENT) * 2.54)
+            elif units == 'pt':
+                self.paragraph.paragraph_format.left_indent = Pt(min(margin // 10 * INDENT, MAX_INDENT) * 72)
             elif units == '%':
                 self.paragraph.paragraph_format.left_indent = MAX_INDENT * (units / 100)
-            # TODO handle more units
+            else:
+                # When unit is not supported
+                self.paragraph.paragraph_format.left_indent = None
 
     def add_styles_to_table(self, style):
         if 'text-align' in style:
-            align = style['text-align']
-            align = re.sub('!important', '', align, flags=re.IGNORECASE)
+            align = re.sub('!important', '', style['text-align'], flags=re.IGNORECASE)
 
             if 'center' in align:
                 self.table.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -135,7 +134,7 @@ class HtmlToDocx(HTMLParser):
             if 'auto' in margin_left and 'auto' in margin_right:
                 self.table.alignment = WD_ALIGN_PARAGRAPH.CENTER
         elif 'margin-left' in style:
-            margin = style['margin-left']
+            margin = re.sub('!important', '', style['margin-left'], flags=re.IGNORECASE)
             units = re.sub(r'[0-9]+', '', margin)
             margin = int(float(re.sub(r'[a-zA-Z\!]+', '', margin)))
 
@@ -143,18 +142,22 @@ class HtmlToDocx(HTMLParser):
                 self.table.left_indent = Inches(min(margin // 10 * INDENT, MAX_INDENT))
             elif units == 'cm':
                 self.table.left_indent = Cm(min(margin // 10 * INDENT, MAX_INDENT) * 2.54)
+            elif units == 'pt':
+                self.table.left_indent = Pt(min(margin // 10 * INDENT, MAX_INDENT) * 72)
             elif units == '%':
                 self.table.left_indent = MAX_INDENT * (units / 100)
-            # TODO handle more units
+            else:
+                # When unit is not supported
+                self.table.left_indent = None
 
     def add_styles_to_run(self, style):
         if 'font-size' in style:
-            font_size = style['font-size']
+            font_size = re.sub('!important', '', style['font-size'], flags=re.IGNORECASE)
             units = re.sub(r'[0-9]+', '', font_size)
             font_size = int(float(re.sub(r'[a-zA-Z\!]+', '', font_size)))
 
             if units == 'px':
-                font_size_unit = Inches(font_size)
+                font_size_unit = Inches(utils.px_to_inches(font_size))
             elif units == 'cm':
                 font_size_unit = Cm(font_size)
             elif units == 'pt':
@@ -168,8 +171,7 @@ class HtmlToDocx(HTMLParser):
                     run.font.size = font_size_unit
 
         if 'color' in style:
-            font_color = style['color'].lower()
-            font_color = re.sub('!important', '', font_color, flags=re.IGNORECASE)
+            font_color = re.sub('!important', '', style['color'].lower(), flags=re.IGNORECASE)
 
             if 'rgb' in font_color:
                 color = re.sub(r'[a-z()]+', '', font_color)
@@ -187,7 +189,7 @@ class HtmlToDocx(HTMLParser):
             self.run.font.color.rgb = RGBColor(*colors)
 
         if 'background-color' in style:
-            background_color = style['background-color'].lower()
+            background_color = re.sub('!important', '', style['background-color'].lower(), flags=re.IGNORECASE)
 
             if 'rgb' in background_color:
                 color = re.sub(r'[a-z()]+', '', background_color)
@@ -361,7 +363,7 @@ class HtmlToDocx(HTMLParser):
 
     def handle_div(self, current_attrs):
         # handle page break
-        if 'style' in current_attrs and "page-break-after: always" in current_attrs['style']:
+        if 'style' in current_attrs and 'page-break-after: always' in current_attrs['style']:
             self.doc.add_page_break()
 
     def handle_link(self, href, text):
@@ -435,7 +437,7 @@ class HtmlToDocx(HTMLParser):
         elif tag == 'li':
             self.handle_li()
 
-        elif tag == "hr":
+        elif tag == 'hr':
             # This implementation was taken from:
             # https://github.com/python-openxml/python-docx/issues/105#issuecomment-62806373
             self.paragraph = self.doc.add_paragraph()
@@ -473,7 +475,7 @@ class HtmlToDocx(HTMLParser):
             self.handle_table(current_attrs)
             return
 
-        elif tag == "div":
+        elif tag == 'div':
             self.handle_div(current_attrs)
 
         # set new run reference point in case of leading line breaks
