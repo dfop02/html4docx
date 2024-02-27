@@ -153,6 +153,9 @@ class HtmlToDocx(HTMLParser):
     def add_styles_to_run(self, style):
         if 'font-size' in style:
             font_size = re.sub('!important', '', style['font-size'], flags=re.IGNORECASE)
+            # Adapt font_size when text, ex.: small, medium, etc.
+            font_size = utils.adapt_font_size(font_size)
+
             units = re.sub(r'[0-9]+', '', font_size)
             font_size = int(float(re.sub(r'[a-zA-Z\!]+', '', font_size)))
 
@@ -262,8 +265,8 @@ class HtmlToDocx(HTMLParser):
         src = current_attrs['src']
 
         # added image dimension, interpreting values as pixel only
-        height = Pt(int(current_attrs['height'][:-2])) if 'height' in current_attrs else None
-        width = Pt(int(current_attrs['width'][:-2])) if 'width' in current_attrs else None
+        height = Pt(int(re.sub(r'[^0-9]+$', '', current_attrs['height']))) if 'height' in current_attrs else None
+        width = Pt(int(re.sub(r'[^0-9]+$', '', current_attrs['width']))) if 'width' in current_attrs else None
 
         # fetch image
         src_is_url = utils.is_url(src)

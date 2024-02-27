@@ -23,6 +23,16 @@ font_names = {
     'pre': 'Courier',
 }
 
+font_sizes_named = {
+    'xx-small': '9px',
+    'x-small': '10px',
+    'small': '13px',
+    'medium': '16px',
+    'large': '18px',
+    'x-large': '24px',
+    'xx-large': '32px'
+}
+
 styles = {
     'LIST_BULLET': 'List Bullet',
     'LIST_NUMBER': 'List Number',
@@ -49,6 +59,12 @@ def px_to_inches(px):
 
 def rgb_to_hex(rgb):
     return '#' + ''.join(f'{i:02X}' for i in rgb)
+
+def adapt_font_size(size):
+    if (size in font_sizes_named.keys()):
+        return font_sizes_named[size]
+
+    return size
 
 def fetch_image(url):
     """
