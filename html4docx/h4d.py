@@ -21,7 +21,7 @@ import urllib
 from io import BytesIO
 from html.parser import HTMLParser
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
 
 import docx
 from docx import Document
@@ -57,6 +57,17 @@ class HtmlToDocx(HTMLParser):
             'table > tfoot > tr'
         ]
         self.table_style = DEFAULT_TABLE_STYLE
+
+    def set_table_style(self, new_table_style: str) -> None:
+        if " " not in new_table_style:
+            try:
+                # Fixed 'style lookup by style_id is deprecated.'
+                # https://stackoverflow.com/a/29567907/17274446
+                self.table_style = ' '.join(re.findall(r'[A-Z][^A-Z]*', new_table_style))
+                return
+            except KeyError as e:
+                raise ValueError(f"Unable to apply style {self.table_style}.") from e
+        self.table_style = new_table_style
 
     def set_initial_attrs(self, document=None):
         self.tags = {
@@ -330,12 +341,7 @@ class HtmlToDocx(HTMLParser):
         self.table = self.doc.add_table(rows, cols)
 
         if self.table_style:
-            try:
-                # Fixed 'style lookup by style_id is deprecated.'
-                # https://stackoverflow.com/a/29567907/17274446
-                self.table_style = ' '.join(re.findall(r'[A-Z][^A-Z]*', self.table_style))
-            except KeyError as e:
-                raise ValueError(f"Unable to apply style {self.table_style}.") from e
+            self.table.style = self.table_style
 
         rows = self.get_table_rows(table_soup)
         cell_row = 0
