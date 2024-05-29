@@ -40,5 +40,9 @@ setup(
     install_requires = [
         'python-docx>=1.1.0',
         'beautifulsoup4>=4.12.2'
+    ],
+    tests_require = [
+        'pytest>=8.1.1',
+        'pytest-cov>=4.1.0'
     ]
 )

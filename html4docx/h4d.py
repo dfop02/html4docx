@@ -21,7 +21,7 @@ import urllib
 from io import BytesIO
 from html.parser import HTMLParser
 
-from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
+from bs4 import BeautifulSoup
 
 import docx
 from docx import Document
@@ -59,14 +59,25 @@ class HtmlToDocx(HTMLParser):
         self.table_style = DEFAULT_TABLE_STYLE
 
     def set_table_style(self, new_table_style: str) -> None:
+        """Set table style for all tables in the final DOCX file. The full list of style options can be found at
+        https://python-docx.readthedocs.io/en/latest/user/styles-understanding.html#table-styles-in-default-template
+
+        Args:
+            new_table_style (str): DOCX-supported table style string, i.e. "Colorful Grid Accent 2".
+
+        Raises:
+            ValueError: Thrown if input string does not contain spaces but fails the regex for splitting by capitals.
+        """
+        # If the input table style string does not contain spaces, i.e. "TableGrid", split with spaces by capitals.
         if " " not in new_table_style:
             try:
                 # Fixed 'style lookup by style_id is deprecated.'
                 # https://stackoverflow.com/a/29567907/17274446
                 self.table_style = ' '.join(re.findall(r'[A-Z][^A-Z]*', new_table_style))
                 return
-            except KeyError as e:
-                raise ValueError(f"Unable to apply style {self.table_style}.") from e
+            except KeyError as key_error:
+                raise ValueError(f"Unable to apply style {self.table_style}.") from key_error
+        # Otherwise, save without reformatting input.
         self.table_style = new_table_style
 
     def set_initial_attrs(self, document=None):
