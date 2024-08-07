@@ -90,6 +90,9 @@ My goal to fork and fix/update this package was to complete my current task at w
 - Support for HTML Pagination | [Evilran](https://github.com/Evilran) from [PR](https://github.com/pqzx/html2docx/pull/39)
 - Support Table style | [Evilran](https://github.com/Evilran) from [PR](https://github.com/pqzx/html2docx/pull/39)
 - Support alternative encoding | [HebaElwazzan](https://github.com/HebaElwazzan) from [PR](https://github.com/pqzx/html2docx/pull/59)
+- Support colors by name | [Dfop02](https://github.com/dfop02)
+- Support font_size when text, ex.: small, medium, etc. | [Dfop02](https://github.com/dfop02)
+- Support to internal links (Anchor) | [Dfop02](https://github.com/dfop02)
 - Refactory Tests to be more consistent and less 'human validation' | [Dfop02](https://github.com/dfop02)
 
 ## License

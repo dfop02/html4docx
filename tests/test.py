@@ -221,7 +221,7 @@ and blank lines.
         assert '<w:pBdr>' in document._body._body.xml
 
     def test_external_hyperlink(self):
-        hyperlink_html_example = "<a href=\"https://www.google.com\">Anchor Link</a>"
+        hyperlink_html_example = "<a href=\"https://www.google.com\">Google External Link</a>"
 
         self.document.add_heading(
             'Test: Handling external hyperlink',
@@ -231,7 +231,34 @@ and blank lines.
         self.parser.add_html_to_document(hyperlink_html_example, self.document)
 
         document = self.parser.parse_html_string(hyperlink_html_example)
+        # Extract external hyperlinks
+        external_hyperlinks = []
+
+        for rel in document.part.rels.values():
+            if "hyperlink" in rel.reltype:
+                external_hyperlinks.append(rel.target_ref)
+
+        assert 'https://www.google.com' in external_hyperlinks
         assert '<w:hyperlink' in document._body._body.xml
+
+    def test_internal_hyperlink(self):
+        hyperlink_html_example = (
+            "<p><h1 id=\"intro\">Introduction Header</h1></p>"
+            "<p>Click here: <a href=\"#intro\" title=\"Link to intro\">Link to intro</a></p>"
+        )
+
+        self.document.add_heading(
+            'Test: Handling internal hyperlink',
+            level=1
+        )
+        # Add on document for human validation
+        self.parser.add_html_to_document(hyperlink_html_example, self.document)
+
+        document = self.parser.parse_html_string(hyperlink_html_example)
+        document_body = document._body._body.xml
+        assert '<w:bookmarkStart w:id="0" w:name="intro"/>' in document_body
+        assert '<w:bookmarkEnd w:id="0"/>' in document_body
+        assert '<w:hyperlink w:anchor="intro" w:tooltip="Link to intro">' in document_body
 
     def test_image_no_src(self):
         self.document.add_heading(
