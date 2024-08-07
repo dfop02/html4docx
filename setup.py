@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 here   = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.md')).read()
-VERSION = '1.0.3'
+VERSION = '1.0.4'
 
 setup(
     name                 = 'html-for-docx',
@@ -14,20 +14,22 @@ setup(
     packages             = find_packages(),
     python_requires      = '>=3.7',
     author               = 'Diogo Fernandes',
-    author_email         = 'dfop02@hotmail.com',
+    author_email         = 'diogofernandesop@gmail.com',
     platforms            = ['any'],
     include_package_data = True,
-    keywords             = ['html', 'docx', 'convert'],
+    keywords             = ['html', 'docx', 'office', 'word', 'convert', 'transform'],
     zip_safe             = False,
     url                  = 'https://github.com/dfop02/html4docx',
     project_urls = {
+        "Changelog": "https://github.com/dfop02/html4docx/blob/master/HISTORY.rst",
         "Bug Tracker": "https://github.com/dfop02/html4docx/issues",
         "Repository": "https://github.com/dfop02/html4docx"
     },
-    download_url         = f'https://github.com/dfop02/html4docx/archive/v{VERSION}.tar.gz',
+    download_url         = f'https://github.com/dfop02/html4docx/archive/{VERSION}.tar.gz',
     classifiers          = [
         'Intended Audience :: Developers',
         'Topic :: Software Development :: Build Tools',
+        'Topic :: Software Development :: Libraries',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.7',

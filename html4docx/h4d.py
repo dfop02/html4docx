@@ -64,8 +64,8 @@ class HtmlToDocx(HTMLParser):
             'list': [],
         }
         self.doc = document if document else Document()
-        self.bs = self.options['fix-html'] # whether or not to clean with BeautifulSoup
         self.document = self.doc
+        self.bs = self.options['fix-html'] # whether or not to clean with BeautifulSoup
         self.include_tables = True # TODO add this option back in?
         self.include_images = self.options['images']
         self.include_styles = self.options['styles']
@@ -73,20 +73,50 @@ class HtmlToDocx(HTMLParser):
         self.skip = False
         self.skip_tag = None
         self.instances_to_skip = 0
+        self.bookmark_id = 0
 
     def copy_settings_from(self, other):
         """Copy settings from another instance of HtmlToDocx"""
         self.table_style = other.table_style
 
     def get_cell_html(self, soup):
-        # Returns string of td element with opening and closing <td> tags removed
-        # Cannot use find_all as it only finds element tags and does not find text which
-        # is not inside an element
+        """
+        Returns string of td element with opening and closing <td> tags removed
+        Cannot use find_all as it only finds element tags and does not find text which
+        is not inside an element
+        """
         return ' '.join([str(i) for i in soup.contents])
+
+    def unit_converter(self, unit: str, value: int):
+        result = None
+        if unit == 'px':
+            result = Inches(min(value // 10 * INDENT, MAX_INDENT))
+        elif unit == 'cm':
+            result = Cm(min(value // 10 * INDENT, MAX_INDENT) * 2.54)
+        elif unit == 'pt':
+            result = Pt(min(value // 10 * INDENT, MAX_INDENT) * 72)
+        elif unit == '%':
+            result = int(MAX_INDENT * (value / 100))
+
+        # When unit is not supported returns None
+        return result
+
+    def add_bookmark(self, bookmark_name):
+        """Adds a word bookmark to an existing paragraph"""
+        bookmark_start = OxmlElement('w:bookmarkStart')
+        bookmark_start.set(qn('w:id'), str(self.bookmark_id))
+        bookmark_start.set(qn('w:name'), bookmark_name)
+        self.paragraph._element.insert(0, bookmark_start)
+
+        bookmark_end = OxmlElement('w:bookmarkEnd')
+        bookmark_end.set(qn('w:id'), str(self.bookmark_id))
+        self.paragraph._element.append(bookmark_end)
+
+        self.bookmark_id += 1
 
     def add_styles_to_paragraph(self, style):
         if 'text-align' in style:
-            align = re.sub('!important', '', style['text-align'], flags=re.IGNORECASE)
+            align = utils.remove_important_from_style(style['text-align'])
 
             if 'center' in align:
                 self.paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -101,25 +131,15 @@ class HtmlToDocx(HTMLParser):
             if 'auto' in margin_left and 'auto' in margin_right:
                 self.paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
         elif 'margin-left' in style:
-            margin = re.sub('!important', '', style['margin-left'], flags=re.IGNORECASE)
+            margin = utils.remove_important_from_style(style['margin-left'])
             units = re.sub(r'[0-9]+', '', margin)
-            margin = int(float(re.sub(r'[a-zA-Z\!]+', '', margin)))
+            margin = int(float(re.sub(r'[a-zA-Z\!\%]+', '', margin)))
 
-            if units == 'px':
-                self.paragraph.paragraph_format.left_indent = Inches(min(margin // 10 * INDENT, MAX_INDENT))
-            elif units == 'cm':
-                self.paragraph.paragraph_format.left_indent = Cm(min(margin // 10 * INDENT, MAX_INDENT) * 2.54)
-            elif units == 'pt':
-                self.paragraph.paragraph_format.left_indent = Pt(min(margin // 10 * INDENT, MAX_INDENT) * 72)
-            elif units == '%':
-                self.paragraph.paragraph_format.left_indent = MAX_INDENT * (units / 100)
-            else:
-                # When unit is not supported
-                self.paragraph.paragraph_format.left_indent = None
+            self.paragraph.paragraph_format.left_indent = self.unit_converter(units, margin)
 
     def add_styles_to_table(self, style):
         if 'text-align' in style:
-            align = re.sub('!important', '', style['text-align'], flags=re.IGNORECASE)
+            align = utils.remove_important_from_style(style['text-align'])
 
             if 'center' in align:
                 self.table.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -134,30 +154,20 @@ class HtmlToDocx(HTMLParser):
             if 'auto' in margin_left and 'auto' in margin_right:
                 self.table.alignment = WD_ALIGN_PARAGRAPH.CENTER
         elif 'margin-left' in style:
-            margin = re.sub('!important', '', style['margin-left'], flags=re.IGNORECASE)
+            margin = utils.remove_important_from_style(style['margin-left'])
             units = re.sub(r'[0-9]+', '', margin)
-            margin = int(float(re.sub(r'[a-zA-Z\!]+', '', margin)))
+            margin = int(float(re.sub(r'[a-zA-Z\!\%]+', '', margin)))
 
-            if units == 'px':
-                self.table.left_indent = Inches(min(margin // 10 * INDENT, MAX_INDENT))
-            elif units == 'cm':
-                self.table.left_indent = Cm(min(margin // 10 * INDENT, MAX_INDENT) * 2.54)
-            elif units == 'pt':
-                self.table.left_indent = Pt(min(margin // 10 * INDENT, MAX_INDENT) * 72)
-            elif units == '%':
-                self.table.left_indent = MAX_INDENT * (units / 100)
-            else:
-                # When unit is not supported
-                self.table.left_indent = None
+            self.table.left_indent = self.unit_converter(units, margin)
 
     def add_styles_to_run(self, style):
         if 'font-size' in style:
-            font_size = re.sub('!important', '', style['font-size'], flags=re.IGNORECASE)
+            font_size = utils.remove_important_from_style(style['font-size'])
             # Adapt font_size when text, ex.: small, medium, etc.
             font_size = utils.adapt_font_size(font_size)
 
             units = re.sub(r'[0-9]+', '', font_size)
-            font_size = int(float(re.sub(r'[a-zA-Z\!]+', '', font_size)))
+            font_size = int(float(re.sub(r'[a-zA-Z\!\%]+', '', font_size)))
 
             if units == 'px':
                 font_size_unit = Inches(utils.px_to_inches(font_size))
@@ -174,7 +184,7 @@ class HtmlToDocx(HTMLParser):
                     run.font.size = font_size_unit
 
         if 'color' in style:
-            font_color = re.sub('!important', '', style['color'].lower(), flags=re.IGNORECASE)
+            font_color = utils.remove_important_from_style(style['color'].lower())
 
             if 'rgb' in font_color:
                 color = re.sub(r'[a-z()]+', '', font_color)
@@ -192,7 +202,7 @@ class HtmlToDocx(HTMLParser):
             self.run.font.color.rgb = RGBColor(*colors)
 
         if 'background-color' in style:
-            background_color = re.sub('!important', '', style['background-color'].lower(), flags=re.IGNORECASE)
+            background_color = utils.remove_important_from_style(style['background-color'].lower())
 
             if 'rgb' in background_color:
                 color = re.sub(r'[a-z()]+', '', background_color)
@@ -369,31 +379,48 @@ class HtmlToDocx(HTMLParser):
         if 'style' in current_attrs and 'page-break-after: always' in current_attrs['style']:
             self.doc.add_page_break()
 
-    def handle_link(self, href, text):
-        # Link requires a relationship
-        # is_external = href.startswith('http')
-        rel_id = self.paragraph.part.relate_to(
-            href,
-            docx.opc.constants.RELATIONSHIP_TYPE.HYPERLINK,
-            is_external=True # TO-DO support anchor links for this library yet
-        )
+    def handle_link(self, href, text, tooltip=None):
+        """
+        A function that places a hyperlink within a paragraph object.
 
-        # Create the w:hyperlink tag and add needed values
-        hyperlink = docx.oxml.shared.OxmlElement('w:hyperlink')
-        hyperlink.set(docx.oxml.shared.qn('r:id'), rel_id)
+        Args:
+            href: A string containing the required url.
+            text: The text displayed for the url.
+            tooltip: The text displayed when holder link.
+        """
+        is_external = href.startswith('http')
+        hyperlink = OxmlElement('w:hyperlink')
+
+        if is_external:
+            # Create external hyperlink
+            rel_id = self.paragraph.part.relate_to(
+                href,
+                docx.opc.constants.RELATIONSHIP_TYPE.HYPERLINK,
+                is_external=True
+            )
+
+            # Create the w:hyperlink tag and add needed values
+            hyperlink.set(qn('r:id'), rel_id)
+        else:
+            # Create internal hyperlink (anchor)
+            hyperlink.set(qn('w:anchor'), href.replace('#', ''))
+
+        if tooltip is not None:
+            # set tooltip to hyperlink
+            hyperlink.set(qn('w:tooltip'), tooltip)
 
         # Create sub-run
         subrun = self.paragraph.add_run()
-        rPr = docx.oxml.shared.OxmlElement('w:rPr')
+        rPr = OxmlElement('w:rPr')
 
         # add default color
-        c = docx.oxml.shared.OxmlElement('w:color')
-        c.set(docx.oxml.shared.qn('w:val'), "0000EE")
+        c = OxmlElement('w:color')
+        c.set(qn('w:val'), "0000EE")
         rPr.append(c)
 
         # add underline
-        u = docx.oxml.shared.OxmlElement('w:u')
-        u.set(docx.oxml.shared.qn('w:val'), 'single')
+        u = OxmlElement('w:u')
+        u.set(qn('w:val'), 'single')
         rPr.append(u)
 
         subrun._r.append(rPr)
@@ -485,6 +512,9 @@ class HtmlToDocx(HTMLParser):
         if tag in ['p', 'li', 'pre']:
             self.run = self.paragraph.add_run()
 
+        if 'id' in current_attrs:
+            self.add_bookmark(current_attrs['id'])
+
         # add style
         if not self.include_styles:
             return
@@ -540,7 +570,7 @@ class HtmlToDocx(HTMLParser):
         # https://html.spec.whatwg.org/#interactive-content
         link = self.tags.get('a')
         if link:
-            self.handle_link(link['href'], data)
+            self.handle_link(link.get('href', None), data, link.get('title', None))
         else:
             # If there's a link, dont put the data directly in the run
             self.run = self.paragraph.add_run(data)
@@ -617,15 +647,15 @@ class HtmlToDocx(HTMLParser):
 
     def add_html_to_document(self, html, document):
         if not isinstance(html, str):
-            raise ValueError('First argument needs to be a %s' % str)
+            raise ValueError(f'First argument needs to be a {str}')
         elif not isinstance(document, docx.document.Document) and not isinstance(document, docx.table._Cell):
-            raise ValueError('Second argument needs to be a %s' % docx.document.Document)
+            raise ValueError(f'Second argument needs to be a {docx.document.Document}')
         self.set_initial_attrs(document)
         self.run_process(html)
 
     def add_html_to_cell(self, html, cell):
         if not isinstance(cell, docx.table._Cell):
-            raise ValueError('Second argument needs to be a %s' % docx.table._Cell)
+            raise ValueError(f'Second argument needs to be a {docx.table._Cell}')
         unwanted_paragraph = cell.paragraphs[0]
         utils.delete_paragraph(unwanted_paragraph)
         self.set_initial_attrs(cell)
@@ -642,8 +672,8 @@ class HtmlToDocx(HTMLParser):
         self.run_process(html)
         if not filename_docx:
             path, filename = os.path.split(filename_html)
-            filename_docx = '%s/new_docx_file_%s' % (path, filename)
-        self.doc.save('%s.docx' % filename_docx)
+            filename_docx = f'{path}/new_docx_file_{filename}'
+        self.doc.save(f'{filename_docx}.docx')
 
     def parse_html_string(self, html):
         self.set_initial_attrs()

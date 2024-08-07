@@ -66,6 +66,9 @@ def adapt_font_size(size):
 
     return size
 
+def remove_important_from_style(text):
+    return re.sub('!important', '', text, flags=re.IGNORECASE)
+
 def fetch_image(url):
     """
     Attempts to fetch an image from a url.
