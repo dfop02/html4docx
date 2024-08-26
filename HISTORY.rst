@@ -3,7 +3,15 @@
 Release History
 ---------------
 
-1.0.4 (2024-08-11)
+1.0.5 (2024-08-21)
+++++++++++++++++++
+
+**Fixes**
+- Fix numeric lists | [Dfop02](https://github.com/dfop02) based on [Issue](https://github.com/python-openxml/python-docx/issues/25#issuecomment-400787031) from [madphysicist](https://github.com/madphysicist)
+- Fix nested lists (numeric/bullet) | [Dfop02](https://github.com/dfop02)
+
+
+1.0.4 (2024-08-06)
 ++++++++++++++++++
 
 **Updates**

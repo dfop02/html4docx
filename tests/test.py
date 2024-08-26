@@ -271,6 +271,37 @@ and blank lines.
         document = self.parser.parse_html_string('<img />')
         assert '<image: no_src>' in document.paragraphs[0].text
 
+    def test_lists(self):
+        numeric_list_html_example = (
+            "<ol>"
+            "<li>First Item</li>"
+            "<ol>"
+            "<li>First SubItem 1</li>"
+            "<li>First SubItem 2</li>"
+            "</ol>"
+            "<li>Second Item</li>"
+            "<li>Third Item</li>"
+            "<ul>"
+            "<li>Third Subitem Bullet</li>"
+            "</ul>"
+            "<li>Fourth Item</li>"
+            "</ol>"
+        )
+
+        self.document.add_heading(
+            'Test: Numeric List',
+            level=1
+        )
+        # Add on document for human validation
+        self.parser.add_html_to_document(numeric_list_html_example, self.document)
+
+        document = self.parser.parse_html_string(numeric_list_html_example)
+        styles = [str(p.style.name) for p in document.paragraphs]
+
+        assert 'List Number' in styles
+        assert 'List Number 2' in styles
+        assert 'List Bullet 2' in styles
+
     def test_font_size(self):
         font_size_html_example = (
             "<p><span style=\"font-size:8px\">paragraph 8px</span></p>"

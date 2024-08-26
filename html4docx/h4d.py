@@ -70,6 +70,7 @@ class HtmlToDocx(HTMLParser):
         self.include_images = self.options['images']
         self.include_styles = self.options['styles']
         self.paragraph = None
+        self.prev_li = None
         self.skip = False
         self.skip_tag = None
         self.instances_to_skip = 0
@@ -239,22 +240,131 @@ class HtmlToDocx(HTMLParser):
         string_dict = dict([x.split(':') for x in new_string if ':' in x])
         return string_dict
 
-    def handle_li(self):
-        # check list stack to determine style and depth
-        list_depth = len(self.tags['list'])
-        if list_depth:
-            list_type = self.tags['list'][-1]
-        else:
-            list_type = 'ul' # assign unordered if no tag
+    # Inspired by:
+    # https://github.com/python-openxml/python-docx/issues/25#issuecomment-400787031
+    def list_number(self, prev=None, level=None):
+        """
+        Makes a paragraph into a list item with a specific level. Works for both Word and Google Docs.
 
-        if list_type == 'ol':
-            list_style = utils.styles['LIST_NUMBER']
+        Args:
+            prev: The previous paragraph in the list. If specified, the numbering
+                will continue from this paragraph. Otherwise, a new numbering
+                scheme will be started.
+            level: The level of the paragraph within the outline. Defaults to zero if not specified.
+        """
+        def get_next_abstractNumId(numbering):
+            """
+            Get the next available abstractNumId by checking the existing abstractNum elements.
+            """
+            abstract_nums = numbering.findall(qn('w:abstractNum'))
+            existing_ids = [int(num.get(qn('w:abstractNumId'))) for num in abstract_nums]
+            return max(existing_ids) + 1 if existing_ids else 0
+
+        def get_next_numId(numbering):
+            """
+            Get the next available numId by checking the existing num elements.
+            """
+            nums = numbering.findall(qn('w:num'))
+            existing_ids = [int(num.get(qn('w:numId'))) for num in nums]
+            return max(existing_ids) + 1 if existing_ids else 0
+
+        def create_abstract_num(numbering, level):
+            """
+            Create an abstract numbering definition.
+            """
+            abstract_num_id = get_next_abstractNumId(numbering)
+
+            abstract_num = OxmlElement('w:abstractNum')
+            abstract_num.set(qn('w:abstractNumId'), str(abstract_num_id))
+
+            lvl = OxmlElement('w:lvl')
+            lvl.set(qn('w:ilvl'), str(level))
+
+            start = OxmlElement('w:start')
+            start.set(qn('w:val'), '1')
+            lvl.append(start)
+
+            numFmt = OxmlElement('w:numFmt')
+            numFmt.set(qn('w:val'), 'decimal')
+            lvl.append(numFmt)
+
+            lvlText = OxmlElement('w:lvlText')
+            lvlText.set(qn('w:val'), '%1.')
+            lvl.append(lvlText)
+
+            lvlJc = OxmlElement('w:lvlJc')
+            lvlJc.set(qn('w:val'), 'left')
+            lvl.append(lvlJc)
+
+            pStyle = OxmlElement('w:pStyle')
+            pStyle.set(qn('w:val'), 'LIST_NUMBER')
+            lvl.append(pStyle)
+
+            abstract_num.append(lvl)
+
+            numbering.append(abstract_num)
+            return abstract_num_id
+
+        def create_num(numbering, abstract_num_id):
+            """
+            Create a numbering instance linked to the abstract numbering definition.
+            """
+            num_id = get_next_numId(numbering)
+
+            num = OxmlElement('w:num')
+            num.set(qn('w:numId'), str(num_id))
+
+            abstract_numId = OxmlElement('w:abstractNumId')
+            abstract_numId.set(qn('w:val'), str(abstract_num_id))
+            num.append(abstract_numId)
+
+            numbering.append(num)
+
+            return num_id
+
+        if prev is None or prev._p.pPr is None or prev._p.pPr.numPr is None or prev._p.pPr.numPr.numId is None:
+            level = 0 if level is None else level
+            numbering = self.doc.part.numbering_part.numbering_definitions._numbering
+            abstract_num_id = create_abstract_num(numbering, level)
+            num_id = create_num(numbering, abstract_num_id)
         else:
-            list_style = utils.styles['LIST_BULLET']
+            level = prev._p.pPr.numPr.ilvl.val if level is None else level
+            num_id = prev._p.pPr.numPr.numId.val
+
+        self.paragraph._p.get_or_add_pPr().get_or_add_numPr().get_or_add_numId().val = num_id
+        self.paragraph._p.get_or_add_pPr().get_or_add_numPr().get_or_add_ilvl().val = level
+
+    def set_list_style(self, list_style: str, level: str):
+        """
+        Define the list style name, currently the Python Docx has a limit of just 3 levels.
+        Args:
+            list_style: The style based on tag collected, can be List Numeric or List Bullet.
+            level: The depth of list based on the first ocorrence.
+        """
+        if level >= 2 and level <= 3:
+            return f'{list_style} {level}'
+
+        return list_style
+
+    def handle_li(self):
+        """
+        Handle the li tag applying list paragraph.
+        Lists with more than 3 depth level will not have a consistent numbering
+        since has no native support from Python-Docx.
+        """
+        list_depth = len(self.tags['list'])
+        list_type = self.tags['list'][-1] if list_depth else 'ul'
+        numeric_style = list_type == 'ol'
+        list_style = utils.styles['LIST_NUMBER'] if numeric_style else utils.styles['LIST_BULLET']
+        list_style = self.set_list_style(list_style, list_depth)
 
         self.paragraph = self.doc.add_paragraph(style=list_style)
         self.paragraph.paragraph_format.left_indent = Inches(min(list_depth * LIST_INDENT, MAX_INDENT))
         self.paragraph.paragraph_format.line_spacing = 1
+
+        if numeric_style:
+            self.list_number(prev=self.prev_li, level=list_depth-1)
+            self.prev_li = self.paragraph
 
     def add_image_to_cell(self, cell, image, width=None, height=None):
         # python-docx doesn't have method yet for adding images to table cells. For now we use this
@@ -540,9 +650,13 @@ class HtmlToDocx(HTMLParser):
             if self.tags['span']:
                 self.tags['span'].pop()
                 return
-        elif tag == 'ol' or tag == 'ul':
+
+        elif tag in ('ol', 'ul'):
             utils.remove_last_occurence(self.tags['list'], tag)
+            if not self.tags['list']:
+                self.prev_li = None
             return
+
         elif tag == 'table':
             self.table_no += 1
             self.table = None
