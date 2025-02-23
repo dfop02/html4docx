@@ -5,6 +5,9 @@ import urllib.request
 from io import BytesIO
 from enum import Enum
 from urllib.parse import urlparse
+from docx.shared import RGBColor, Pt, Cm, Mm, Inches
+
+from html4docx.colors import Color
 
 font_styles = {
     'b': 'bold',
@@ -38,6 +41,10 @@ styles = {
     'LIST_NUMBER': 'List Number',
 }
 
+# values in inches
+INDENT = 0.25
+MAX_INDENT = 5.5 # To stop indents going off the page
+
 class ImageAlignment(Enum):
     LEFT = 1
     CENTER = 2
@@ -54,9 +61,6 @@ def is_url(url):
     parts = urlparse(url)
     return all([parts.scheme, parts.netloc, parts.path])
 
-def px_to_inches(px):
-    return px * 0.0104166667
-
 def rgb_to_hex(rgb):
     return '#' + ''.join(f'{i:02X}' for i in rgb)
 
@@ -67,7 +71,7 @@ def adapt_font_size(size):
     return size
 
 def remove_important_from_style(text):
-    return re.sub('!important', '', text, flags=re.IGNORECASE)
+    return re.sub('!important', '', text, flags=re.IGNORECASE).strip()
 
 def fetch_image(url):
     """
@@ -82,6 +86,111 @@ def fetch_image(url):
             return BytesIO(response.read())
     except urllib.error.URLError:
         return None
+
+def parse_dict_string(string: str, separator: str = ';'):
+    new_string = re.sub(r'\s+', ' ', string.replace("\n", '')).split(separator)
+    string_dict = dict((k.strip(), v.strip()) for x in new_string if ':' in x for k, v in [x.split(':')])
+    return string_dict
+
+def unit_converter(unit_value: str, target_unit: str = "pt"):
+    """
+    Converts a CSS unit value to a target unit (default is 'pt').
+    Supported input units: px, pt, in, pc, cm, mm, em, rem, %.
+    Supported target units: pt, px, in, cm, mm.
+
+    Args:
+        unit_value (str): The value with unit (e.g., "12px", "1.5in").
+        target_unit (str): The target unit to convert to (default is "pt").
+
+    Returns:
+        Union[float, Pt, Cm, Inches]: The converted value in the target unit,
+        clamped to MAX_INDENT. Returns a python-docx class (Pt, Cm, Inches) when possible.
+
+    Sources:
+        https://www.w3schools.com/cssref/css_units.php
+    """
+    # Remove whitespace and convert to lowercase
+    unit_value = unit_value.strip().lower()
+
+    # Extract numeric value and unit
+    value = float(re.sub(r'[^0-9.]', '', unit_value))  # Extract numeric part
+    unit = re.sub(r'[0-9.]', '', unit_value)           # Extract unit part
+
+    # Conversion factors to points (pt)
+    conversion_to_pt = {
+        "px": value * 0.75,    # 1px = 0.75pt (assuming 96dpi)
+        "pt": value * 1.0,     # 1pt = 1pt
+        "in": value * 72.0,    # 1in = 72pt
+        "pc": value * 12.0,    # 1pc = 12pt
+        "cm": value * 28.3465, # 1cm = 28.3465pt
+        "mm": value * 2.83465, # 1mm = 2.83465pt
+        "em": value * 12.0,    # 1em = 12pt (assuming 1em = 16px)
+        "rem": value * 12.0,   # 1rem = 12pt (assuming 1rem = 16px)
+        "%": value,            # Percentage is context-dependent; return as-is
+    }
+
+    # Convert input value to points (pt)
+    if unit in conversion_to_pt:
+        value_in_pt = conversion_to_pt[unit]
+    else:
+        print(f'Warning: unsupported unit {unit}, return None instead.')
+        return None
+
+    # Clamp the value to MAX_INDENT (in points)
+    value_in_pt = min(value_in_pt, MAX_INDENT * 72.0)  # MAX_INDENT is in inches
+
+    # Convert from points (pt) to the target unit
+    conversion_from_pt = {
+        "pt": Pt(value_in_pt),              # 1pt = 1pt
+        "px": round(value_in_pt / 0.75, 2), # 1pt = 1.33px
+        "in": Inches(value_in_pt / 72.0),   # 1pt = 1/72in
+        "cm": Cm(value_in_pt / 28.3465),    # 1pt = 0.0353cm
+        "mm": Mm(value_in_pt / 2.83465),    # 1pt = 0.3527mm
+    }
+
+    if target_unit in conversion_from_pt:
+        return conversion_from_pt[target_unit]
+    else:
+        raise ValueError(f"Unsupported target unit: {target_unit}")
+
+# def unit_converter(unit_value: str):
+#     unit_value = remove_important_from_style(unit_value.strip().lower())
+#     unit = re.sub(r'[0-9\.]+', '', unit_value)
+#     value = float(re.sub(r'[a-zA-Z\!\%]+', '', unit_value))
+
+#     if unit == 'px':
+#         result = Inches(min(value // 10 * INDENT, MAX_INDENT))
+#     elif unit == 'in':
+#         result = Inches(min(value // 10 * INDENT, MAX_INDENT) * 1)
+#     elif unit == 'cm':
+#         result = Cm(min(value * INDENT, MAX_INDENT) * 2.54)
+#     elif unit == 'pt':
+#         result = Pt(min(value // 10 * INDENT, MAX_INDENT) * 72)
+#     elif unit == 'rem' or unit == 'em':
+#         result = Inches(min(value * 16 // 10 * INDENT, MAX_INDENT))  # Assuming 1rem/em = 16px
+#     elif unit == '%':
+#         result = int(MAX_INDENT * (value / 100))
+#     else:
+#         print(f'Warning: unsupported unit {unit}, return None instead.')
+#         return None
+
+#     return result
+
+def parse_color(color: str, return_hex: bool = False):
+    color = remove_important_from_style(color.strip().lower())
+
+    if 'rgb' in color:
+        color = re.sub(r'[^0-9,]', '', color)
+        colors = [int(x) for x in color.split(',')]
+    elif color.startswith('#'):
+        color = color.lstrip('#')
+        colors = RGBColor.from_string(color)
+    elif color in Color.__members__.keys():
+        colors = Color[color].value
+    else:
+        colors = [0, 0, 0]  # Default to black for unexpected colors
+
+    return rgb_to_hex(colors) if return_hex else colors
 
 def remove_last_occurence(ls, x):
     ls.pop(len(ls) - ls[::-1].index(x) - 1)
