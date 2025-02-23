@@ -2,7 +2,9 @@ import os
 from pathlib import Path
 import unittest
 from docx import Document
+from docx.oxml.ns import qn
 from html4docx import HtmlToDocx
+from html4docx.utils import unit_converter
 from .context import test_dir
 
 class OutputTest(unittest.TestCase):
@@ -25,6 +27,7 @@ class OutputTest(unittest.TestCase):
         cls.text1 = cls.get_html_from_file('text1.html')
         cls.table_html = cls.get_html_from_file('tables1.html')
         cls.table2_html = cls.get_html_from_file('tables2.html')
+        cls.table3_html = cls.get_html_from_file('tables3.html')
 
     @classmethod
     def tearDownClass(cls):
@@ -275,9 +278,14 @@ and blank lines.
         font_size_html_example = (
             "<p><span style=\"font-size:8px\">paragraph 8px</span></p>"
             "<p><span style=\"font-size: 1cm\">paragraph 1cm</span></p>"
-            "<p><span style=\"font-size: 12em !important\">paragraph 12em not supported</span></p>"
+            "<p><span style=\"font-size: 6em !important\">paragraph 6em</span></p>"
+            "<p><span style=\"font-size: 1.2cm\">paragraph 12cm</span></p>"
+            "<p><span style=\"font-size: 1.2vh\">paragraph 12vh not supported</span></p>"
+            "<p><span style=\"font-size: 5pc\">paragraph 5pc</span></p>"
             "<p><span style=\"font-size:14pt!important\">paragraph 14pt</span></p>"
             "<p><span style=\"font-size: 16pt!IMPORTANT\">paragraph 16pt</span></p>"
+            "<p><span style=\"font-size:2mm!IMPORTANT\">paragraph 2mm</span></p>"
+            "<p><span style=\"font-size:small!IMPORTANT\">paragraph small</span></p>"
         )
 
         self.document.add_heading(
@@ -289,7 +297,7 @@ and blank lines.
 
         document = self.parser.parse_html_string(font_size_html_example)
         font_sizes = [str(p.runs[1].font.size) for p in document.paragraphs]
-        assert ['76200', '355600', 'None', '177800', '203200'] == font_sizes
+        assert ['76200', '355600', '914400', '431800', 'None', '762000', '177800', '203200', '69850', '120650'] == font_sizes
 
     def test_color_by_name(self):
         color_html_example = (
@@ -298,6 +306,7 @@ and blank lines.
             "<p><span style=\"color: blue !important\">paragraph blue</span></p>"
             "<p><span style=\"color: green!important\">paragraph green</span></p>"
             "<p><span style=\"color: darkgray!IMPORTANT\">paragraph darkgray</span></p>"
+            "<p><span style=\"color: MAGENTA !IMPORTANT\">paragraph magenta</span></p>"
             "<p><span style=\"color: invalidcolor\">paragraph has default black because of invalid color name</span></p>"
         )
 
@@ -317,6 +326,225 @@ and blank lines.
         assert '008000' in colors # Green
         assert 'A9A9A9' in colors # Darkgray
         assert '000000' in colors # Black
+        assert 'FF00FF' in colors # Magenta
+
+    def test_table_cell_border_properties(self):
+        """Validates that all table cells have the expected border size, style, and color."""
+
+        self.document.add_heading(
+            'Test: Table Cell Border Properties',
+            level=1
+        )
+        # Add on document for human validation
+        self.parser.add_html_to_document(self.table3_html, self.document)
+        document = self.parser.parse_html_string(self.table3_html)
+
+        # Define expected border properties
+        expected_colors = [
+            {
+                "top": {"color": "D95B48", "style": "single", "size": "1.0"},
+                "bottom": {"color": "D95B48", "style": "single", "size": "1.0"},
+                "left": {"color": "FF0000", "style": "single", "size": "1.0"},
+                "right": {"color": "8B0000", "style": "single", "size": "1.0"}
+            },
+            {
+                "top": {"color": "FAC32A", "style": "single", "size": "1.0"},
+                "bottom": {"color": "FAC32A", "style": "single", "size": "1.0"},
+                "left": {"color": "none", "style": "none", "size": "none"},
+                "right": {"color": "FAC32A", "style": "single", "size": "12.0"}
+            },
+            {
+                "top": {"color": "30E667", "style": "none", "size": "5.0"},
+                "bottom": {"color": "30E667", "style": "single", "size": "5.0"},
+                "left": {"color": "30E667", "style": "single", "size": "5.0"},
+                "right": {"color": "30E667", "style": "single", "size": "5.0"}
+            },
+            {
+                "top": {"color": "none", "style": "none", "size": "none"},
+                "bottom": {"color": "D948CF", "style": "single", "size": "1.0"},
+                "left": {"color": "none", "style": "none", "size": "none"},
+                "right": {"color": "D948CF", "style": "single", "size": "5.0"}
+            },
+            {
+                "top": {"color": "EAAAA7", "style": "single", "size": "1.0"},
+                "bottom": {"color": "EAAAA7", "style": "single", "size": "1.0"},
+                "left": {"color": "EAAAA7", "style": "single", "size": "1.0"},
+                "right": {"color": "EAAAA7", "style": "single", "size": "1.0"}
+            },
+            {
+                "top": {"color": "none", "style": "none", "size": "none"},
+                "bottom": {"color": "ACC4AA", "style": "dashed", "size": "7.0"},
+                "left": {"color": "none", "style": "none", "size": "none"},
+                "right": {"color": "ACC4AA", "style": "dotted", "size": "4.0"}
+            }
+        ]
+
+        # Validate border properties for each cell
+        cell_idx = 0
+        for row_idx, row in enumerate(document.tables[0].rows):
+            for column_idx, cell in enumerate(row.cells):
+                # Get the table cell element and properties
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcBorders = tcPr.find(qn('w:tcBorders'))
+
+                # Extract border properties
+                border_sides = {
+                    'top': tcBorders.find(qn('w:top')) if tcBorders is not None else None,
+                    'bottom': tcBorders.find(qn('w:bottom')) if tcBorders is not None else None,
+                    'left': tcBorders.find(qn('w:left')) if tcBorders is not None else None,
+                    'right': tcBorders.find(qn('w:right')) if tcBorders is not None else None,
+                }
+
+                for side, border in border_sides.items():
+                    if border is not None:
+                        color = border.get(qn('w:color'), "").upper()  # Ensure uppercase and no #
+                        size = border.get(qn('w:sz'))
+                        style = border.get(qn('w:val'))
+                    else:
+                        color, size, style = "none", "none", "none"
+
+                    # Convert size from eighths of a point to points
+                    size_in_pt = str(int(size) / 8) if size and size != "none" else "none"
+
+                    # Get expected properties for the current cell and side
+                    expected_properties = expected_colors[cell_idx][side]
+
+                    # Assertions
+                    assert color == expected_properties["color"], (
+                        f"Color mismatch for {side} in row {row_idx} column {column_idx}: "
+                        f"expected {expected_properties['color']}, got {color}"
+                    )
+                    assert size_in_pt == expected_properties["size"], (
+                        f"Size mismatch for {side} in row {row_idx} column {column_idx}: "
+                        f"expected {expected_properties['size']}, got {size_in_pt}"
+                    )
+                    assert style == expected_properties["style"], (
+                        f"Style mismatch for {side} in row {row_idx} column {column_idx}: "
+                        f"expected {expected_properties['style']}, got {style}"
+                    )
+
+                cell_idx += 1
+
+    def test_table_cell_background_color(self):
+        """Validates that all table cells have the expected background color."""
+
+        self.document.add_heading(
+            'Test: Table Cell Background Color',
+            level=1
+        )
+        # Add on document for human validation
+        self.parser.add_html_to_document(self.table3_html, self.document)
+        document = self.parser.parse_html_string(self.table3_html)
+
+        # Define expected background colors for each cell
+        expected_background_colors = [
+            "3749EF", # Row 1 Column 1
+            "33b32e", # Row 1 Column 2
+            "BFBFBF", # Row 2 Column 1
+            "2eaab3", # Row 2 Column 2
+            "99fffa", # Row 3 Column 1
+            "2eaab3"  # Row 3 Column 2
+        ]
+
+        # Validate background colors for each cell
+        cell_idx = 0
+        for row_idx, row in enumerate(document.tables[0].rows):
+            for column_idx, cell in enumerate(row.cells):
+                # Get the table cell element and properties
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+
+                # Get the background color (shading) if it exists
+                shading = tcPr.find(qn('w:shd'))
+                if shading is not None:
+                    background_color = shading.get(qn('w:fill'), "").upper()  # Ensure uppercase and no #
+                else:
+                    background_color = "None"
+
+                # Get expected background color for the current cell
+                expected_color = expected_background_colors[cell_idx].upper()
+                cell_idx += 1
+
+                assert background_color == expected_color, (
+                    f"Background color mismatch for row {row_idx} column {column_idx}: "
+                    f"expected {expected_color}, got {background_color}"
+                )
+
+    def test_table_cell_dimensions(self):
+        """Validates that all table cells have the expected width and height."""
+
+        self.document.add_heading(
+            'Test: Table Cell Dimensions',
+            level=1
+        )
+        # Add on document for human validation
+        self.parser.add_html_to_document(self.table3_html, self.document)
+        document = self.parser.parse_html_string(self.table3_html)
+
+        # Define expected dimensions for each cell
+        expected_dimensions = [
+            # First row
+            [
+                {
+                    "width": "258.35px",  # Width for the first cell
+                    "height": "23.75pt"   # Height for the first cell
+                },
+                {
+                    "width": "222.2pt",   # Width for the second cell
+                    "height": "23.75pt"   # Height for the second cell
+                }
+            ],
+            # Second row
+            [
+                {
+                    "width": "258.35in",  # Width for the first cell
+                    "height": "15.5pt"    # Height for the first cell
+                },
+                {
+                    "width": "6cm",       # Width for the second cell
+                    "height": "15.5pt"    # Height for the second cell
+                }
+            ],
+            # Third row
+            [
+                {
+                    "width": "258.35pt",  # Width for the first cell
+                    "height": "2rem"      # Height for the first cell
+                },
+                {
+                    "width": "6cm",       # Width for the second cell
+                    "height": "2em"       # Height for the second cell
+                }
+            ]
+        ]
+
+        # Validate dimensions for each cell
+        for row_idx, row in enumerate(document.tables[0].rows):
+            for cell_idx, cell in enumerate(row.cells):
+                # Get the table cell element and properties
+                docx_cell = document.tables[0].cell(row_idx, cell_idx)
+
+                # Convert width from EMUs to px
+                cell_width_px = round((docx_cell.width / 914400) * 96, 2)  # 1 EMU = 1/914400 inch, 1 inch = 96px
+                # Get expected width and convert it to points using unit_converter
+                expected_width = expected_dimensions[row_idx][cell_idx]["width"]
+                expected_width_px = unit_converter(expected_width, "px")
+
+                # Convert height from EMUs to px
+                cell_height_px = round((row.height / 914400) * 96, 2)  # 1 EMU = 1/914400 inch, 1 inch = 96px
+                # Get expected height and convert it to points
+                expected_height = expected_dimensions[row_idx][cell_idx]["height"]
+                expected_height_px = unit_converter(expected_height, "px")
+
+                assert round(abs(cell_width_px - expected_width_px), 2) <= 0.03, (
+                    f"Width mismatch for cell ({row_idx}, {cell_idx}): "
+                    f"expected {expected_width_px}px, got {cell_width_px}px"
+                )
+                assert round(abs(cell_height_px - expected_height_px), 2) <= 0.03, (
+                    f"Height mismatch for cell ({row_idx}, {cell_idx}): "
+                    f"expected {expected_height_px}px, got {cell_height_px}px"
+                )
 
     def test_unbalanced_table(self):
         # A table with more td elements in latter rows than in the first
