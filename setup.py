@@ -17,7 +17,7 @@ setup(
     author_email         = 'diogofernandesop@gmail.com',
     platforms            = ['any'],
     include_package_data = True,
-    keywords             = ['html', 'docx', 'office', 'word', 'convert', 'transform'],
+    keywords             = ['html', 'docx', 'docs', 'office', 'word', 'convert', 'transform'],
     zip_safe             = False,
     url                  = 'https://github.com/dfop02/html4docx',
     project_urls = {
@@ -37,7 +37,8 @@ setup(
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
-        'Programming Language :: Python :: 3.12'
+        'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13'
     ],
     install_requires = [
         'python-docx>=1.1.0',

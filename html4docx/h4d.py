@@ -25,13 +25,12 @@ from bs4 import BeautifulSoup
 
 import docx
 from docx import Document
-from docx.shared import RGBColor, Pt, Cm, Inches
+from docx.shared import RGBColor, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
 from html4docx import utils
-from html4docx.colors import Color
 
 # values in inches
 INDENT = 0.25
@@ -87,19 +86,151 @@ class HtmlToDocx(HTMLParser):
         """
         return ' '.join([str(i) for i in soup.contents])
 
-    def unit_converter(self, unit: str, value: int):
-        result = None
-        if unit == 'px':
-            result = Inches(min(value // 10 * INDENT, MAX_INDENT))
-        elif unit == 'cm':
-            result = Cm(min(value // 10 * INDENT, MAX_INDENT) * 2.54)
-        elif unit == 'pt':
-            result = Pt(min(value // 10 * INDENT, MAX_INDENT) * 72)
-        elif unit == '%':
-            result = int(MAX_INDENT * (value / 100))
+    def set_cell_background(self, cell, color):
+        """Set the background color of a table cell."""
+        tc = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        shd = OxmlElement('w:shd')
+        shd.set(qn('w:fill'), color.lstrip('#'))
+        tcPr.append(shd)
 
-        # When unit is not supported returns None
-        return result
+    def set_cell_borders(self, cell, styles):
+        """
+        Apply custom borders to a table cell using CSS-like styles.
+
+        Args:
+            cell: The table cell to style.
+            styles (dict): A dictionary of CSS-like border styles.
+                          Example: {"border": "1px 5px 10px 20px", "border-style": "solid", "border-color": "#FF0000"}
+        sources:
+            Border attributes: http://officeopenxml.com/WPtableBorders.php
+        """
+        tc = cell._tc  # Get the table cell element
+        tcPr = tc.get_or_add_tcPr()  # Get or add the table cell properties
+
+        # Default border properties
+        default_size = 0
+        default_color = "#000000"
+        default_style = "single"
+        borders = {
+            "top": {"size": default_size, "color": default_color, "style": default_style},
+            "right": {"size": default_size, "color": default_color, "style": default_style},
+            "bottom": {"size": default_size, "color": default_color, "style": default_style},
+            "left": {"size": default_size, "color": default_color, "style": default_style},
+        }
+        border_styles = {
+            "none": "none",
+            "hidden": "none",
+            "initial": "none",
+            "solid": "single",
+            "dotted": "dotted",
+            "dashed": "dashed",
+            "double": "double",
+            "inset": "inset",
+            "outset": "outset"
+        }
+
+        def parse_border_style(value: str):
+            """Parses border styles to match word standart"""
+            return border_styles[value] if value in border_styles.keys() else 'none'
+
+        def border_unit_converter(unit_value: str):
+            """Convert multiple units to pt that is used on Word table cell border"""
+            unit_value = utils.remove_important_from_style(unit_value)
+            unit = re.sub(r'[0-9\.]+', '', unit_value)
+            value = float(re.sub(r'[a-zA-Z\!\%]+', '', unit_value))  # Allow float values
+
+            if unit == 'px':
+                result = int(value * 0.75)  # 1 px = 0.75 pt
+            elif unit == 'cm':
+                result = int(value * 28.35)  # 1 cm = 28.35 pt
+            elif unit == 'in':
+                result = int(value * 72)  # 1 inch = 72 pt
+            elif unit == 'pt':
+                result = int(value) # default is pt
+            elif unit == 'rem' or unit == 'em':
+                result = int(value * 12)  # Assuming 1rem/em = 16px, converted to pt
+            elif unit == '%':
+                result = int(MAX_INDENT * (value / 100))
+            else:
+                return None  # Unsupported units return None
+
+            return result
+
+        def parse_border_value(value: str):
+            """Parses a border value like '1px solid #000000' or '5px'"""
+            parts = value.split()
+            size = border_unit_converter(parts[0]) if parts else default_size
+            style = parse_border_style(parts[1]) if len(parts) > 1 else default_style
+            color = utils.parse_color(parts[2], return_hex=True) if len(parts) > 2 else default_color
+            return size, style, color
+
+        for style, value in styles.items():
+            if "border" not in style:
+                continue
+
+            if style == "border":  # Handle shorthand border
+                border_values = value.split()
+                num_values = len(border_values)
+
+                if num_values == 1:  # "5px"
+                    size, style, color = parse_border_value(value)
+                    for side in borders:
+                        borders[side].update({"size": size, "style": style, "color": color})
+                elif num_values == 2:  # "10px 20px"
+                    borders["top"].update({"size": border_unit_converter(border_values[0])})
+                    borders["bottom"].update({"size": border_unit_converter(border_values[0])})
+                    borders["left"].update({"size": border_unit_converter(border_values[1])})
+                    borders["right"].update({"size": border_unit_converter(border_values[1])})
+                elif num_values == 3:  # "5px solid #000000"
+                    size, style, color = parse_border_value(value)
+                    for side in borders:
+                        borders[side].update({"size": size, "style": style, "color": color})
+                elif num_values == 4:  # "1px 5px 10px 20px"
+                    borders["top"].update({"size": border_unit_converter(border_values[0])})
+                    borders["right"].update({"size": border_unit_converter(border_values[1])})
+                    borders["bottom"].update({"size": border_unit_converter(border_values[2])})
+                    borders["left"].update({"size": border_unit_converter(border_values[3])})
+
+            elif style in ("border-width", "border-color", "border-style"):
+                for side in borders:
+                    prop = style.split("-")[-1]
+                    if prop == "width":
+                        borders[side]["size"] = border_unit_converter(value)
+                    elif prop == "color":
+                        borders[side]["color"] = utils.parse_color(value, return_hex=True)
+                    elif prop == "style":
+                        borders[side]["style"] = parse_border_style(value)
+
+            elif re.match(r"^border-(top|right|bottom|left)(-(width|color|style))?$", style):
+                parts = style.split("-")
+                side = parts[1]
+                prop = parts[2] if len(parts) > 2 else None
+
+                if prop == "width":
+                    borders[side]["size"] = border_unit_converter(value)
+                elif prop == "color":
+                    borders[side]["color"] = utils.parse_color(value, return_hex=True)
+                elif prop == "style":
+                    borders[side]["style"] = parse_border_style(value)
+                else:
+                    size, style, color = parse_border_value(value)
+                    borders[side].update({"size": size, "style": style, "color": color})
+
+        # Check if w:tcBorders exists, otherwise create it
+        tcBorders = tcPr.first_child_found_in('w:tcBorders')
+        if tcBorders is None:
+            tcBorders = OxmlElement('w:tcBorders')
+            tcPr.append(tcBorders)
+
+        # Apply borders to the cell
+        for side, border_info in borders.items():
+            if border_info["size"] > 0:
+                border = OxmlElement(f"w:{side}")
+                border.set(qn("w:val"), border_info["style"])  # Set border style
+                border.set(qn("w:sz"), str(border_info["size"] * 8))  # Word uses eighths of a point
+                border.set(qn("w:color"), border_info["color"].replace('#', ''))  # Set border color
+                tcBorders.append(border)
 
     def add_bookmark(self, bookmark_name):
         """Adds a word bookmark to an existing paragraph"""
@@ -114,51 +245,51 @@ class HtmlToDocx(HTMLParser):
 
         self.bookmark_id += 1
 
-    def add_styles_to_paragraph(self, style):
+    def add_text_align_or_margin_to(self, obj, style):
         if 'text-align' in style:
             align = utils.remove_important_from_style(style['text-align'])
 
             if 'center' in align:
-                self.paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                obj.alignment = WD_ALIGN_PARAGRAPH.CENTER
             elif 'right' in align:
-                self.paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                obj.alignment = WD_ALIGN_PARAGRAPH.RIGHT
             elif 'justify' in align:
-                self.paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                obj.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
         if 'margin-left' in style and 'margin-right' in style:
             margin_left = style['margin-left']
             margin_right = style['margin-right']
             if 'auto' in margin_left and 'auto' in margin_right:
-                self.paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                obj.alignment = WD_ALIGN_PARAGRAPH.CENTER
         elif 'margin-left' in style:
-            margin = utils.remove_important_from_style(style['margin-left'])
-            units = re.sub(r'[0-9]+', '', margin)
-            margin = int(float(re.sub(r'[a-zA-Z\!\%]+', '', margin)))
+            obj.left_indent = utils.unit_converter(style['margin-left'])
 
-            self.paragraph.paragraph_format.left_indent = self.unit_converter(units, margin)
+    def add_styles_to_table_cell(self, styles, doc_cell, cell_row):
+        # Set background color
+        if 'background-color' in styles:
+            self.set_cell_background(doc_cell, styles['background-color'])
 
-    def add_styles_to_table(self, style):
-        if 'text-align' in style:
-            align = utils.remove_important_from_style(style['text-align'])
+        # Set width (approximate, since DOCX uses different units)
+        if 'width' in styles:
+            doc_cell.width = utils.unit_converter(styles['width'])
 
-            if 'center' in align:
-                self.table.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            elif 'right' in align:
-                self.table.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            elif 'justify' in align:
-                self.table.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+        # Set height (due word limitations, cannot set individually cell height, only whole row)
+        if 'height' in styles:
+            cell_row.height = utils.unit_converter(styles['height'])
 
-        if 'margin-left' in style and 'margin-right' in style:
-            margin_left = style['margin-left']
-            margin_right = style['margin-right']
-            if 'auto' in margin_left and 'auto' in margin_right:
-                self.table.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        elif 'margin-left' in style:
-            margin = utils.remove_important_from_style(style['margin-left'])
-            units = re.sub(r'[0-9]+', '', margin)
-            margin = int(float(re.sub(r'[a-zA-Z\!\%]+', '', margin)))
+        # Set text color
+        if 'color' in styles:
+            color = utils.parse_color(styles['color'])
+            if color:
+                for paragraph in doc_cell.paragraphs:
+                    for run in paragraph.runs:
+                        run.font.color.rgb = color
 
-            self.table.left_indent = self.unit_converter(units, margin)
+        # Set borders
+        if any('border' in style for style in styles.keys()):
+            self.set_cell_borders(doc_cell, styles)
+
+        self.add_text_align_or_margin_to(doc_cell, styles)
 
     def add_styles_to_run(self, style):
         if 'font-size' in style:
@@ -166,56 +297,16 @@ class HtmlToDocx(HTMLParser):
             # Adapt font_size when text, ex.: small, medium, etc.
             font_size = utils.adapt_font_size(font_size)
 
-            units = re.sub(r'[0-9]+', '', font_size)
-            font_size = int(float(re.sub(r'[a-zA-Z\!\%]+', '', font_size)))
-
-            if units == 'px':
-                font_size_unit = Inches(utils.px_to_inches(font_size))
-            elif units == 'cm':
-                font_size_unit = Cm(font_size)
-            elif units == 'pt':
-                font_size_unit = Pt(font_size)
-            else:
-                # When unit is not supported
-                font_size_unit = None
-
-            if font_size_unit:
+            if font_size:
                 for run in self.paragraph.runs:
-                    run.font.size = font_size_unit
+                    run.font.size = utils.unit_converter(font_size)
 
         if 'color' in style:
-            font_color = utils.remove_important_from_style(style['color'].lower())
-
-            if 'rgb' in font_color:
-                color = re.sub(r'[a-z()]+', '', font_color)
-                colors = [int(x) for x in color.split(',')]
-            elif '#' in font_color:
-                color = font_color.lstrip('#')
-                colors = RGBColor.from_string(color)
-            elif font_color in Color._member_names_:
-                colors = Color[font_color].value
-            else:
-                colors = [0, 0, 0]
-                # Set color to black to prevent crashing
-                # with inexpected colors
-
+            colors = utils.parse_color(style['color'])
             self.run.font.color.rgb = RGBColor(*colors)
 
         if 'background-color' in style:
-            background_color = utils.remove_important_from_style(style['background-color'].lower())
-
-            if 'rgb' in background_color:
-                color = re.sub(r'[a-z()]+', '', background_color)
-                colors = [int(x) for x in color.split(',')]
-            elif '#' in background_color:
-                color = background_color.lstrip('#')
-                colors = RGBColor.from_string(color)
-            elif background_color in Color._member_names_:
-                colors = Color[background_color].value
-            else:
-                colors = [0, 0, 0]
-                # Set color to black to prevent crashing
-                # with inexpected colors
+            color = utils.parse_color(style['background-color'], return_hex=True)
 
             # Little trick to apply background-color to paragraph
             # because `self.run.font.highlight_color`
@@ -226,18 +317,13 @@ class HtmlToDocx(HTMLParser):
             # Add attributes to the element
             shd.set(qn('w:val'), 'clear')
             shd.set(qn('w:color'), 'auto')
-            shd.set(qn('w:fill'), utils.rgb_to_hex(colors))
+            shd.set(qn('w:fill'), color.lstrip('#'))
 
             # Make sure the paragraph styling element exists
             self.paragraph.paragraph_format.element.get_or_add_pPr()
 
             # Append the shading element
             self.paragraph.paragraph_format.element.pPr.append(shd)
-
-    def parse_dict_string(self, string, separator=';'):
-        new_string = string.replace(" ", '').split(separator)
-        string_dict = dict([x.split(':') for x in new_string if ':' in x])
-        return string_dict
 
     def handle_li(self):
         # check list stack to determine style and depth
@@ -275,8 +361,8 @@ class HtmlToDocx(HTMLParser):
         src = current_attrs['src']
 
         # added image dimension, interpreting values as pixel only
-        height = Pt(int(re.sub(r'[^0-9]+$', '', current_attrs['height']))) if 'height' in current_attrs else None
-        width = Pt(int(re.sub(r'[^0-9]+$', '', current_attrs['width']))) if 'width' in current_attrs else None
+        height = utils.unit_converter(current_attrs['height']) if 'height' in current_attrs else None
+        width = utils.unit_converter(current_attrs['width']) if 'width' in current_attrs else None
 
         # fetch image
         src_is_url = utils.is_url(src)
@@ -337,6 +423,8 @@ class HtmlToDocx(HTMLParser):
         """
         table_soup = self.tables[self.table_no]
         rows, cols = self.get_table_dimensions(table_soup)
+        # Available Table Styles
+        # https://python-docx.readthedocs.io/en/latest/user/styles-understanding.html#table-styles-in-default-template
         self.table = self.doc.add_table(rows, cols)
 
         if self.table_style:
@@ -347,26 +435,32 @@ class HtmlToDocx(HTMLParser):
             except KeyError as e:
                 raise ValueError(f"Unable to apply style {self.table_style}.") from e
 
-        rows = self.get_table_rows(table_soup)
-        cell_row = 0
-        docx_cells = self.table._cells
-        for row in rows:
-            cols = self.get_table_columns(row)
-            cell_col = 0
-            for col in cols:
+        # Reference:
+        # https://python-docx.readthedocs.io/en/latest/api/table.html#cell-objects
+        for cell_row, row in enumerate(self.get_table_rows(table_soup)):
+            for cell_col, col in enumerate(self.get_table_columns(row)):
                 cell_html = self.get_cell_html(col)
                 if col.name == 'th':
                     cell_html = "<b>%s</b>" % cell_html
-                docx_cell = docx_cells[cell_col + (cell_row * self.table._column_count)]
+
+                # Get _Cell object from table based on cell_row and cell_col
+                docx_cell = self.table.cell(cell_row, cell_col)
+
+                # Parse cell styles
+                cell_styles = utils.parse_dict_string(col.get('style', ''))
+
+                if 'width' in cell_styles or 'height' in cell_styles:
+                    self.table.autofit = False
+
                 child_parser = HtmlToDocx()
                 child_parser.copy_settings_from(self)
                 child_parser.add_html_to_cell(cell_html, docx_cell)
-                cell_col += 1
-            cell_row += 1
+                child_parser.add_styles_to_table_cell(cell_styles, docx_cell, self.table.rows[cell_row])
+                # child_parser.add_styles_to_run(cell_styles)
 
         if 'style' in current_attrs and self.table:
-            style = self.parse_dict_string(current_attrs['style'])
-            self.add_styles_to_table(style)
+            style = utils.parse_dict_string(current_attrs['style'])
+            self.add_text_align_or_margin_to(self.table, style)
 
         # skip all tags until corresponding closing tag
         self.instances_to_skip = len(table_soup.find_all('table'))
@@ -520,8 +614,8 @@ class HtmlToDocx(HTMLParser):
             return
 
         if 'style' in current_attrs and self.paragraph:
-            style = self.parse_dict_string(current_attrs['style'])
-            self.add_styles_to_paragraph(style)
+            style = utils.parse_dict_string(current_attrs['style'])
+            self.add_text_align_or_margin_to(self.paragraph.paragraph_format, style)
 
     def handle_endtag(self, tag):
         if self.skip:
@@ -577,7 +671,7 @@ class HtmlToDocx(HTMLParser):
             spans = self.tags['span']
             for span in spans:
                 if 'style' in span:
-                    style = self.parse_dict_string(span['style'])
+                    style = utils.parse_dict_string(span['style'])
                     self.add_styles_to_run(style)
 
             # add font style and name

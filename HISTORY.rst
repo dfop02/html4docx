@@ -3,6 +3,21 @@
 Release History
 ---------------
 
+1.0.5 (2025-02-23)
+++++++++++++++++++
+
+**Updates**
+- Refactory functions to be more readable and performatic, moving common functions to utils.
+- Add tests for table cells new features.
+
+**Fixes**
+- Fix a bug when using colors by name, when some colors exists but was not available. E.g.: magenta | [Dfop02](https://github.com/dfop02)
+- Fix background-color not working, always returning black. | [Dfop02](https://github.com/dfop02)
+
+**New Features**
+- Add support to table cells style (border, background-color, width, height, margin) | [Dfop02](https://github.com/dfop02)
+- Add support to "in", "rem", "em", "mm" and "pc" units | [Dfop02](https://github.com/dfop02)
+
 1.0.4 (2024-08-11)
 ++++++++++++++++++
 
