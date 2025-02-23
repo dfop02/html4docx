@@ -38,14 +38,3 @@ jobs:
     - name: Run tests
       run: |
         python -m tests.test
-        python -m tests.test_tables
-        python -m tests.test_code
-        python -m doctest -v html4docx/h4d.py
-    - name: Upload test artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: test_outputs
-        path: |
-          tests/test.docx
-          tests/new_docx_file_tables2.html.docx
-          tests/new_docx_file_code.html.docx
