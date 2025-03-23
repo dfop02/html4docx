@@ -38,3 +38,8 @@ jobs:
     - name: Run tests
       run: |
         python -m tests.test
+    - name: Upload test.docx
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-docx-p${{ matrix.python-version }}
+        path: tests/test.docx
