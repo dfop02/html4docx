@@ -89,19 +89,42 @@ class OutputTest(unittest.TestCase):
         )
         self.parser.add_html_to_document(self.table_html, self.document)
 
+        # When no table style is set, use Normal Table as default
+        table_style = 'Normal Table'
+
+        # Find the last table added to the document
+        last_table = self.document.tables[-1]  # Assumes the table was added at the end
+
+        # Validate the table style
+        self.assertEqual(last_table.style.name, table_style, f"Table style does not match expected '{table_style}'")
+
     def test_add_html_with_tables_accent_style(self):
+        table_style = 'Light Grid Accent 6'
         self.document.add_heading(
             'Test: add html with tables with accent',
         )
-        self.parser.table_style = 'Light Grid Accent 6'
+        self.parser.table_style = table_style
         self.parser.add_html_to_document(self.table_html, self.document)
 
+        # Find the last table added to the document
+        last_table = self.document.tables[-1]  # Assumes the table was added at the end
+
+        # Validate the table style
+        self.assertEqual(last_table.style.name, table_style, f"Table style does not match expected '{table_style}'")
+
     def test_add_html_with_tables_basic_style(self):
+        table_style = 'Table Grid'
         self.document.add_heading(
             'Test: add html with tables with basic style',
         )
-        self.parser.table_style = 'Table Grid'
+        self.parser.table_style = table_style
         self.parser.add_html_to_document(self.table_html, self.document)
+
+        # Find the last table added to the document
+        last_table = self.document.tables[-1]  # Assumes the table was added at the end
+
+        # Validate the table style
+        self.assertEqual(last_table.style.name, table_style, f"Table style does not match expected '{table_style}'")
 
     def test_add_nested_tables(self):
         self.document.add_heading(

@@ -29,7 +29,7 @@ new_parser = HtmlToDocx()
 html_string = '<h1>Hello world</h1>'
 new_parser.add_html_to_document(html_string, document)
 
-document.save('your_file_name')
+document.save('your_file_name.docx')
 ```
 
 Convert files directly
@@ -67,8 +67,7 @@ To add borders to tables, use the `Table Grid` style:
 new_parser.table_style = 'Table Grid'
 ```
 
-Default table styles can be found
-here: https://python-docx.readthedocs.io/en/latest/user/styles-understanding.html#table-styles-in-default-template
+All table styles we support can be found [here](https://python-docx.readthedocs.io/en/latest/user/styles-understanding.html#table-styles-in-default-template).
 
 ### Why
 
