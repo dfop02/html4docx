@@ -3,31 +3,55 @@
 Release History
 ---------------
 
+1.0.6 (2025-05-02)
+++++++++++++++++++
+
+**Updates**
+
+- Fix Changelog bad formating.
+- Update `README.md` with latest changes.
+- Add funding to project.
+- Add `CONTRIBUTING.md` to project.
+- Add pull request template to project.
+- Update tests for table style to assert that is working fine.
+- Save `tests.docx` on Github Actions to make it easier to help debugging issues across multiple builds. | [gionn](https://github.com/gionn)
+
+**Fixes**
+
+- Fix `table_style` not working. | [Dfop02](https://github.com/dfop02)
+
+
 1.0.5 (2025-02-23)
 ++++++++++++++++++
 
 **Updates**
+
 - Refactory functions to be more readable and performatic, moving common functions to utils.
 - Add tests for table cells new features.
 
 **Fixes**
+
 - Fix a bug when using colors by name, when some colors exists but was not available. E.g.: magenta | [Dfop02](https://github.com/dfop02)
 - Fix background-color not working, always returning black. | [Dfop02](https://github.com/dfop02)
 
 **New Features**
+
 - Add support to table cells style (border, background-color, width, height, margin) | [Dfop02](https://github.com/dfop02)
 - Add support to "in", "rem", "em", "mm" and "pc" units | [Dfop02](https://github.com/dfop02)
+
 
 1.0.4 (2024-08-11)
 ++++++++++++++++++
 
 **Updates**
+
 - Create Changelog HISTORY.
 - Update README.
 - Add Github Action Workflow to publish in pypi.
 - Change default VERSION tag, removing the "v" from new releases.
 
 **New Features**
+
 - Support to internal links (Anchor) | [Dfop02](https://github.com/dfop02)
 
 
@@ -60,11 +84,13 @@ Release History
 - Initial Release!
 
 **Fixes**
+
 - Handle missing run for leading br tag | [dashingdove](https://github.com/dashingdove) from [PR](https://github.com/pqzx/html2docx/pull/53)
 - Fix base64 images | [djplaner](https://github.com/djplaner) from [Issue](https://github.com/pqzx/html2docx/issues/28#issuecomment-1052736896)
 - Handle img tag without src attribute | [johnjor](https://github.com/johnjor) from [PR](https://github.com/pqzx/html2docx/pull/63)
 
 **New Features**
+
 - Add Witdh/Height style to images | [maifeeulasad](https://github.com/maifeeulasad) from [PR](https://github.com/pqzx/html2docx/pull/29)
 - Improve performance on large tables | [dashingdove](https://github.com/dashingdove) from [PR](https://github.com/pqzx/html2docx/pull/58)
 - Support for HTML Pagination | [Evilran](https://github.com/Evilran) from [PR](https://github.com/pqzx/html2docx/pull/39)

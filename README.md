@@ -29,7 +29,7 @@ new_parser = HtmlToDocx()
 html_string = '<h1>Hello world</h1>'
 new_parser.add_html_to_document(html_string, document)
 
-document.save('your_file_name')
+document.save('your_file_name.docx')
 ```
 
 Convert files directly
@@ -61,31 +61,32 @@ new_parser = HtmlToDocx()
 new_parser.table_style = 'Light Shading Accent 4'
 ```
 
-To add borders to tables, use the `TableGrid` style:
+To add borders to tables, use the `Table Grid` style:
 
 ```python
-new_parser.table_style = 'TableGrid'
+new_parser.table_style = 'Table Grid'
 ```
 
-Default table styles can be found
-here: https://python-docx.readthedocs.io/en/latest/user/styles-understanding.html#table-styles-in-default-template
+All table styles we support can be found [here](https://python-docx.readthedocs.io/en/latest/user/styles-understanding.html#table-styles-in-default-template).
 
 ### Why
 
-My goal to fork and fix/update this package was to complete my current task at work that envolves manipulating a html to docs which the original couldn't complete because was lacking of few features and bugs, so instead creating a package from zero, I prefer update this one.
+My goal in forking and fixing/updating this package was to complete my current task at work, which involves converting HTML to DOCX. The original package lacked a few features and had some bugs, preventing me from completing the task. Instead of creating a new package from scratch, I preferred to update this one.
 
 ### Differences (fixes and new features)
 
 **Fixes**
+- Fix `table_style` not working | [Dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/11)
 - Handle missing run for leading br tag | [dashingdove](https://github.com/dashingdove) from [PR](https://github.com/pqzx/html2docx/pull/53)
 - Fix base64 images | [djplaner](https://github.com/djplaner) from [Issue](https://github.com/pqzx/html2docx/issues/28#issuecomment-1052736896)
 - Handle img tag without src attribute | [johnjor](https://github.com/johnjor) from [PR](https://github.com/pqzx/html2docx/pull/63)
 - Fix bug when any style has `!important` | [Dfop02](https://github.com/dfop02)
 - Fix 'style lookup by style_id is deprecated.' | [Dfop02](https://github.com/dfop02)
+- Fix `background-color` not working | [Dfop02](https://github.com/dfop02)
 
 **New Features**
 - Add Witdh/Height style to images | [maifeeulasad](https://github.com/maifeeulasad) from [PR](https://github.com/pqzx/html2docx/pull/29)
-- Support px, cm, pt and % for style margin-left to paragraphs | [Dfop02](https://github.com/dfop02)
+- Support px, cm, pt, in, rem, em, mm, pc and % units for styles | [Dfop02](https://github.com/dfop02)
 - Improve performance on large tables | [dashingdove](https://github.com/dashingdove) from [PR](https://github.com/pqzx/html2docx/pull/58)
 - Support for HTML Pagination | [Evilran](https://github.com/Evilran) from [PR](https://github.com/pqzx/html2docx/pull/39)
 - Support Table style | [Evilran](https://github.com/Evilran) from [PR](https://github.com/pqzx/html2docx/pull/39)
@@ -93,6 +94,7 @@ My goal to fork and fix/update this package was to complete my current task at w
 - Support colors by name | [Dfop02](https://github.com/dfop02)
 - Support font_size when text, ex.: small, medium, etc. | [Dfop02](https://github.com/dfop02)
 - Support to internal links (Anchor) | [Dfop02](https://github.com/dfop02)
+- Add support to table cells style (border, background-color, width, height, margin) | [Dfop02](https://github.com/dfop02)
 - Refactory Tests to be more consistent and less 'human validation' | [Dfop02](https://github.com/dfop02)
 
 ## License

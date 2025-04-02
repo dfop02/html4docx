@@ -1,5 +1,7 @@
 import os
 import re
+import base64
+import urllib
 import urllib.request
 
 from io import BytesIO
@@ -86,6 +88,25 @@ def fetch_image(url):
             return BytesIO(response.read())
     except urllib.error.URLError:
         return None
+
+def fetch_image_data(src):
+    """Fetches image data from a URL or local file."""
+    if src.startswith("data:image/"):  # Handle Base64
+        _, encoded = src.split(",", 1)
+        return BytesIO(base64.b64decode(encoded))
+
+    elif is_url(src):  # Handle URLs
+        try:
+            with urllib.request.urlopen(src) as response:
+                return BytesIO(response.read())
+        except urllib.error.URLError:
+            return None
+
+    else:  # Handle Local Files
+        try:
+            return open(src, "rb")
+        except FileNotFoundError:
+            return None
 
 def parse_dict_string(string: str, separator: str = ';'):
     new_string = re.sub(r'\s+', ' ', string.replace("\n", '')).split(separator)

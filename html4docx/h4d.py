@@ -365,21 +365,7 @@ class HtmlToDocx(HTMLParser):
         width = utils.unit_converter(current_attrs['width']) if 'width' in current_attrs else None
 
         # fetch image
-        src_is_url = utils.is_url(src)
-        if src_is_url:
-            try:
-                image = utils.fetch_image(src)
-            except urllib.error.URLError:
-                image = None
-        else:
-            image = src
-
-        # check if image starts with data:.*base64 and
-        # convert to bytes ready to insert to docx
-        if image and isinstance(image, str) and image.startswith('data:image/'):
-            image = image.split(',')[1]
-            image = base64.b64decode(image)
-            image = BytesIO(image)
+        image = utils.fetch_image_data(src)
 
         # add image to doc
         if image:
@@ -392,7 +378,7 @@ class HtmlToDocx(HTMLParser):
                 image = None
 
         if not image:
-            if src_is_url:
+            if utils.is_url(src):
                 self.doc.add_paragraph("<image: %s>" % src)
             else:
                 # avoid exposing filepaths in document
@@ -431,7 +417,8 @@ class HtmlToDocx(HTMLParser):
             try:
                 # Fixed 'style lookup by style_id is deprecated.'
                 # https://stackoverflow.com/a/29567907/17274446
-                self.table_style = ' '.join(re.findall(r'[A-Z][^A-Z]*', self.table_style))
+                self.table_style = ' '.join(re.findall(r'[A-Z][a-z]*|[0-9]', self.table_style))
+                self.table.style = self.table_style
             except KeyError as e:
                 raise ValueError(f"Unable to apply style {self.table_style}.") from e
 
@@ -456,7 +443,6 @@ class HtmlToDocx(HTMLParser):
                 child_parser.copy_settings_from(self)
                 child_parser.add_html_to_cell(cell_html, docx_cell)
                 child_parser.add_styles_to_table_cell(cell_styles, docx_cell, self.table.rows[cell_row])
-                # child_parser.add_styles_to_run(cell_styles)
 
         if 'style' in current_attrs and self.table:
             style = utils.parse_dict_string(current_attrs['style'])

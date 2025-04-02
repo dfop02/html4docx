@@ -89,19 +89,42 @@ class OutputTest(unittest.TestCase):
         )
         self.parser.add_html_to_document(self.table_html, self.document)
 
+        # When no table style is set, use Normal Table as default
+        table_style = 'Normal Table'
+
+        # Find the last table added to the document
+        last_table = self.document.tables[-1]  # Assumes the table was added at the end
+
+        # Validate the table style
+        self.assertEqual(last_table.style.name, table_style, f"Table style does not match expected '{table_style}'")
+
     def test_add_html_with_tables_accent_style(self):
+        table_style = 'Light Grid Accent 6'
         self.document.add_heading(
             'Test: add html with tables with accent',
         )
-        self.parser.table_style = 'Light Grid Accent 6'
+        self.parser.table_style = table_style
         self.parser.add_html_to_document(self.table_html, self.document)
 
+        # Find the last table added to the document
+        last_table = self.document.tables[-1]  # Assumes the table was added at the end
+
+        # Validate the table style
+        self.assertEqual(last_table.style.name, table_style, f"Table style does not match expected '{table_style}'")
+
     def test_add_html_with_tables_basic_style(self):
+        table_style = 'Table Grid'
         self.document.add_heading(
             'Test: add html with tables with basic style',
         )
-        self.parser.table_style = 'TableGrid'
+        self.parser.table_style = table_style
         self.parser.add_html_to_document(self.table_html, self.document)
+
+        # Find the last table added to the document
+        last_table = self.document.tables[-1]  # Assumes the table was added at the end
+
+        # Validate the table style
+        self.assertEqual(last_table.style.name, table_style, f"Table style does not match expected '{table_style}'")
 
     def test_add_nested_tables(self):
         self.document.add_heading(
@@ -113,7 +136,7 @@ class OutputTest(unittest.TestCase):
         self.document.add_heading(
             'Test: add nested tables with basic style',
         )
-        self.parser.table_style = 'TableGrid'
+        self.parser.table_style = 'Table Grid'
         self.parser.add_html_to_document(self.table2_html, self.document)
 
     def test_add_nested_tables_accent_style(self):
@@ -559,6 +582,40 @@ and blank lines.
             "</table>",
             self.document
         )
+
+    def test_emojis_and_special_characters(self):
+        emojis_and_special_chars_html_example = """
+        <html>
+            <body>
+                <p>Emoji Test: 😊🔥🎉</p>
+                <p>HTML Entities: &amp; &lt; &gt; &copy; &reg;</p>
+                <p>Math Symbols: ∑ π √</p>
+            </body>
+        </html>
+        """
+
+        self.document.add_heading(
+            'Test: Emojis and Special Characters',
+            level=1
+        )
+        # Add on document for human validation
+        self.parser.add_html_to_document(emojis_and_special_chars_html_example, self.document)
+
+        document = self.parser.parse_html_string(emojis_and_special_chars_html_example)
+        doc_text = " ".join([p.text for p in document.paragraphs])
+
+        # Check if all expected elements exist in the DOCX
+        assert "😊" in doc_text, "Emoji '😊' is missing"
+        assert "🔥" in doc_text, "Emoji '🔥' is missing"
+        assert "🎉" in doc_text, "Emoji '🎉' is missing"
+        assert "&" in doc_text, "HTML entity '&amp;' did not convert correctly"
+        assert "<" in doc_text, "HTML entity '&lt;' did not convert correctly"
+        assert ">" in doc_text, "HTML entity '&gt;' did not convert correctly"
+        assert "©" in doc_text, "HTML entity '&copy;' did not convert correctly"
+        assert "®" in doc_text, "HTML entity '&reg;' did not convert correctly"
+        assert "∑" in doc_text, "Math symbol '∑' is missing"
+        assert "π" in doc_text, "Math symbol 'π' is missing"
+        assert "√" in doc_text, "Math symbol '√' is missing"
 
 if __name__ == '__main__':
     unittest.main()
