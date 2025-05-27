@@ -3,6 +3,20 @@
 Release History
 ---------------
 
+1.0.7 (2025-XX-XX)
+++++++++++++++++++
+
+**Updates**
+
+- Being able to use inline images on same paragraph. | [Dfop02](https://github.com/dfop02)
+- Add tests for inline images. | [Dfop02](https://github.com/dfop02)
+- Add tests for Bold, Italic, Underline and Strike. | [Dfop02](https://github.com/dfop02)
+
+**Fixes**
+
+- None
+
+
 1.0.6 (2025-05-02)
 ++++++++++++++++++
 

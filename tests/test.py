@@ -3,6 +3,9 @@ from pathlib import Path
 import unittest
 from docx import Document
 from docx.oxml.ns import qn
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from docx.parts.image import ImagePart
+
 from html4docx import HtmlToDocx
 from html4docx.utils import unit_converter
 from .context import test_dir
@@ -253,7 +256,6 @@ and blank lines.
             'Test: Handling external hyperlink',
             level=1
         )
-        # Add on document for human validation
         self.parser.add_html_to_document(hyperlink_html_example, self.document)
 
         document = self.parser.parse_html_string(hyperlink_html_example)
@@ -277,7 +279,6 @@ and blank lines.
             'Test: Handling internal hyperlink',
             level=1
         )
-        # Add on document for human validation
         self.parser.add_html_to_document(hyperlink_html_example, self.document)
 
         document = self.parser.parse_html_string(hyperlink_html_example)
@@ -291,11 +292,77 @@ and blank lines.
             'Test: Handling img without src',
             level=1
         )
-        # Add on document for human validation
         self.parser.add_html_to_document('<img />', self.document)
 
         document = self.parser.parse_html_string('<img />')
         assert '<image: no_src>' in document.paragraphs[0].text
+
+    def test_inline_images(self):
+        self.document.add_heading(
+            'Test: Handling inline images',
+            level=1
+        )
+        test_img_src = 'https://github.com/dfop02/html4docx/blob/main/tests/assets/images/test_img.png?raw=true'
+        html_example = (
+            f"<p><img src='{test_img_src}' />"
+            f"<img src='{test_img_src}' />"
+            f"<img src='{test_img_src}' /></p>"
+        )
+        self.parser.add_html_to_document(html_example, self.document)
+
+        document = self.parser.parse_html_string(html_example)
+
+        # Find paragraphs containing inline pictures
+        img_paragraphs = [
+            p for p in document.paragraphs
+            if any(r._element.xpath(".//pic:pic") for r in p.runs)
+        ]
+        assert img_paragraphs, "Expected at least one paragraph with inline images"
+
+        first_img_para = img_paragraphs[0]
+        inline_img_runs = [
+            r for r in first_img_para.runs
+            if r._element.xpath(".//pic:pic")
+        ]
+        assert len(inline_img_runs) == 3, "Expected 3 inline image runs in a single paragraph"
+
+    def test_bold_italic_underline_and_strike(self):
+        self.document.add_heading(
+            'Test: Bold, Italic, Underline and Strike tags',
+            level=1
+        )
+
+        html_example = (
+            "<p>This text has <b>Bold Words</b>.</p>"
+            "<p>This text has <i>Italic Words</i>.</p>"
+            "<p>This text has <u>Underline Words</u>.</p>"
+            "<p>This text has <s>Strike Words</s>.</p>"
+            "<p>This text has <b><i><u><s>Bold, Italic, Underline and Strike Words</s></u></i></b>.</p>"
+        )
+        # Add on document for human validation
+        self.parser.add_html_to_document(html_example, self.document)
+
+        document = self.parser.parse_html_string(html_example)
+        paragraphs = document.paragraphs
+
+        self.assertIn("Bold Words", paragraphs[0].text)
+        self.assertTrue(paragraphs[0].runs[2].bold)
+
+        self.assertIn("Italic Words", paragraphs[1].text)
+        self.assertTrue(paragraphs[1].runs[2].italic)
+
+        self.assertIn("Underline Words", paragraphs[2].text)
+        self.assertTrue(paragraphs[2].runs[2].underline)
+
+        self.assertIn("Strike Words", paragraphs[3].text)
+        self.assertTrue(paragraphs[3].runs[2].font.strike)
+
+        self.assertIn("Bold, Italic, Underline and Strike Words", paragraphs[4].text)
+        run = paragraphs[4].runs[2]
+        self.assertTrue(run.bold)
+        self.assertTrue(run.italic)
+        self.assertTrue(run.underline)
+        self.assertTrue(run.font.strike)
 
     def test_font_size(self):
         font_size_html_example = (
