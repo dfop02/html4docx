@@ -367,11 +367,12 @@ class HtmlToDocx(HTMLParser):
         # fetch image
         image = utils.fetch_image_data(src)
 
+        self.run = self.paragraph.add_run()
         # add image to doc
         if image:
             try:
                 if isinstance(self.doc, docx.document.Document):
-                    self.doc.add_picture(image, width, height)
+                    self.run.add_picture(image, width, height)
                 else:
                     self.add_image_to_cell(self.doc, image, width, height)
             except FileNotFoundError:

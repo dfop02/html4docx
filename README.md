@@ -95,6 +95,7 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Support font_size when text, ex.: small, medium, etc. | [Dfop02](https://github.com/dfop02)
 - Support to internal links (Anchor) | [Dfop02](https://github.com/dfop02)
 - Add support to table cells style (border, background-color, width, height, margin) | [Dfop02](https://github.com/dfop02)
+- Being able to use inline images on same paragraph. | [Dfop02](https://github.com/dfop02)
 - Refactory Tests to be more consistent and less 'human validation' | [Dfop02](https://github.com/dfop02)
 
 ## License
