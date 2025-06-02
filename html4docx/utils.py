@@ -39,8 +39,12 @@ font_sizes_named = {
 }
 
 styles = {
-    'LIST_BULLET': 'List Bullet',
-    'LIST_NUMBER': 'List Number',
+    'ul': 'List Bullet',
+    'ul2': 'List Bullet 2',
+    'ul3': 'List Bullet 3',
+    'ol': 'List Number',
+    'ol2': 'List Number 2',
+    'ol3': 'List Number 3',
 }
 
 # values in inches

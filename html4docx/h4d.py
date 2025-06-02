@@ -73,6 +73,7 @@ class HtmlToDocx(HTMLParser):
         self.skip_tag = None
         self.instances_to_skip = 0
         self.bookmark_id = 0
+        self.in_li = False
 
     def copy_settings_from(self, other):
         """Copy settings from another instance of HtmlToDocx"""
@@ -327,20 +328,15 @@ class HtmlToDocx(HTMLParser):
 
     def handle_li(self):
         # check list stack to determine style and depth
-        list_depth = len(self.tags['list'])
-        if list_depth:
-            list_type = self.tags['list'][-1]
-        else:
-            list_type = 'ul' # assign unordered if no tag
-
-        if list_type == 'ol':
-            list_style = utils.styles['LIST_NUMBER']
-        else:
-            list_style = utils.styles['LIST_BULLET']
+        list_depth = len(self.tags['list']) or 1
+        list_type = self.tags['list'][-1] if self.tags['list'] else 'ul'
+        level = min(list_depth, 3)  # cap nesting at 3
+        style_key = list_type if level <= 1 else f"{list_type}{level}"
+        list_style = utils.styles.get(style_key, 'List Bullet')  # default to bullet
 
         self.paragraph = self.doc.add_paragraph(style=list_style)
-        self.paragraph.paragraph_format.left_indent = Inches(min(list_depth * LIST_INDENT, MAX_INDENT))
-        self.paragraph.paragraph_format.line_spacing = 1
+        # self.paragraph.paragraph_format.line_spacing = 1
+        self.in_li = True
 
     def add_image_to_cell(self, cell, image, width=None, height=None):
         # python-docx doesn't have method yet for adding images to table cells. For now we use this
@@ -528,7 +524,7 @@ class HtmlToDocx(HTMLParser):
         if tag == 'span':
             self.tags['span'].append(current_attrs)
             return
-        elif tag == 'ol' or tag == 'ul':
+        elif tag in ['ol', 'ul']:
             self.tags['list'].append(tag)
             return # don't apply styles for now
         elif tag == 'br':
@@ -542,7 +538,10 @@ class HtmlToDocx(HTMLParser):
 
         self.tags[tag] = current_attrs
         if tag in ['p', 'pre']:
-            self.paragraph = self.doc.add_paragraph()
+            if self.in_li:
+                pass
+            else:
+                self.paragraph = self.doc.add_paragraph()
 
         elif tag == 'li':
             self.handle_li()
@@ -628,6 +627,8 @@ class HtmlToDocx(HTMLParser):
             self.table = None
             self.doc = self.document
             self.paragraph = None
+        elif tag == 'li':
+            self.in_li = False
 
         if tag in self.tags:
             self.tags.pop(tag)
@@ -720,6 +721,14 @@ class HtmlToDocx(HTMLParser):
     def run_process(self, html):
         if self.bs and BeautifulSoup:
             self.soup = BeautifulSoup(html, 'html.parser')
+
+            # Fix orphaned <li> tags
+            for orphan_li in self.soup.find_all('li'):
+                if orphan_li.find_parent(['ul', 'ol']) is None:
+                    wrapper = self.soup.new_tag("ul")
+                    orphan_li.insert_before(wrapper)
+                    wrapper.append(orphan_li.extract())
+
             html = str(self.soup)
         if self.include_tables:
             self.get_tables()
