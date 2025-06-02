@@ -15,17 +15,14 @@ How to deal with block level style applied over table elements? e.g. text align
 import argparse
 import os
 import re
-import base64
-import urllib
 
-from io import BytesIO
 from html.parser import HTMLParser
 
 from bs4 import BeautifulSoup
 
 import docx
 from docx import Document
-from docx.shared import RGBColor, Inches
+from docx.shared import RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
