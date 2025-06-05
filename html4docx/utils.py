@@ -1,13 +1,15 @@
+import base64
 import os
 import re
-import base64
 import urllib
 import urllib.request
-
-from io import BytesIO
 from enum import Enum
+from io import BytesIO
 from urllib.parse import urlparse
-from docx.shared import RGBColor, Pt, Cm, Mm, Inches
+
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Cm, Inches, Mm, Pt, RGBColor
 
 from html4docx.colors import Color
 
@@ -297,3 +299,20 @@ def get_image_alignment(image_style):
     if image_style == 'display: block; margin-left: auto; margin-right: auto;':
         return ImageAlignment.CENTER
     return ImageAlignment.LEFT
+
+def restart_numbering(paragraph, num_id=1000):
+    """Forces Word to treat this paragraph as the start of a new numbered list."""
+    p = paragraph._p
+    pPr = p.get_or_add_pPr()
+
+    numPr = OxmlElement('w:numPr')
+
+    numId = OxmlElement('w:numId')
+    numId.set(qn('w:val'), str(num_id))
+    numPr.append(numId)
+
+    ilvl = OxmlElement('w:ilvl')
+    ilvl.set(qn('w:val'), '0')  # top-level list
+    numPr.append(ilvl)
+
+    pPr.append(numPr)

@@ -15,17 +15,15 @@ How to deal with block level style applied over table elements? e.g. text align
 import argparse
 import os
 import re
-
 from html.parser import HTMLParser
 
-from bs4 import BeautifulSoup
-
 import docx
+from bs4 import BeautifulSoup
 from docx import Document
-from docx.shared import RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.shared import RGBColor
 
 from html4docx import utils
 
@@ -71,6 +69,13 @@ class HtmlToDocx(HTMLParser):
         self.instances_to_skip = 0
         self.bookmark_id = 0
         self.in_li = False
+        self.previous_tag_was_closing_ol = False
+        # This counter simulates unique numbering IDs for <ol> elements.
+        # Each new top-level ordered list increments this to trick python-docx into restarting list numbering.
+        # Required because python-docx doesn't expose fine-grained list numbering control.
+        self.list_restart_counter = 1000
+        self.current_ol_num_id = None
+
 
     def copy_settings_from(self, other):
         """Copy settings from another instance of HtmlToDocx"""
@@ -332,8 +337,12 @@ class HtmlToDocx(HTMLParser):
         list_style = utils.styles.get(style_key, 'List Bullet')  # default to bullet
 
         self.paragraph = self.doc.add_paragraph(style=list_style)
-        # self.paragraph.paragraph_format.line_spacing = 1
         self.in_li = True
+
+        # Only restart if this is a new top-level <ol> after previous <ol>
+        if list_type == "ol" and self.current_ol_num_id and level == 1:
+            utils.restart_numbering(self.paragraph, num_id=self.current_ol_num_id)
+
 
     def add_image_to_cell(self, cell, image, width=None, height=None):
         # python-docx doesn't have method yet for adding images to table cells. For now we use this
@@ -522,6 +531,16 @@ class HtmlToDocx(HTMLParser):
             self.tags['span'].append(current_attrs)
             return
         elif tag in ['ol', 'ul']:
+            if tag == "ol" and self.previous_tag_was_closing_ol:
+                self.list_restart_counter += 1
+                self.current_ol_num_id = self.list_restart_counter
+            elif tag == "ol":
+                # Assign new ID if it's a fresh top-level list
+                self.list_restart_counter += 1
+                self.current_ol_num_id = self.list_restart_counter
+            else:
+                self.current_ol_num_id = None  # unordered list
+
             self.tags['list'].append(tag)
             return # don't apply styles for now
         elif tag == 'br':
@@ -535,9 +554,7 @@ class HtmlToDocx(HTMLParser):
 
         self.tags[tag] = current_attrs
         if tag in ['p', 'pre']:
-            if self.in_li:
-                pass
-            else:
+            if not self.in_li:
                 self.paragraph = self.doc.add_paragraph()
 
         elif tag == 'li':
@@ -616,8 +633,11 @@ class HtmlToDocx(HTMLParser):
             if self.tags['span']:
                 self.tags['span'].pop()
                 return
-        elif tag == 'ol' or tag == 'ul':
+        elif tag in ['ol', 'ul']:
             utils.remove_last_occurence(self.tags['list'], tag)
+            if tag == 'ol' and len(self.tags['list']) == 0:
+                self.previous_tag_was_closing_ol = True
+                self.current_ol_num_id = None  # end of that numbered list
             return
         elif tag == 'table':
             self.table_no += 1

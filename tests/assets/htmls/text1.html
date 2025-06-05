@@ -21,11 +21,30 @@
 <p>A picture with height and width and centered: <img style="display: block; margin-left: auto; margin-right: auto;" height="100px" width="200px" src='https://github.com/dfop02/html4docx/blob/main/tests/assets/images/test_img.png?raw=true' /></p>
 <h1>heading 1</h1>
 <ol>
-    <li>Ordered list first item</li>
-    <p>Paragraph inserted between items</p>
-    <li>Second item</li>
-    <li><p>Third item within a paragraph</p></li>
-    <li>Fourth item with <strong>bold text</strong></li>
+  <li>first list, first level, item 1</li>
+  <p>Paragraph inserted between items</p>
+  <li>first list, first level, item 2</li>
+  <li><p>first list, first level, item 3 within a paragraph</p></li>
+</ol>
+<ol>
+  <li>second list, first level, item 1</li>
+  <li>
+    second list, first level, item 2
+    <ol>
+      <li>second list, second level, item 1</li>
+      <li>second list, second level, item 2</li>
+
+      <ol>
+        <li>second list, third level, item 1</li>
+        <li>second list, third level, item 2</li>
+      </ol>
+
+      <ul>
+        <li>third level, unsorted list, item 1</li>
+        <li>third level, unsorted list, item 2</li>
+      </ul>
+    </ol>
+  </li>
 </ol>
 <ul style="list-style-type: circle;">
     <li>Unorderd list</li>
