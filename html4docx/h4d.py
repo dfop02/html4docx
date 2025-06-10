@@ -68,14 +68,13 @@ class HtmlToDocx(HTMLParser):
         self.skip_tag = None
         self.instances_to_skip = 0
         self.bookmark_id = 0
-        self.in_li = False
-        self.previous_tag_was_closing_ol = False
         # This counter simulates unique numbering IDs for <ol> elements.
         # Each new top-level ordered list increments this to trick python-docx into restarting list numbering.
         # Required because python-docx doesn't expose fine-grained list numbering control.
-        self.list_restart_counter = 1000
+        self.in_li = False
+        self.list_restart_counter = 0
         self.current_ol_num_id = None
-
+        self._list_num_ids = {}
 
     def copy_settings_from(self, other):
         """Copy settings from another instance of HtmlToDocx"""
@@ -329,20 +328,64 @@ class HtmlToDocx(HTMLParser):
             self.paragraph.paragraph_format.element.pPr.append(shd)
 
     def handle_li(self):
-        # check list stack to determine style and depth
+        '''
+            Handle li tags
+            source: https://stackoverflow.com/a/78685353/17274446
+        '''
         list_depth = len(self.tags['list']) or 1
         list_type = self.tags['list'][-1] if self.tags['list'] else 'ul'
-        level = min(list_depth, 3)  # cap nesting at 3
+        level = min(list_depth, 3)
         style_key = list_type if level <= 1 else f"{list_type}{level}"
-        list_style = utils.styles.get(style_key, 'List Bullet')  # default to bullet
+        list_style = utils.styles.get(style_key, 'List Number' if list_type == 'ol' else 'List Bullet')
 
         self.paragraph = self.doc.add_paragraph(style=list_style)
         self.in_li = True
 
-        # Only restart if this is a new top-level <ol> after previous <ol>
-        if list_type == "ol" and self.current_ol_num_id and level == 1:
-            utils.restart_numbering(self.paragraph, num_id=self.current_ol_num_id)
+        if list_type == "ol":
+            # Use your current_ol_num_id (generated on <ol> open) as key
+            ol_id = self.current_ol_num_id or -1
 
+            if ol_id not in self._list_num_ids:
+                # First time using this <ol> → create a new numId
+
+                style_obj = self.paragraph.style
+                num_id_style = None
+
+                if hasattr(style_obj._element.pPr, 'numPr'):
+                    num_id_style = style_obj._element.pPr.numPr.numId.val
+
+                if num_id_style is not None:
+                    ct_numbering = self.doc.part.numbering_part.numbering_definitions._numbering
+                    ct_num = ct_numbering.num_having_numId(num_id_style)
+                    abstractNumId = ct_num.abstractNumId.val
+
+                    # Add new numId linked to same abstractNumId
+                    ct_num_new = ct_numbering.add_num(abstractNumId)
+                    new_num_id = ct_num_new.numId
+
+                    # Apply startOverride for level 0
+                    lvl_override = ct_num_new.add_lvlOverride(0)
+                    start_override = lvl_override._add_startOverride()
+                    start_override.val = 1
+
+                    # Cache this new numId
+                    self._list_num_ids[ol_id] = new_num_id
+            else:
+                new_num_id = self._list_num_ids[ol_id]
+
+            # Assign this numId to the paragraph
+            pPr = self.paragraph._p.get_or_add_pPr()
+            numPr = OxmlElement('w:numPr')
+
+            numId_elem = OxmlElement('w:numId')
+            numId_elem.set(qn('w:val'), str(new_num_id))
+
+            ilvl = OxmlElement('w:ilvl')
+            ilvl.set(qn('w:val'), str(level - 1))
+
+            numPr.append(ilvl)
+            numPr.append(numId_elem)
+            pPr.append(numPr)
 
     def add_image_to_cell(self, cell, image, width=None, height=None):
         # python-docx doesn't have method yet for adding images to table cells. For now we use this
@@ -531,10 +574,7 @@ class HtmlToDocx(HTMLParser):
             self.tags['span'].append(current_attrs)
             return
         elif tag in ['ol', 'ul']:
-            if tag == "ol" and self.previous_tag_was_closing_ol:
-                self.list_restart_counter += 1
-                self.current_ol_num_id = self.list_restart_counter
-            elif tag == "ol":
+            if tag == 'ol':
                 # Assign new ID if it's a fresh top-level list
                 self.list_restart_counter += 1
                 self.current_ol_num_id = self.list_restart_counter
@@ -635,9 +675,9 @@ class HtmlToDocx(HTMLParser):
                 return
         elif tag in ['ol', 'ul']:
             utils.remove_last_occurence(self.tags['list'], tag)
-            if tag == 'ol' and len(self.tags['list']) == 0:
-                self.previous_tag_was_closing_ol = True
-                self.current_ol_num_id = None  # end of that numbered list
+            if tag == 'ol':
+                self._list_num_ids.pop(self.current_ol_num_id, None)
+                self.current_ol_num_id = None
             return
         elif tag == 'table':
             self.table_no += 1
