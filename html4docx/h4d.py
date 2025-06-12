@@ -513,7 +513,7 @@ class HtmlToDocx(HTMLParser):
             text: The text displayed for the url.
             tooltip: The text displayed when holder link.
         """
-        is_external = href.startswith('http')
+        is_external = href.startswith('http') if href else False
         hyperlink = OxmlElement('w:hyperlink')
 
         if is_external:
@@ -707,8 +707,9 @@ class HtmlToDocx(HTMLParser):
         # You cannot have interactive content in an A tag, this includes links
         # https://html.spec.whatwg.org/#interactive-content
         link = self.tags.get('a')
-        if link:
-            self.handle_link(link.get('href', None), data, link.get('title', None))
+        href = link.get('href', None) if link else None
+        if link and href:
+            self.handle_link(href, data, link.get('title', None))
         else:
             # If there's a link, dont put the data directly in the run
             self.run = self.paragraph.add_run(data)
