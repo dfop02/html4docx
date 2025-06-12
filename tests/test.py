@@ -617,5 +617,34 @@ and blank lines.
         assert "π" in doc_text, "Math symbol 'π' is missing"
         assert "√" in doc_text, "Math symbol '√' is missing"
 
+    def test_ordered_list(self):
+        self.document.add_heading(
+            'Test: Ordered List',
+            level=1
+        )
+        self.parser.add_html_to_document(self.text1, self.document)
+
+        document = self.parser.parse_html_string(self.text1)
+        doc_text = " ".join([p.text for p in document.paragraphs])
+
+        # Check if specific ordered list items exist in the DOCX
+        assert "first list, first level, item 1" in doc_text, "Ordered list item 'first list, first level, item 1' is missing"
+        assert "first list, first level, item 2" in doc_text, "Ordered list item 'first list, first level, item 2' is missing"
+        assert "first list, first level, item 3 within a paragraph" in doc_text, "Ordered list item 'first list, first level, item 3 within a paragraph' is missing"
+
+    def test_unordered_list(self):
+        self.document.add_heading(
+            'Test: Unordered List',
+            level=1
+        )
+        self.parser.add_html_to_document(self.text1, self.document)
+
+        document = self.parser.parse_html_string(self.text1)
+        doc_text = " ".join([p.text for p in document.paragraphs])
+
+        # Check if specific unordered list items exist in the DOCX
+        assert "Unorderd list" in doc_text, "Unordered list item 'Unorderd list' is missing"
+        assert "with circle markers" in doc_text, "Unordered list item 'with circle markers' is missing"
+
 if __name__ == '__main__':
     unittest.main()
