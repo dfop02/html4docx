@@ -15,20 +15,15 @@ How to deal with block level style applied over table elements? e.g. text align
 import argparse
 import os
 import re
-import base64
-import urllib
-
-from io import BytesIO
 from html.parser import HTMLParser
 
-from bs4 import BeautifulSoup
-
 import docx
+from bs4 import BeautifulSoup
 from docx import Document
-from docx.shared import RGBColor, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.shared import RGBColor
 
 from html4docx import utils
 
@@ -73,6 +68,13 @@ class HtmlToDocx(HTMLParser):
         self.skip_tag = None
         self.instances_to_skip = 0
         self.bookmark_id = 0
+        # This counter simulates unique numbering IDs for <ol> elements.
+        # Each new top-level ordered list increments this to trick python-docx into restarting list numbering.
+        # Required because python-docx doesn't expose fine-grained list numbering control.
+        self.in_li = False
+        self.list_restart_counter = 0
+        self.current_ol_num_id = None
+        self._list_num_ids = {}
 
     def copy_settings_from(self, other):
         """Copy settings from another instance of HtmlToDocx"""
@@ -326,21 +328,64 @@ class HtmlToDocx(HTMLParser):
             self.paragraph.paragraph_format.element.pPr.append(shd)
 
     def handle_li(self):
-        # check list stack to determine style and depth
-        list_depth = len(self.tags['list'])
-        if list_depth:
-            list_type = self.tags['list'][-1]
-        else:
-            list_type = 'ul' # assign unordered if no tag
-
-        if list_type == 'ol':
-            list_style = utils.styles['LIST_NUMBER']
-        else:
-            list_style = utils.styles['LIST_BULLET']
+        '''
+            Handle li tags
+            source: https://stackoverflow.com/a/78685353/17274446
+        '''
+        list_depth = len(self.tags['list']) or 1
+        list_type = self.tags['list'][-1] if self.tags['list'] else 'ul'
+        level = min(list_depth, 3)
+        style_key = list_type if level <= 1 else f"{list_type}{level}"
+        list_style = utils.styles.get(style_key, 'List Number' if list_type == 'ol' else 'List Bullet')
 
         self.paragraph = self.doc.add_paragraph(style=list_style)
-        self.paragraph.paragraph_format.left_indent = Inches(min(list_depth * LIST_INDENT, MAX_INDENT))
-        self.paragraph.paragraph_format.line_spacing = 1
+        self.in_li = True
+
+        if list_type == "ol":
+            # Use your current_ol_num_id (generated on <ol> open) as key
+            ol_id = self.current_ol_num_id or -1
+
+            if ol_id not in self._list_num_ids:
+                # First time using this <ol> → create a new numId
+
+                style_obj = self.paragraph.style
+                num_id_style = None
+
+                if hasattr(style_obj._element.pPr, 'numPr'):
+                    num_id_style = style_obj._element.pPr.numPr.numId.val
+
+                if num_id_style is not None:
+                    ct_numbering = self.doc.part.numbering_part.numbering_definitions._numbering
+                    ct_num = ct_numbering.num_having_numId(num_id_style)
+                    abstractNumId = ct_num.abstractNumId.val
+
+                    # Add new numId linked to same abstractNumId
+                    ct_num_new = ct_numbering.add_num(abstractNumId)
+                    new_num_id = ct_num_new.numId
+
+                    # Apply startOverride for level 0
+                    lvl_override = ct_num_new.add_lvlOverride(0)
+                    start_override = lvl_override._add_startOverride()
+                    start_override.val = 1
+
+                    # Cache this new numId
+                    self._list_num_ids[ol_id] = new_num_id
+            else:
+                new_num_id = self._list_num_ids[ol_id]
+
+            # Assign this numId to the paragraph
+            pPr = self.paragraph._p.get_or_add_pPr()
+            numPr = OxmlElement('w:numPr')
+
+            numId_elem = OxmlElement('w:numId')
+            numId_elem.set(qn('w:val'), str(new_num_id))
+
+            ilvl = OxmlElement('w:ilvl')
+            ilvl.set(qn('w:val'), str(level - 1))
+
+            numPr.append(ilvl)
+            numPr.append(numId_elem)
+            pPr.append(numPr)
 
     def add_image_to_cell(self, cell, image, width=None, height=None):
         # python-docx doesn't have method yet for adding images to table cells. For now we use this
@@ -469,7 +514,7 @@ class HtmlToDocx(HTMLParser):
             text: The text displayed for the url.
             tooltip: The text displayed when holder link.
         """
-        is_external = href.startswith('http')
+        is_external = href.startswith('http') if href else False
         hyperlink = OxmlElement('w:hyperlink')
 
         if is_external:
@@ -529,7 +574,14 @@ class HtmlToDocx(HTMLParser):
         if tag == 'span':
             self.tags['span'].append(current_attrs)
             return
-        elif tag == 'ol' or tag == 'ul':
+        elif tag in ['ol', 'ul']:
+            if tag == 'ol':
+                # Assign new ID if it's a fresh top-level list
+                self.list_restart_counter += 1
+                self.current_ol_num_id = self.list_restart_counter
+            else:
+                self.current_ol_num_id = None  # unordered list
+
             self.tags['list'].append(tag)
             return # don't apply styles for now
         elif tag == 'br':
@@ -543,7 +595,8 @@ class HtmlToDocx(HTMLParser):
 
         self.tags[tag] = current_attrs
         if tag in ['p', 'pre']:
-            self.paragraph = self.doc.add_paragraph()
+            if not self.in_li:
+                self.paragraph = self.doc.add_paragraph()
 
         elif tag == 'li':
             self.handle_li()
@@ -621,14 +674,19 @@ class HtmlToDocx(HTMLParser):
             if self.tags['span']:
                 self.tags['span'].pop()
                 return
-        elif tag == 'ol' or tag == 'ul':
+        elif tag in ['ol', 'ul']:
             utils.remove_last_occurence(self.tags['list'], tag)
+            if tag == 'ol':
+                self._list_num_ids.pop(self.current_ol_num_id, None)
+                self.current_ol_num_id = None
             return
         elif tag == 'table':
             self.table_no += 1
             self.table = None
             self.doc = self.document
             self.paragraph = None
+        elif tag == 'li':
+            self.in_li = False
 
         if tag in self.tags:
             self.tags.pop(tag)
@@ -650,8 +708,9 @@ class HtmlToDocx(HTMLParser):
         # You cannot have interactive content in an A tag, this includes links
         # https://html.spec.whatwg.org/#interactive-content
         link = self.tags.get('a')
-        if link:
-            self.handle_link(link.get('href', None), data, link.get('title', None))
+        href = link.get('href', None) if link else None
+        if link and href:
+            self.handle_link(href, data, link.get('title', None))
         else:
             # If there's a link, dont put the data directly in the run
             self.run = self.paragraph.add_run(data)
@@ -721,6 +780,7 @@ class HtmlToDocx(HTMLParser):
     def run_process(self, html):
         if self.bs and BeautifulSoup:
             self.soup = BeautifulSoup(html, 'html.parser')
+
             html = str(self.soup)
         if self.include_tables:
             self.get_tables()

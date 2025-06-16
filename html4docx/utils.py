@@ -1,13 +1,15 @@
+import base64
 import os
 import re
-import base64
 import urllib
 import urllib.request
-
-from io import BytesIO
 from enum import Enum
+from io import BytesIO
 from urllib.parse import urlparse
-from docx.shared import RGBColor, Pt, Cm, Mm, Inches
+
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Cm, Inches, Mm, Pt, RGBColor
 
 from html4docx.colors import Color
 
@@ -39,8 +41,12 @@ font_sizes_named = {
 }
 
 styles = {
-    'LIST_BULLET': 'List Bullet',
-    'LIST_NUMBER': 'List Number',
+    'ul': 'List Bullet',
+    'ul2': 'List Bullet 2',
+    'ul3': 'List Bullet 3',
+    'ol': 'List Number',
+    'ol2': 'List Number 2',
+    'ol3': 'List Number 3',
 }
 
 # values in inches
