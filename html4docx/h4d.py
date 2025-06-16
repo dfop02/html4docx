@@ -780,13 +780,6 @@ class HtmlToDocx(HTMLParser):
         if self.bs and BeautifulSoup:
             self.soup = BeautifulSoup(html, 'html.parser')
 
-            # Fix orphaned <li> tags
-            for orphan_li in self.soup.find_all('li'):
-                if orphan_li.find_parent(['ul', 'ol']) is None:
-                    wrapper = self.soup.new_tag("ul")
-                    orphan_li.insert_before(wrapper)
-                    wrapper.append(orphan_li.extract())
-
             html = str(self.soup)
         if self.include_tables:
             self.get_tables()

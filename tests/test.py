@@ -618,33 +618,72 @@ and blank lines.
         assert "√" in doc_text, "Math symbol '√' is missing"
 
     def test_ordered_list(self):
-        self.document.add_heading(
-            'Test: Ordered List',
-            level=1
-        )
-        self.parser.add_html_to_document(self.text1, self.document)
+        self.document.add_heading("Test: Ordered List", level=1)
 
-        document = self.parser.parse_html_string(self.text1)
-        doc_text = " ".join([p.text for p in document.paragraphs])
+        ordered_list_html_example = """
+        <ol>
+          <li>first list, item 1</li>
+          <p>Paragraph inserted between items</p>
+          <li>first list, item 2</li>
+          <li><p>first list, item 3 within a paragraph</p></li>
+        </ol>
+        """
+        self.parser.add_html_to_document(ordered_list_html_example, self.document)
+        document = self.parser.parse_html_string(ordered_list_html_example)
 
-        # Check if specific ordered list items exist in the DOCX
-        assert "first list, first level, item 1" in doc_text, "Ordered list item 'first list, first level, item 1' is missing"
-        assert "first list, first level, item 2" in doc_text, "Ordered list item 'first list, first level, item 2' is missing"
-        assert "first list, first level, item 3 within a paragraph" in doc_text, "Ordered list item 'first list, first level, item 3 within a paragraph' is missing"
+        # Extract paragraphs with 'ListNumber' style (ordered list)
+        ordered_list_paragraphs = [
+            p for p in document.paragraphs if p.style.name == "List Number"
+        ]
+
+        # Expected items in order
+        expected_items = [
+            "first list, item 1",
+            "first list, item 2",
+            "first list, item 3 within a paragraph",
+        ]
+
+        assert len(ordered_list_paragraphs) >= len(
+            expected_items
+        ), f"Expected at least {len(expected_items)} ordered list items, found {len(ordered_list_paragraphs)}"
+
+        for i, expected_text in enumerate(expected_items):
+            actual_text = ordered_list_paragraphs[i].text.strip()
+            assert (
+                actual_text == expected_text
+            ), f"Expected ordered list item '{expected_text}', but got '{actual_text}'"
 
     def test_unordered_list(self):
-        self.document.add_heading(
-            'Test: Unordered List',
-            level=1
-        )
-        self.parser.add_html_to_document(self.text1, self.document)
+        self.document.add_heading("Test: Unordered List", level=1)
 
-        document = self.parser.parse_html_string(self.text1)
-        doc_text = " ".join([p.text for p in document.paragraphs])
+        unordered_list_html_example = """
+        <ul>
+          <li>Unorderd list</li>
+          <p>Paragraph inserted between items</p>
+          <li>with circle markers</li>
+          <li><p>last option</p></li>
+        </ul>
+        """
+        self.parser.add_html_to_document(unordered_list_html_example, self.document)
+        document = self.parser.parse_html_string(unordered_list_html_example)
 
-        # Check if specific unordered list items exist in the DOCX
-        assert "Unorderd list" in doc_text, "Unordered list item 'Unorderd list' is missing"
-        assert "with circle markers" in doc_text, "Unordered list item 'with circle markers' is missing"
+        # Extract paragraphs with 'ListBullet' style (unordered list)
+        unordered_list_paragraphs = [
+            p for p in document.paragraphs if p.style.name == "List Bullet"
+        ]
 
-if __name__ == '__main__':
+        # Expected unordered items
+        expected_items = ["Unorderd list", "with circle markers", "last option"]
+
+        assert len(unordered_list_paragraphs) >= len(
+            expected_items
+        ), f"Expected at least {len(expected_items)} unordered list items, found {len(unordered_list_paragraphs)}"
+
+        for expected_text in expected_items:
+            assert any(
+                expected_text == p.text.strip() for p in unordered_list_paragraphs
+            ), f"Unordered list item '{expected_text}' not found in List Bullet paragraphs"
+
+
+if __name__ == "__main__":
     unittest.main()
