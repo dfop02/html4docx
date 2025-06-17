@@ -7,8 +7,6 @@ from enum import Enum
 from io import BytesIO
 from urllib.parse import urlparse
 
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
 from docx.shared import Cm, Inches, Mm, Pt, RGBColor
 
 from html4docx.colors import Color
@@ -58,10 +56,10 @@ class ImageAlignment(Enum):
     CENTER = 2
     RIGHT = 3
 
-def get_filename_from_url(url):
+def get_filename_from_url(url: str):
     return os.path.basename(urlparse(url).path)
 
-def is_url(url):
+def is_url(url: str):
     """
     Not to be used for actually validating a url, but in our use case we only
     care if it's a url or a file path, and they're pretty distinguishable
@@ -69,44 +67,39 @@ def is_url(url):
     parts = urlparse(url)
     return all([parts.scheme, parts.netloc, parts.path])
 
-def rgb_to_hex(rgb):
+def rgb_to_hex(rgb: str):
     return '#' + ''.join(f'{i:02X}' for i in rgb)
 
-def adapt_font_size(size):
-    if (size in font_sizes_named.keys()):
+def adapt_font_size(size: str):
+    if size in font_sizes_named.keys():
         return font_sizes_named[size]
 
     return size
 
-def remove_important_from_style(text):
+def remove_important_from_style(text: str):
     return re.sub('!important', '', text, flags=re.IGNORECASE).strip()
 
-def fetch_image(url):
+def fetch_image(url: str):
     """
-    Attempts to fetch an image from a url.
+    Attempts to fetch an image from a url, with 5s timeout.
     If successful returns a bytes object, else returns None
 
     :return:
     """
     try:
-        with urllib.request.urlopen(url) as response:
-            # security flaw?
+        with urllib.request.urlopen(url, timeout=5) as response:
             return BytesIO(response.read())
     except urllib.error.URLError:
         return None
 
-def fetch_image_data(src):
+def fetch_image_data(src: str):
     """Fetches image data from a URL or local file."""
     if src.startswith("data:image/"):  # Handle Base64
         _, encoded = src.split(",", 1)
         return BytesIO(base64.b64decode(encoded))
 
     elif is_url(src):  # Handle URLs
-        try:
-            with urllib.request.urlopen(src) as response:
-                return BytesIO(response.read())
-        except urllib.error.URLError:
-            return None
+        return fetch_image(src)
 
     else:  # Handle Local Files
         try:
@@ -179,29 +172,6 @@ def unit_converter(unit_value: str, target_unit: str = "pt"):
         return conversion_from_pt[target_unit]
     else:
         raise ValueError(f"Unsupported target unit: {target_unit}")
-
-# def unit_converter(unit_value: str):
-#     unit_value = remove_important_from_style(unit_value.strip().lower())
-#     unit = re.sub(r'[0-9\.]+', '', unit_value)
-#     value = float(re.sub(r'[a-zA-Z\!\%]+', '', unit_value))
-
-#     if unit == 'px':
-#         result = Inches(min(value // 10 * INDENT, MAX_INDENT))
-#     elif unit == 'in':
-#         result = Inches(min(value // 10 * INDENT, MAX_INDENT) * 1)
-#     elif unit == 'cm':
-#         result = Cm(min(value * INDENT, MAX_INDENT) * 2.54)
-#     elif unit == 'pt':
-#         result = Pt(min(value // 10 * INDENT, MAX_INDENT) * 72)
-#     elif unit == 'rem' or unit == 'em':
-#         result = Inches(min(value * 16 // 10 * INDENT, MAX_INDENT))  # Assuming 1rem/em = 16px
-#     elif unit == '%':
-#         result = int(MAX_INDENT * (value / 100))
-#     else:
-#         print(f'Warning: unsupported unit {unit}, return None instead.')
-#         return None
-
-#     return result
 
 def parse_color(color: str, return_hex: bool = False):
     color = remove_important_from_style(color.strip().lower())

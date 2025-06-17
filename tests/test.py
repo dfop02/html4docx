@@ -3,8 +3,6 @@ from pathlib import Path
 import unittest
 from docx import Document
 from docx.oxml.ns import qn
-from docx.opc.constants import RELATIONSHIP_TYPE as RT
-from docx.parts.image import ImagePart
 
 from html4docx import HtmlToDocx
 from html4docx.utils import unit_converter

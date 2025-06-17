@@ -3,18 +3,25 @@
 Release History
 ---------------
 
-1.0.7 (2025-XX-XX)
+1.0.7 (2025-06-17)
 ++++++++++++++++++
 
 **Updates**
 
-- Being able to use inline images on same paragraph. | [Dfop02](https://github.com/dfop02)
 - Add tests for inline images. | [Dfop02](https://github.com/dfop02)
 - Add tests for Bold, Italic, Underline and Strike. | [Dfop02](https://github.com/dfop02)
+- Add tests for Ordered and Unordered Lists. | [TaylorN15](https://github.com/TaylorN15) from [PR](https://github.com/dfop02/html4docx/pull/16)
+- Update Docs (Include Known Issues and Project Guidelines). | [Dfop02](https://github.com/dfop02)
+- Refactor `utils.py` file. | [Dfop02](https://github.com/dfop02)
 
 **Fixes**
 
-- None
+- Fix Ordered and Unordered Lists. | [TaylorN15](https://github.com/TaylorN15) from [PR](https://github.com/dfop02/html4docx/pull/16)
+
+**New Features**
+
+- Being able to use inline images on same paragraph. | [Dfop02](https://github.com/dfop02)
+- Limit 5s timeout to fetch any image from web. | [Dfop02](https://github.com/dfop02)
 
 
 1.0.6 (2025-05-02)
