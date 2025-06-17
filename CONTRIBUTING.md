@@ -2,6 +2,10 @@
 
 Thank you for your interest in contributing to html4docx! Your help is greatly appreciated. Please follow these guidelines to ensure a smooth collaboration.
 
+This project is primarily designed for compatibility with Microsoft Word, but it currently works well with LibreOffice and Google Docs, based on our testing. The goal is to maintain this cross-platform harmony while continuing to implement fixes and updates.
+
+> ⚠️ However, please note that Microsoft Word is the priority. Bugs or issues specific to other editors (e.g., LibreOffice or Google Docs) may be considered, but fixing them is secondary to maintaining full compatibility with Word.
+
 ## Reporting Issues
 
 Before opening a new issue, please check if a similar issue [already exists](https://github.com/dfop02/manga-reader/issues?state=open) or was [recently closed](https://github.com/dfop02/manga-reader/issues?direction=desc&page=1&sort=updated&state=closed).

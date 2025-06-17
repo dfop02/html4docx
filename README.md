@@ -83,6 +83,7 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Fix bug when any style has `!important` | [Dfop02](https://github.com/dfop02)
 - Fix 'style lookup by style_id is deprecated.' | [Dfop02](https://github.com/dfop02)
 - Fix `background-color` not working | [Dfop02](https://github.com/dfop02)
+- Fix Ordered and Unordered Lists | [TaylorN15](https://github.com/TaylorN15) from [PR](https://github.com/dfop02/html4docx/pull/16)
 
 **New Features**
 - Add Witdh/Height style to images | [maifeeulasad](https://github.com/maifeeulasad) from [PR](https://github.com/pqzx/html2docx/pull/29)
@@ -95,7 +96,21 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Support font_size when text, ex.: small, medium, etc. | [Dfop02](https://github.com/dfop02)
 - Support to internal links (Anchor) | [Dfop02](https://github.com/dfop02)
 - Add support to table cells style (border, background-color, width, height, margin) | [Dfop02](https://github.com/dfop02)
+- Being able to use inline images on same paragraph. | [Dfop02](https://github.com/dfop02)
 - Refactory Tests to be more consistent and less 'human validation' | [Dfop02](https://github.com/dfop02)
+
+## Known Issues
+
+- **Maximum Nesting Depth:** Ordered lists support up to 3 nested levels. Any additional depth beyond level 3 will be treated as level 3.
+- **Counter Reset Behavior:**
+  - At level 1, starting a new ordered list will reset the counter.
+  - At levels 2 and 3, the counter will continue from the previous item unless explicitly reset.
+
+## Project Guidelines
+
+This project is primarily designed for compatibility with Microsoft Word, but it currently works well with LibreOffice and Google Docs, based on our testing. The goal is to maintain this cross-platform harmony while continuing to implement fixes and updates.
+
+> ⚠️ However, please note that Microsoft Word is the priority. Bugs or issues specific to other editors (e.g., LibreOffice or Google Docs) may be considered, but fixing them is secondary to maintaining full compatibility with Word.
 
 ## License
 
