@@ -412,7 +412,11 @@ class HtmlToDocx(HTMLParser):
         # fetch image
         image = utils.fetch_image_data(src)
 
+        if not self.paragraph:
+            self.paragraph = self.doc.add_paragraph()
+
         self.run = self.paragraph.add_run()
+
         # add image to doc
         if image:
             try:
