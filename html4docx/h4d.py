@@ -239,12 +239,15 @@ class HtmlToDocx(HTMLParser):
         bookmark_start = OxmlElement('w:bookmarkStart')
         bookmark_start.set(qn('w:id'), str(self.bookmark_id))
         bookmark_start.set(qn('w:name'), bookmark_name)
-        self.paragraph._element.insert(0, bookmark_start)
 
         bookmark_end = OxmlElement('w:bookmarkEnd')
         bookmark_end.set(qn('w:id'), str(self.bookmark_id))
-        self.paragraph._element.append(bookmark_end)
 
+        if not self.paragraph:
+            self.paragraph = self.doc.add_paragraph()
+
+        self.paragraph._element.insert(0, bookmark_start)
+        self.paragraph._element.append(bookmark_end)
         self.bookmark_id += 1
 
     def add_text_align_or_margin_to(self, obj, style):
@@ -403,6 +406,9 @@ class HtmlToDocx(HTMLParser):
             self.doc.add_paragraph("<image: no_src>")
             return
 
+        if not self.paragraph:
+            self.paragraph = self.doc.add_paragraph()
+
         src = current_attrs['src']
 
         # added image dimension, interpreting values as pixel only
@@ -455,8 +461,6 @@ class HtmlToDocx(HTMLParser):
         """
         table_soup = self.tables[self.table_no]
         rows, cols = self.get_table_dimensions(table_soup)
-        # Available Table Styles
-        # https://python-docx.readthedocs.io/en/latest/user/styles-understanding.html#table-styles-in-default-template
         self.table = self.doc.add_table(rows, cols)
 
         if self.table_style:
@@ -464,6 +468,8 @@ class HtmlToDocx(HTMLParser):
                 # Fixed 'style lookup by style_id is deprecated.'
                 # https://stackoverflow.com/a/29567907/17274446
                 self.table_style = ' '.join(re.findall(r'[A-Z][a-z]*|[0-9]', self.table_style))
+                # Available Table Styles
+                # https://python-docx.readthedocs.io/en/latest/user/styles-understanding.html#table-styles-in-default-template
                 self.table.style = self.table_style
             except KeyError as e:
                 raise ValueError(f"Unable to apply style {self.table_style}.") from e
@@ -504,6 +510,28 @@ class HtmlToDocx(HTMLParser):
         # handle page break
         if 'style' in current_attrs and 'page-break-after: always' in current_attrs['style']:
             self.doc.add_page_break()
+
+    def handle_hr(self):
+        # This implementation was taken from:
+        # https://github.com/python-openxml/python-docx/issues/105#issuecomment-62806373
+        self.paragraph = self.doc.add_paragraph()
+        pPr = self.paragraph._p.get_or_add_pPr()
+        pBdr = OxmlElement('w:pBdr')
+        pPr.insert_element_before(
+            pBdr,
+            'w:shd', 'w:tabs', 'w:suppressAutoHyphens', 'w:kinsoku', 'w:wordWrap',
+            'w:overflowPunct', 'w:topLinePunct', 'w:autoSpaceDE', 'w:autoSpaceDN',
+            'w:bidi', 'w:adjustRightInd', 'w:snapToGrid', 'w:spacing', 'w:ind',
+            'w:contextualSpacing', 'w:mirrorIndents', 'w:suppressOverlap', 'w:jc',
+            'w:textDirection', 'w:textAlignment', 'w:textboxTightWrap',
+            'w:outlineLvl', 'w:divId', 'w:cnfStyle', 'w:rPr', 'w:sectPr', 'w:pPrChange'
+        )
+        bottom = OxmlElement('w:bottom')
+        bottom.set(qn('w:val'), 'single')
+        bottom.set(qn('w:sz'), '6')
+        bottom.set(qn('w:space'), '1')
+        bottom.set(qn('w:color'), 'auto')
+        pBdr.append(bottom)
 
     def handle_link(self, href, text, tooltip=None):
         """
@@ -602,27 +630,7 @@ class HtmlToDocx(HTMLParser):
             self.handle_li()
 
         elif tag == 'hr':
-            # This implementation was taken from:
-            # https://github.com/python-openxml/python-docx/issues/105#issuecomment-62806373
-            self.paragraph = self.doc.add_paragraph()
-            pPr = self.paragraph._p.get_or_add_pPr()
-            pBdr = OxmlElement('w:pBdr')
-            pPr.insert_element_before(
-                pBdr,
-                'w:shd', 'w:tabs', 'w:suppressAutoHyphens', 'w:kinsoku', 'w:wordWrap',
-                'w:overflowPunct', 'w:topLinePunct', 'w:autoSpaceDE', 'w:autoSpaceDN',
-                'w:bidi', 'w:adjustRightInd', 'w:snapToGrid', 'w:spacing', 'w:ind',
-                'w:contextualSpacing', 'w:mirrorIndents', 'w:suppressOverlap', 'w:jc',
-                'w:textDirection', 'w:textAlignment', 'w:textboxTightWrap',
-                'w:outlineLvl', 'w:divId', 'w:cnfStyle', 'w:rPr', 'w:sectPr',
-                'w:pPrChange'
-            )
-            bottom = OxmlElement('w:bottom')
-            bottom.set(qn('w:val'), 'single')
-            bottom.set(qn('w:sz'), '6')
-            bottom.set(qn('w:space'), '1')
-            bottom.set(qn('w:color'), 'auto')
-            pBdr.append(bottom)
+            self.handle_hr()
 
         elif re.match('h[1-9]', tag):
             if isinstance(self.doc, docx.document.Document):
@@ -707,28 +715,31 @@ class HtmlToDocx(HTMLParser):
         # There can only be one nested link in a valid html document
         # You cannot have interactive content in an A tag, this includes links
         # https://html.spec.whatwg.org/#interactive-content
-        link = self.tags.get('a')
-        href = link.get('href', None) if link else None
+        link = self.tags.get('a', {})
+        href = link.get('href', None)
+        title = link.get('title', None)
+
         if link and href:
-            self.handle_link(href, data, link.get('title', None))
-        else:
-            # If there's a link, dont put the data directly in the run
-            self.run = self.paragraph.add_run(data)
-            spans = self.tags['span']
-            for span in spans:
-                if 'style' in span:
-                    style = utils.parse_dict_string(span['style'])
-                    self.add_styles_to_run(style)
+            self.handle_link(href, data, title)
+            return
 
-            # add font style and name
-            for tag in self.tags:
-                if tag in utils.font_styles:
-                    font_style = utils.font_styles[tag]
-                    setattr(self.run.font, font_style, True)
+        # If there's a link, dont put the data directly in the run
+        self.run = self.paragraph.add_run(data)
+        spans = self.tags['span']
+        for span in spans:
+            if 'style' in span:
+                style = utils.parse_dict_string(span['style'])
+                self.add_styles_to_run(style)
 
-                if tag in utils.font_names:
-                    font_name = utils.font_names[tag]
-                    self.run.font.name = font_name
+        # add font style and name
+        for tag in self.tags:
+            if tag in utils.font_styles:
+                font_style = utils.font_styles[tag]
+                setattr(self.run.font, font_style, True)
+
+            if tag in utils.font_names:
+                font_name = utils.font_names[tag]
+                self.run.font.name = font_name
 
     def ignore_nested_tables(self, tables_soup):
         """
