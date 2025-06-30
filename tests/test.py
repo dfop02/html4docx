@@ -285,6 +285,31 @@ and blank lines.
         assert '<w:bookmarkEnd w:id="0"/>' in document_body
         assert '<w:hyperlink w:anchor="intro" w:tooltip="Link to intro">' in document_body
 
+    def test_internal_hyperlink_without_paragraph(self):
+        hyperlink_html_example = (
+            "<h1 id=\"intro\">Introduction Header</h1>"
+            "<p>Click here: <a href=\"#intro\" title=\"Link to intro\">Link to intro</a><p/>"
+        )
+
+        document = self.parser.parse_html_string(hyperlink_html_example)
+        document_body = document._body._body.xml
+
+        assert '<w:bookmarkStart w:id="0" w:name="intro"/>' in document_body
+        assert '<w:bookmarkEnd w:id="0"/>' in document_body
+        assert '<w:hyperlink w:anchor="intro" w:tooltip="Link to intro">' in document_body
+
+    def test_internal_hyperlink_without_anchor(self):
+        hyperlink_html_example = (
+            "<p>Click here: <a href=\"#intro\" title=\"Link to intro\">Link to intro</a></p>"
+        )
+
+        document = self.parser.parse_html_string(hyperlink_html_example)
+        document_body = document._body._body.xml
+
+        assert '<w:bookmarkStart w:id="0" w:name="intro"/>' not in document_body
+        assert '<w:bookmarkEnd w:id="0"/>' not in document_body
+        assert '<w:hyperlink w:anchor="intro" w:tooltip="Link to intro">' in document_body
+
     def test_image_no_src(self):
         self.document.add_heading(
             'Test: Handling img without src',
@@ -323,6 +348,24 @@ and blank lines.
             if r._element.xpath(".//pic:pic")
         ]
         assert len(inline_img_runs) == 3, "Expected 3 inline image runs in a single paragraph"
+
+    def test_single_image_without_paragraph(self):
+        html_example = "<img src='https://github.com/dfop02/html4docx/blob/main/tests/assets/images/test_img.png?raw=true' />"
+        document = self.parser.parse_html_string(html_example)
+
+        # Find paragraphs containing inline pictures
+        img_paragraphs = [
+            p for p in document.paragraphs
+            if any(r._element.xpath(".//pic:pic") for r in p.runs)
+        ]
+        assert img_paragraphs, "Expected at least one paragraph with inline images"
+
+        first_img_para = img_paragraphs[0]
+        inline_img_runs = [
+            r for r in first_img_para.runs
+            if r._element.xpath(".//pic:pic")
+        ]
+        assert len(inline_img_runs) == 1, "Expected 1 inline image runs in a single paragraph"
 
     def test_bold_italic_underline_and_strike(self):
         self.document.add_heading(
