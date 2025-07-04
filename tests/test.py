@@ -320,6 +320,26 @@ and blank lines.
         document = self.parser.parse_html_string('<img />')
         assert '<image: no_src>' in document.paragraphs[0].text
 
+    def test_local_img(self):
+        # A table with more td elements in latter rows than in the first
+        self.document.add_heading('Test: Local Image', level=1)
+        html_local_img = '<img alt="" height="306px" src="./tests/assets/images/test_img.png" width="520px"/>'
+        self.parser.add_html_to_document(html_local_img,self.document)
+        document = self.parser.parse_html_string(html_local_img)
+
+        # Get the last paragraph
+        paragraphs = document.paragraphs
+        image_paragraph = paragraphs[-1]
+
+        # Check the run contains an image
+        image_found = False
+        for run in image_paragraph.runs:
+            if run._element.xpath(".//w:drawing"):
+                image_found = True
+                break
+
+        assert image_found, "No image was found in the document"
+
     def test_inline_images(self):
         self.document.add_heading(
             'Test: Handling inline images',
@@ -679,17 +699,30 @@ and blank lines.
 
     def test_unbalanced_table(self):
         # A table with more td elements in latter rows than in the first
-        self.document.add_heading(
-            'Test: Handling unbalanced tables',
-            level=1
-        )
-        self.parser.add_html_to_document(
-            "<table>"
-            "<tr><td>Hello</td></tr>"
-            "<tr><td>One</td><td>Two</td></tr>"
-            "</table>",
-            self.document
-        )
+        self.document.add_heading('Test: Handling unbalanced tables', level=1)
+
+        html_unbalanced_table = """
+            <table>
+            <tr><td>Hello</td></tr>
+            <tr><td>One</td><td>Two</td></tr>
+            </table>
+        """
+        self.parser.add_html_to_document(html_unbalanced_table, self.document)
+        document = self.parser.parse_html_string(html_unbalanced_table)
+
+        # Get the last table added to the document
+        tables = document.tables
+        assert len(tables) == 1
+
+        # Docx will autofit all cells
+        table = tables[0]
+        assert len(table.rows) == 2
+        assert len(table.rows[0].cells) == 2
+        assert len(table.rows[1].cells) == 2
+
+        assert table.rows[0].cells[0].text.strip() == "Hello"
+        assert table.rows[1].cells[0].text.strip() == "One"
+        assert table.rows[1].cells[1].text.strip() == "Two"
 
     def test_emojis_and_special_characters(self):
         emojis_and_special_chars_html_example = """
