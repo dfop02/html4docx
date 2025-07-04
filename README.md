@@ -83,6 +83,7 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Fix bug when any style has `!important` | [Dfop02](https://github.com/dfop02)
 - Fix 'style lookup by style_id is deprecated.' | [Dfop02](https://github.com/dfop02)
 - Fix `background-color` not working | [Dfop02](https://github.com/dfop02)
+- Fix crashes when img or bookmark is created without paragraph | [Dfop02](https://github.com/dfop02)
 - Fix Ordered and Unordered Lists | [TaylorN15](https://github.com/TaylorN15) from [PR](https://github.com/dfop02/html4docx/pull/16)
 
 **New Features**
