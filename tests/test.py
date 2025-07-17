@@ -825,6 +825,61 @@ and blank lines.
                 expected_text == p.text.strip() for p in unordered_list_paragraphs
             ), f"Unordered list item '{expected_text}' not found in List Bullet paragraphs"
 
+    def test_table_rowspan_and_colspan(self):
+        self.document.add_heading("Test: Table rowspan and colspan", level=1)
+
+        rowspan_and_colspan_html_example = """
+        <table border="1" cellspacing="0" cellpadding="4">
+          <tr>
+            <th rowspan="2" style="vertical-align:middle;text-align:center">Region</th>
+            <th colspan="2" style="vertical-align:middle;text-align:center">Sales (CHF millions)</th>
+          </tr>
+          <tr>
+            <th>2024</th>
+            <th>2023</th>
+          </tr>
+          <tr>
+            <td>United States</td>
+            <td>22,456</td>
+            <td>20,892</td>
+          </tr>
+          <tr>
+            <td>Europe</td>
+            <td>8,147</td>
+            <td>7,634</td>
+          </tr>
+        </table>"""
+        self.parser.table_style = 'Table Grid'
+        self.parser.add_html_to_document(rowspan_and_colspan_html_example, self.document)
+        document = self.parser.parse_html_string(rowspan_and_colspan_html_example)
+
+        # Find the first table
+        table = document.tables[0]
+
+        # Assertions on structure
+        assert len(table.rows) == 4, "Table should have 4 rows"
+        assert len(table.columns) == 3, "Table should have 3 columns"
+
+        # Cell (0, 0): Region (rowspan=2)
+        assert "Region" in table.cell(0, 0).text
+        assert table.cell(0, 0)._tc.tcPr.vMerge is not None, "Table Cell (0, 0) is not vertically merged"
+        assert table.cell(1, 0)._tc.tcPr.vMerge is not None, "Table Cell (1, 0) is not vertically merged"
+
+        # Cell (0, 1): Sales (CHF millions) (colspan=2)
+        sales_cell = table.cell(0, 1)
+        assert "Sales" in sales_cell.text
+        assert sales_cell._tc.tcPr.gridSpan is not None, "Table Cell (0, 1) is not horizontally merged"
+        assert int(sales_cell._tc.tcPr.gridSpan.val) == 2, "Table Cell (0, 2) is not horizontally merged"
+
+        # Verify unmerged data cells
+        assert "2024" in table.cell(1, 1).text
+        assert "2023" in table.cell(1, 2).text
+        assert "United States" in table.cell(2, 0).text
+        assert "22,456" in table.cell(2, 1).text
+        assert "20,892" in table.cell(2, 2).text
+        assert "Europe" in table.cell(3, 0).text
+        assert "8,147" in table.cell(3, 1).text
+        assert "7,634" in table.cell(3, 2).text
 
 if __name__ == "__main__":
     unittest.main()

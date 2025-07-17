@@ -108,6 +108,10 @@ def fetch_image_data(src: str):
             return None
 
 def parse_dict_string(string: str, separator: str = ';'):
+    """Parse style string into dict, return empty dict if no style"""
+    if not string:
+        return dict()
+
     new_string = re.sub(r'\s+', ' ', string.replace("\n", '')).split(separator)
     string_dict = dict((k.strip(), v.strip()) for x in new_string if ':' in x for k, v in [x.split(':')])
     return string_dict
