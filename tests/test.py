@@ -285,6 +285,31 @@ and blank lines.
         assert '<w:bookmarkEnd w:id="0"/>' in document_body
         assert '<w:hyperlink w:anchor="intro" w:tooltip="Link to intro">' in document_body
 
+    def test_internal_hyperlink_without_paragraph(self):
+        hyperlink_html_example = (
+            "<h1 id=\"intro\">Introduction Header</h1>"
+            "<p>Click here: <a href=\"#intro\" title=\"Link to intro\">Link to intro</a><p/>"
+        )
+
+        document = self.parser.parse_html_string(hyperlink_html_example)
+        document_body = document._body._body.xml
+
+        assert '<w:bookmarkStart w:id="0" w:name="intro"/>' in document_body
+        assert '<w:bookmarkEnd w:id="0"/>' in document_body
+        assert '<w:hyperlink w:anchor="intro" w:tooltip="Link to intro">' in document_body
+
+    def test_internal_hyperlink_without_anchor(self):
+        hyperlink_html_example = (
+            "<p>Click here: <a href=\"#intro\" title=\"Link to intro\">Link to intro</a></p>"
+        )
+
+        document = self.parser.parse_html_string(hyperlink_html_example)
+        document_body = document._body._body.xml
+
+        assert '<w:bookmarkStart w:id="0" w:name="intro"/>' not in document_body
+        assert '<w:bookmarkEnd w:id="0"/>' not in document_body
+        assert '<w:hyperlink w:anchor="intro" w:tooltip="Link to intro">' in document_body
+
     def test_image_no_src(self):
         self.document.add_heading(
             'Test: Handling img without src',
@@ -294,6 +319,26 @@ and blank lines.
 
         document = self.parser.parse_html_string('<img />')
         assert '<image: no_src>' in document.paragraphs[0].text
+
+    def test_local_img(self):
+        # A table with more td elements in latter rows than in the first
+        self.document.add_heading('Test: Local Image', level=1)
+        html_local_img = '<img alt="" height="306px" src="./tests/assets/images/test_img.png" width="520px"/>'
+        self.parser.add_html_to_document(html_local_img,self.document)
+        document = self.parser.parse_html_string(html_local_img)
+
+        # Get the last paragraph
+        paragraphs = document.paragraphs
+        image_paragraph = paragraphs[-1]
+
+        # Check the run contains an image
+        image_found = False
+        for run in image_paragraph.runs:
+            if run._element.xpath(".//w:drawing"):
+                image_found = True
+                break
+
+        assert image_found, "No image was found in the document"
 
     def test_inline_images(self):
         self.document.add_heading(
@@ -323,6 +368,24 @@ and blank lines.
             if r._element.xpath(".//pic:pic")
         ]
         assert len(inline_img_runs) == 3, "Expected 3 inline image runs in a single paragraph"
+
+    def test_single_image_without_paragraph(self):
+        html_example = "<img src='https://github.com/dfop02/html4docx/blob/main/tests/assets/images/test_img.png?raw=true' />"
+        document = self.parser.parse_html_string(html_example)
+
+        # Find paragraphs containing inline pictures
+        img_paragraphs = [
+            p for p in document.paragraphs
+            if any(r._element.xpath(".//pic:pic") for r in p.runs)
+        ]
+        assert img_paragraphs, "Expected at least one paragraph with inline images"
+
+        first_img_para = img_paragraphs[0]
+        inline_img_runs = [
+            r for r in first_img_para.runs
+            if r._element.xpath(".//pic:pic")
+        ]
+        assert len(inline_img_runs) == 1, "Expected 1 inline image runs in a single paragraph"
 
     def test_bold_italic_underline_and_strike(self):
         self.document.add_heading(
@@ -636,17 +699,30 @@ and blank lines.
 
     def test_unbalanced_table(self):
         # A table with more td elements in latter rows than in the first
-        self.document.add_heading(
-            'Test: Handling unbalanced tables',
-            level=1
-        )
-        self.parser.add_html_to_document(
-            "<table>"
-            "<tr><td>Hello</td></tr>"
-            "<tr><td>One</td><td>Two</td></tr>"
-            "</table>",
-            self.document
-        )
+        self.document.add_heading('Test: Handling unbalanced tables', level=1)
+
+        html_unbalanced_table = """
+            <table>
+            <tr><td>Hello</td></tr>
+            <tr><td>One</td><td>Two</td></tr>
+            </table>
+        """
+        self.parser.add_html_to_document(html_unbalanced_table, self.document)
+        document = self.parser.parse_html_string(html_unbalanced_table)
+
+        # Get the last table added to the document
+        tables = document.tables
+        assert len(tables) == 1
+
+        # Docx will autofit all cells
+        table = tables[0]
+        assert len(table.rows) == 2
+        assert len(table.rows[0].cells) == 2
+        assert len(table.rows[1].cells) == 2
+
+        assert table.rows[0].cells[0].text.strip() == "Hello"
+        assert table.rows[1].cells[0].text.strip() == "One"
+        assert table.rows[1].cells[1].text.strip() == "Two"
 
     def test_emojis_and_special_characters(self):
         emojis_and_special_chars_html_example = """
