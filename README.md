@@ -11,7 +11,9 @@ Convert html to docx, this project is a fork from descontinued [pqzx/html2docx](
 
 ## Usage
 
-The basic usage: Add HTML formatted to an existing Docx
+#### The basic usage
+
+Add HTML formatted to an existing Docx
 
 ```python
 from html4docx import HtmlToDocx
@@ -129,6 +131,8 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Support colors by name | [Dfop02](https://github.com/dfop02)
 - Support font_size when text, ex.: small, medium, etc. | [Dfop02](https://github.com/dfop02)
 - Support to internal links (Anchor) | [Dfop02](https://github.com/dfop02)
+- Support to rowspan and colspan in tables. | [Dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/25)
+- Support to 'vertical-align' in table cells. | [Dfop02](https://github.com/dfop02)
 - Support to metadata | [Dfop02](https://github.com/dfop02)
 - Add support to table cells style (border, background-color, width, height, margin) | [Dfop02](https://github.com/dfop02)
 - Being able to use inline images on same paragraph. | [Dfop02](https://github.com/dfop02)

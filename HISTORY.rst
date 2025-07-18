@@ -4,7 +4,7 @@ Release History
 ---------------
 
 
-1.0.9 (2025-07-xx)
+1.0.9 (2025-07-18)
 ++++++++++++++++++
 
 **Updates**
@@ -14,7 +14,7 @@ Release History
 
 **Fixes**
 
-- Merge missing `Release/1.0.8`. | [Dfop02](https://github.com/dfop02)
+- Merge missing `Release/1.0.8` features. | [Dfop02](https://github.com/dfop02)
 
 **New Features**
 
