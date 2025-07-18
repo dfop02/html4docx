@@ -41,7 +41,7 @@ class Metadata():
             else:
                 print(f'Property "{key}" not found in core properties. Skipping...')
 
-    def get_metadata(self, print_result: bool = False) -> dict[str, any] | None:
+    def get_metadata(self, print_result: bool = False):
         """
         Get metadata from docx document.
 
