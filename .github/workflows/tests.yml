@@ -37,7 +37,7 @@ jobs:
         flake8 . --count --exit-zero --statistics
     - name: Run tests
       run: |
-        python -m tests.test
+        python -m pytest
     - name: Upload test.docx
       uses: actions/upload-artifact@v4
       with:

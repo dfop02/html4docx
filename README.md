@@ -1,11 +1,15 @@
 # HTML FOR DOCX
+![Tests](https://github.com/dfop02/html4docx/actions/workflows/tests.yml/badge.svg)
+![Version](https://img.shields.io/pypi/v/html-for-docx.svg)
+![Supported Versions](https://img.shields.io/pypi/pyversions/html-for-docx.svg)
+
 Convert html to docx, this project is a fork from descontinued [pqzx/html2docx](https://github.com/pqzx/html2docx).
 
-### How install
+## How install
 
 `pip install html-for-docx`
 
-### Usage
+## Usage
 
 The basic usage: Add HTML formatted to an existing Docx
 
@@ -32,16 +36,18 @@ new_parser.add_html_to_document(html_string, document)
 document.save('your_file_name.docx')
 ```
 
-Convert files directly
+#### Convert files directly
 
 ```python
 from html4docx import HtmlToDocx
 
 new_parser = HtmlToDocx()
 new_parser.parse_html_file(input_html_file_path, output_docx_file_path)
+# You can also define a encoding, by default is utf-8
+new_parser.parse_html_file(input_html_file_path, output_docx_file_path, 'utf-8')
 ```
 
-Convert files from a string
+#### Convert files from a string
 
 ```python
 from html4docx import HtmlToDocx
@@ -50,15 +56,16 @@ new_parser = HtmlToDocx()
 docx = new_parser.parse_html_string(input_html_file_string)
 ```
 
-Change table styles
+#### Change table styles
 
-Tables are not styled by default. Use the `table_style` attribute on the parser to set a table style. The style is used for all tables.
+Tables are not styled by default. Use the `table_style` attribute on the parser to set a table style before convert html. The style is used for all tables.
 
 ```python
 from html4docx import HtmlToDocx
 
 new_parser = HtmlToDocx()
 new_parser.table_style = 'Light Shading Accent 4'
+docx = new_parser.parse_html_string(input_html_file_string)
 ```
 
 To add borders to tables, use the `Table Grid` style:
@@ -68,6 +75,32 @@ new_parser.table_style = 'Table Grid'
 ```
 
 All table styles we support can be found [here](https://python-docx.readthedocs.io/en/latest/user/styles-understanding.html#table-styles-in-default-template).
+
+#### Metadata
+
+You're able to read or set docx metadata:
+
+```python
+from docx import Document
+from html4docx import HtmlToDocx
+
+document = Document()
+new_parser = HtmlToDocx()
+new_parser.set_initial_attrs(document)
+metadata = new_parser.metadata
+
+# You can get metadata as dict
+metadata_json = metadata.get_metadata()
+print(metadata_json['author']) # Jane
+# or just print all metadata if if you want
+metadata.get_metadata(print_result=True)
+
+# Set new metadata
+metadata.set_metadata(author="Jane", created="2025-07-18T09:30:00")
+document.save('your_file_name.docx')
+```
+
+You can find all available metadata attributes [here](https://python-docx.readthedocs.io/en/latest/dev/analysis/features/coreprops.html).
 
 ### Why
 
@@ -96,6 +129,7 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Support colors by name | [Dfop02](https://github.com/dfop02)
 - Support font_size when text, ex.: small, medium, etc. | [Dfop02](https://github.com/dfop02)
 - Support to internal links (Anchor) | [Dfop02](https://github.com/dfop02)
+- Support to metadata | [Dfop02](https://github.com/dfop02)
 - Add support to table cells style (border, background-color, width, height, margin) | [Dfop02](https://github.com/dfop02)
 - Being able to use inline images on same paragraph. | [Dfop02](https://github.com/dfop02)
 - Refactory Tests to be more consistent and less 'human validation' | [Dfop02](https://github.com/dfop02)

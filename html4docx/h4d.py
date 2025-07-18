@@ -26,6 +26,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import RGBColor
 
+from html4docx.metadata import Metadata
 from html4docx import utils
 
 # values in inches
@@ -76,6 +77,12 @@ class HtmlToDocx(HTMLParser):
         self.list_restart_counter = 0
         self.current_ol_num_id = None
         self._list_num_ids = {}
+
+    @property
+    def metadata(self):
+        if not hasattr(self, '_metadata'):
+            self._metadata = Metadata(self.doc)
+        return self._metadata
 
     def copy_settings_from(self, other):
         """Copy settings from another instance of HtmlToDocx"""
@@ -400,29 +407,6 @@ class HtmlToDocx(HTMLParser):
             numPr.append(ilvl)
             numPr.append(numId_elem)
             pPr.append(numPr)
-
-    def handle_hr(self):
-        # This implementation was taken from:
-        # https://github.com/python-openxml/python-docx/issues/105#issuecomment-442786431
-        self.paragraph = self.doc.add_paragraph()
-        pPr = self.paragraph._p.get_or_add_pPr()
-        pBdr = OxmlElement('w:pBdr')
-        pPr.insert_element_before(
-            pBdr,
-            'w:shd', 'w:tabs', 'w:suppressAutoHyphens', 'w:kinsoku', 'w:wordWrap',
-            'w:overflowPunct', 'w:topLinePunct', 'w:autoSpaceDE', 'w:autoSpaceDN',
-            'w:bidi', 'w:adjustRightInd', 'w:snapToGrid', 'w:spacing', 'w:ind',
-            'w:contextualSpacing', 'w:mirrorIndents', 'w:suppressOverlap', 'w:jc',
-            'w:textDirection', 'w:textAlignment', 'w:textboxTightWrap',
-            'w:outlineLvl', 'w:divId', 'w:cnfStyle', 'w:rPr', 'w:sectPr',
-            'w:pPrChange'
-        )
-        bottom = OxmlElement('w:bottom')
-        bottom.set(qn('w:val'), 'single')
-        bottom.set(qn('w:sz'), '6')
-        bottom.set(qn('w:space'), '1')
-        bottom.set(qn('w:color'), 'auto')
-        pBdr.append(bottom)
 
     def add_image_to_cell(self, cell, image, width=None, height=None):
         # python-docx doesn't have method yet for adding images to table cells. For now we use this
