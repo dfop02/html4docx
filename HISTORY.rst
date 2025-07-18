@@ -18,9 +18,9 @@ Release History
 
 **New Features**
 
-Add support for rowspan and colspan in tables. | [Dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/25)
-Add support for 'vertical-align' in table cells. | [Dfop02](https://github.com/dfop02)
-Add support for metadata | [Dfop02](https://github.com/dfop02)
+- Add support for rowspan and colspan in tables. | [Dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/25)
+- Add support for 'vertical-align' in table cells. | [Dfop02](https://github.com/dfop02)
+- Add support for metadata | [Dfop02](https://github.com/dfop02)
 
 
 1.0.8 (2025-07-04)
@@ -28,15 +28,15 @@ Add support for metadata | [Dfop02](https://github.com/dfop02)
 
 **Updates**
 
-Add tests for image without paragraph. | [Dfop02](https://github.com/dfop02)
-Add tests for bookmark without paragraph. | [Dfop02](https://github.com/dfop02)
-Add tests for local image. | [Dfop02](https://github.com/dfop02)
-Add tests for unbalanced table. | [Dfop02](https://github.com/dfop02)
+- Add tests for image without paragraph. | [Dfop02](https://github.com/dfop02)
+- Add tests for bookmark without paragraph. | [Dfop02](https://github.com/dfop02)
+- Add tests for local image. | [Dfop02](https://github.com/dfop02)
+- Add tests for unbalanced table. | [Dfop02](https://github.com/dfop02)
 
 **Fixes**
 
-Fix crash when there is bookmark without paragraph. | [Dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/21)
-Fix crash when there is image without paragraph. | [Dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/19)
+- Fix crash when there is bookmark without paragraph. | [Dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/21)
+- Fix crash when there is image without paragraph. | [Dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/19)
 
 **New Features**
 
