@@ -21,6 +21,7 @@ import docx
 from bs4 import BeautifulSoup
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import RGBColor
@@ -251,25 +252,27 @@ class HtmlToDocx(HTMLParser):
         self.bookmark_id += 1
 
     def add_text_align_or_margin_to(self, obj, style):
+        """Styles that can be applied on multiple objects"""
         if 'text-align' in style:
             align = utils.remove_important_from_style(style['text-align'])
 
             if 'center' in align:
                 obj.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            elif 'left' in align:
+                obj.alignment = WD_ALIGN_PARAGRAPH.LEFT
             elif 'right' in align:
                 obj.alignment = WD_ALIGN_PARAGRAPH.RIGHT
             elif 'justify' in align:
                 obj.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
         if 'margin-left' in style and 'margin-right' in style:
-            margin_left = style['margin-left']
-            margin_right = style['margin-right']
-            if 'auto' in margin_left and 'auto' in margin_right:
+            if 'auto' in style['margin-left'] and 'auto' in style['margin-right']:
                 obj.alignment = WD_ALIGN_PARAGRAPH.CENTER
         elif 'margin-left' in style:
             obj.left_indent = utils.unit_converter(style['margin-left'])
 
     def add_styles_to_table_cell(self, styles, doc_cell, cell_row):
+        """Styles that must be applied specifically in a _Cell object"""
         # Set background color
         if 'background-color' in styles:
             self.set_cell_background(doc_cell, styles['background-color'])
@@ -290,11 +293,22 @@ class HtmlToDocx(HTMLParser):
                     for run in paragraph.runs:
                         run.font.color.rgb = color
 
+        # Set vertical align (for individual cells)
+        if 'vertical-align' in styles:
+            align = utils.remove_important_from_style(styles['vertical-align'])
+
+            if 'top' in align:
+                doc_cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+            elif 'middle' in align:
+                doc_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+            elif 'bottom' in align:
+                doc_cell.vertical_alignment = WD_ALIGN_VERTICAL.BOTTOM
+
         # Set borders
         if any('border' in style for style in styles.keys()):
             self.set_cell_borders(doc_cell, styles)
 
-        self.add_text_align_or_margin_to(doc_cell, styles)
+        self.add_text_align_or_margin_to(doc_cell.paragraphs[0], styles)
 
     def add_styles_to_run(self, style):
         if 'font-size' in style:
@@ -316,10 +330,7 @@ class HtmlToDocx(HTMLParser):
             # Little trick to apply background-color to paragraph
             # because `self.run.font.highlight_color`
             # has a very limited amount of colors
-            #
-            # Create XML element
             shd = OxmlElement('w:shd')
-            # Add attributes to the element
             shd.set(qn('w:val'), 'clear')
             shd.set(qn('w:color'), 'auto')
             shd.set(qn('w:fill'), color.lstrip('#'))
@@ -389,6 +400,29 @@ class HtmlToDocx(HTMLParser):
             numPr.append(ilvl)
             numPr.append(numId_elem)
             pPr.append(numPr)
+
+    def handle_hr(self):
+        # This implementation was taken from:
+        # https://github.com/python-openxml/python-docx/issues/105#issuecomment-442786431
+        self.paragraph = self.doc.add_paragraph()
+        pPr = self.paragraph._p.get_or_add_pPr()
+        pBdr = OxmlElement('w:pBdr')
+        pPr.insert_element_before(
+            pBdr,
+            'w:shd', 'w:tabs', 'w:suppressAutoHyphens', 'w:kinsoku', 'w:wordWrap',
+            'w:overflowPunct', 'w:topLinePunct', 'w:autoSpaceDE', 'w:autoSpaceDN',
+            'w:bidi', 'w:adjustRightInd', 'w:snapToGrid', 'w:spacing', 'w:ind',
+            'w:contextualSpacing', 'w:mirrorIndents', 'w:suppressOverlap', 'w:jc',
+            'w:textDirection', 'w:textAlignment', 'w:textboxTightWrap',
+            'w:outlineLvl', 'w:divId', 'w:cnfStyle', 'w:rPr', 'w:sectPr',
+            'w:pPrChange'
+        )
+        bottom = OxmlElement('w:bottom')
+        bottom.set(qn('w:val'), 'single')
+        bottom.set(qn('w:sz'), '6')
+        bottom.set(qn('w:space'), '1')
+        bottom.set(qn('w:color'), 'auto')
+        pBdr.append(bottom)
 
     def add_image_to_cell(self, cell, image, width=None, height=None):
         # python-docx doesn't have method yet for adding images to table cells. For now we use this
@@ -468,6 +502,8 @@ class HtmlToDocx(HTMLParser):
         self.table = self.doc.add_table(rows, cols)
 
         if self.table_style:
+            # Available Table Styles
+            # https://python-docx.readthedocs.io/en/latest/user/styles-understanding.html#table-styles-in-default-template
             try:
                 # Fixed 'style lookup by style_id is deprecated.'
                 # https://stackoverflow.com/a/29567907/17274446
@@ -480,25 +516,56 @@ class HtmlToDocx(HTMLParser):
 
         # Reference:
         # https://python-docx.readthedocs.io/en/latest/api/table.html#cell-objects
+        used_cells = [[False] * cols for _ in range(rows)]
         for cell_row, row in enumerate(self.get_table_rows(table_soup)):
-            for cell_col, col in enumerate(self.get_table_columns(row)):
+            col_offset = 0  # Shift index if some columns are occupied
+            for col in self.get_table_columns(row):
+                while used_cells[cell_row][col_offset]:
+                    col_offset += 1
+
+                current_row = cell_row
+                current_col = col_offset
+
                 cell_html = self.get_cell_html(col)
                 if col.name == 'th':
                     cell_html = "<b>%s</b>" % cell_html
 
                 # Get _Cell object from table based on cell_row and cell_col
-                docx_cell = self.table.cell(cell_row, cell_col)
+                docx_cell = self.table.cell(current_row, current_col)
+
+                # Reference:
+                # https://python-docx.readthedocs.io/en/latest/dev/analysis/features/table/cell-merge.html
+                rowspan = int(col.get('rowspan', 1))
+                colspan = int(col.get('colspan', 1))
+
+                if rowspan > 1 or colspan > 1:
+                    docx_cell = docx_cell.merge(
+                        self.table.cell(
+                            current_row + (rowspan - 1),
+                            current_col + (colspan - 1)
+                        )
+                    )
+
+                    # Mark all merged cells as used
+                    for r in range(current_row, current_row + rowspan):
+                        for c in range(current_col, current_col + colspan):
+                            used_cells[r][c] = True
+                else:
+                    used_cells[current_row][current_col] = True
 
                 # Parse cell styles
                 cell_styles = utils.parse_dict_string(col.get('style', ''))
 
                 if 'width' in cell_styles or 'height' in cell_styles:
                     self.table.autofit = False
+                    self.table.allow_autofit = False
 
                 child_parser = HtmlToDocx()
                 child_parser.copy_settings_from(self)
                 child_parser.add_html_to_cell(cell_html, docx_cell)
                 child_parser.add_styles_to_table_cell(cell_styles, docx_cell, self.table.rows[cell_row])
+
+                col_offset += colspan  # Move to the next real column
 
         if 'style' in current_attrs and self.table:
             style = utils.parse_dict_string(current_attrs['style'])
@@ -777,18 +844,15 @@ class HtmlToDocx(HTMLParser):
         # Table is either empty or has non-direct children between table and tr tags
         # Thus the row dimensions and column dimensions are assumed to be 0
         # A table can have a varying number of columns per row,
-        #     so it is important to find the maximum number of columns in any row
-        if rows:
-            cols = max(len(self.get_table_columns(row)) for row in rows)
-        else:
-            cols = 0
+        # so it is important to find the maximum number of columns in any row
+        cols = max(len(self.get_table_columns(row)) for row in rows) if rows else 0
         return len(rows), cols
 
     def get_tables(self):
         if not hasattr(self, 'soup'):
             self.include_tables = False
             return
-            # find other way to do it, or require this dependency?
+
         self.tables = self.ignore_nested_tables(self.soup.find_all('table'))
         self.table_no = 0
 
