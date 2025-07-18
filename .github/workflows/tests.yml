@@ -27,7 +27,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8
+        if [ -f requirements_test.txt ]; then pip install -r requirements_test.txt; fi
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Lint with flake8
       run: |
@@ -37,7 +37,7 @@ jobs:
         flake8 . --count --exit-zero --statistics
     - name: Run tests
       run: |
-        python -m tests.test
+        python -m pytest
     - name: Upload test.docx
       uses: actions/upload-artifact@v4
       with:

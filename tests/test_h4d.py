@@ -324,7 +324,7 @@ and blank lines.
         # A table with more td elements in latter rows than in the first
         self.document.add_heading('Test: Local Image', level=1)
         html_local_img = '<img alt="" height="306px" src="./tests/assets/images/test_img.png" width="520px"/>'
-        self.parser.add_html_to_document(html_local_img,self.document)
+        self.parser.add_html_to_document(html_local_img, self.document)
         document = self.parser.parse_html_string(html_local_img)
 
         # Get the last paragraph
