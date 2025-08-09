@@ -155,7 +155,7 @@ class HtmlToDocx(HTMLParser):
 
             return unit_value
 
-        def border_unit_converter(unit_value: str) -> int | None:
+        def border_unit_converter(unit_value: str):
             """Convert multiple units to pt that is used on Word table cell border"""
             unit_value = utils.remove_important_from_style(unit_value)
             unit_value = check_unit_keywords(unit_value)
