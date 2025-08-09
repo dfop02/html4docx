@@ -144,24 +144,36 @@ class HtmlToDocx(HTMLParser):
             """Parses border styles to match word standart"""
             return border_styles[value] if value in border_styles.keys() else 'none'
 
-        def border_unit_converter(unit_value: str):
+        def check_unit_keywords(unit_value: str) -> str:
+            keywords = {
+                'thin': '1px',
+                'medium': '3px',
+                'thick': '5px'
+            }
+            if unit_value in keywords.keys():
+                return keywords[unit_value]
+
+            return unit_value
+
+        def border_unit_converter(unit_value: str) -> int | None:
             """Convert multiple units to pt that is used on Word table cell border"""
             unit_value = utils.remove_important_from_style(unit_value)
+            unit_value = check_unit_keywords(unit_value)
             unit = re.sub(r'[0-9\.]+', '', unit_value)
             value = float(re.sub(r'[a-zA-Z\!\%]+', '', unit_value))  # Allow float values
 
             if unit == 'px':
-                result = int(value * 0.75)  # 1 px = 0.75 pt
+                result = value * 0.75  # 1 px = 0.75 pt
             elif unit == 'cm':
-                result = int(value * 28.35)  # 1 cm = 28.35 pt
+                result = value * 28.35  # 1 cm = 28.35 pt
             elif unit == 'in':
-                result = int(value * 72)  # 1 inch = 72 pt
+                result = value * 72  # 1 inch = 72 pt
             elif unit == 'pt':
-                result = int(value) # default is pt
+                result = value # default is pt
             elif unit == 'rem' or unit == 'em':
-                result = int(value * 12)  # Assuming 1rem/em = 16px, converted to pt
+                result = value * 12  # Assuming 1rem/em = 16px, converted to pt
             elif unit == '%':
-                result = int(MAX_INDENT * (value / 100))
+                result = MAX_INDENT * (value / 100)
             else:
                 return None  # Unsupported units return None
 
@@ -183,7 +195,7 @@ class HtmlToDocx(HTMLParser):
                 border_values = value.split()
                 num_values = len(border_values)
 
-                if num_values == 1:  # "5px"
+                if num_values == 1 and value != "none":  # "5px"
                     size, style, color = parse_border_value(value)
                     for side in borders:
                         borders[side].update({"size": size, "style": style, "color": color})

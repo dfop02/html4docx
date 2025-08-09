@@ -500,33 +500,33 @@ and blank lines.
             },
             {
                 "top": {"color": "FAC32A", "style": "single", "size": "1.0"},
-                "bottom": {"color": "FAC32A", "style": "single", "size": "1.0"},
+                "bottom": {"color": "FAC32A", "style": "single", "size": "1.125"},
                 "left": {"color": "none", "style": "none", "size": "none"},
                 "right": {"color": "FAC32A", "style": "single", "size": "12.0"}
             },
             {
-                "top": {"color": "30E667", "style": "none", "size": "5.0"},
-                "bottom": {"color": "30E667", "style": "single", "size": "5.0"},
-                "left": {"color": "30E667", "style": "single", "size": "5.0"},
-                "right": {"color": "30E667", "style": "single", "size": "5.0"}
+                "top": {"color": "30E667", "style": "none", "size": "5.67"},
+                "bottom": {"color": "30E667", "style": "single", "size": "5.67"},
+                "left": {"color": "30E667", "style": "single", "size": "5.67"},
+                "right": {"color": "30E667", "style": "single", "size": "5.67"}
             },
             {
                 "top": {"color": "none", "style": "none", "size": "none"},
-                "bottom": {"color": "D948CF", "style": "single", "size": "1.0"},
+                "bottom": {"color": "D948CF", "style": "single", "size": "1.5"},
                 "left": {"color": "none", "style": "none", "size": "none"},
-                "right": {"color": "D948CF", "style": "single", "size": "5.0"}
+                "right": {"color": "D948CF", "style": "single", "size": "5.67"}
             },
             {
-                "top": {"color": "EAAAA7", "style": "single", "size": "1.0"},
-                "bottom": {"color": "EAAAA7", "style": "single", "size": "1.0"},
-                "left": {"color": "EAAAA7", "style": "single", "size": "1.0"},
-                "right": {"color": "EAAAA7", "style": "single", "size": "1.0"}
+                "top": {"color": "EAAAA7", "style": "single", "size": "1.1"},
+                "bottom": {"color": "EAAAA7", "style": "single", "size": "1.1"},
+                "left": {"color": "EAAAA7", "style": "single", "size": "1.1"},
+                "right": {"color": "EAAAA7", "style": "single", "size": "1.1"}
             },
             {
                 "top": {"color": "none", "style": "none", "size": "none"},
-                "bottom": {"color": "ACC4AA", "style": "dashed", "size": "7.0"},
+                "bottom": {"color": "ACC4AA", "style": "dashed", "size": "7.2"},
                 "left": {"color": "none", "style": "none", "size": "none"},
-                "right": {"color": "ACC4AA", "style": "dotted", "size": "4.0"}
+                "right": {"color": "ACC4AA", "style": "dotted", "size": "4.8"}
             }
         ]
 
@@ -556,7 +556,7 @@ and blank lines.
                         color, size, style = "none", "none", "none"
 
                     # Convert size from eighths of a point to points
-                    size_in_pt = str(int(size) / 8) if size and size != "none" else "none"
+                    size_in_pt = str(round(float(size) / 8, 3)) if size and size != "none" else "none"
 
                     # Get expected properties for the current cell and side
                     expected_properties = expected_colors[cell_idx][side]
@@ -697,6 +697,56 @@ and blank lines.
                     f"expected {expected_height_px}px, got {cell_height_px}px"
                 )
 
+    def test_border_with_keywords(self):
+        self.document.add_heading("Test: Cells with size keywords", level=1)
+
+        size_keywords_html_example = """
+        <table>
+        <tr>
+            <td style="border: thin solid currentcolor">Hello World</td>
+            <td style="border: medium dashed orange">Thanks World</td>
+        </tr>
+        <tr>
+            <td style="border: thick double red">Goodbye World</td>
+            <td style="border: none">Bye World</td>
+        </tr>
+        </table>
+        """
+        self.parser.add_html_to_document(size_keywords_html_example, self.document)
+        document = self.parser.parse_html_string(size_keywords_html_example)
+
+        expected_sizes = ["0.75", "2.25", "3.75", "none"]
+
+        # Validate border properties for each cell
+        cell_idx = 0
+        for row_idx, row in enumerate(document.tables[0].rows):
+            for column_idx, cell in enumerate(row.cells):
+                # Get the table cell element and properties
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcBorders = tcPr.find(qn('w:tcBorders'))
+
+                # Extract border properties
+                border_sides = {
+                    'top': tcBorders.find(qn('w:top')) if tcBorders is not None else None,
+                    'bottom': tcBorders.find(qn('w:bottom')) if tcBorders is not None else None,
+                    'left': tcBorders.find(qn('w:left')) if tcBorders is not None else None,
+                    'right': tcBorders.find(qn('w:right')) if tcBorders is not None else None,
+                }
+
+                for side, border in border_sides.items():
+                    size = border.get(qn('w:sz')) if border is not None else "none"
+
+                    # Convert size from eighths of a point to points
+                    size_in_pt = str(float(size) / 8) if size and size != "none" else "none"
+
+                    assert size_in_pt == expected_sizes[cell_idx], (
+                        f"Size mismatch for {side} in row {row_idx} column {column_idx}: "
+                        f"expected {expected_sizes[cell_idx]}, got {size_in_pt}"
+                    )
+
+                cell_idx += 1
+
     def test_unbalanced_table(self):
         # A table with more td elements in latter rows than in the first
         self.document.add_heading('Test: Handling unbalanced tables', level=1)
@@ -825,6 +875,61 @@ and blank lines.
                 expected_text == p.text.strip() for p in unordered_list_paragraphs
             ), f"Unordered list item '{expected_text}' not found in List Bullet paragraphs"
 
+    def test_table_rowspan_and_colspan(self):
+        self.document.add_heading("Test: Table rowspan and colspan", level=1)
+
+        rowspan_and_colspan_html_example = """
+        <table border="1" cellspacing="0" cellpadding="4">
+          <tr>
+            <th rowspan="2" style="vertical-align:middle;text-align:center">Region</th>
+            <th colspan="2" style="vertical-align:middle;text-align:center">Sales (CHF millions)</th>
+          </tr>
+          <tr>
+            <th>2024</th>
+            <th>2023</th>
+          </tr>
+          <tr>
+            <td>United States</td>
+            <td>22,456</td>
+            <td>20,892</td>
+          </tr>
+          <tr>
+            <td>Europe</td>
+            <td>8,147</td>
+            <td>7,634</td>
+          </tr>
+        </table>"""
+        self.parser.table_style = 'Table Grid'
+        self.parser.add_html_to_document(rowspan_and_colspan_html_example, self.document)
+        document = self.parser.parse_html_string(rowspan_and_colspan_html_example)
+
+        # Find the first table
+        table = document.tables[0]
+
+        # Assertions on structure
+        assert len(table.rows) == 4, "Table should have 4 rows"
+        assert len(table.columns) == 3, "Table should have 3 columns"
+
+        # Cell (0, 0): Region (rowspan=2)
+        assert "Region" in table.cell(0, 0).text
+        assert table.cell(0, 0)._tc.tcPr.vMerge is not None, "Table Cell (0, 0) is not vertically merged"
+        assert table.cell(1, 0)._tc.tcPr.vMerge is not None, "Table Cell (1, 0) is not vertically merged"
+
+        # Cell (0, 1): Sales (CHF millions) (colspan=2)
+        sales_cell = table.cell(0, 1)
+        assert "Sales" in sales_cell.text
+        assert sales_cell._tc.tcPr.gridSpan is not None, "Table Cell (0, 1) is not horizontally merged"
+        assert int(sales_cell._tc.tcPr.gridSpan.val) == 2, "Table Cell (0, 2) is not horizontally merged"
+
+        # Verify unmerged data cells
+        assert "2024" in table.cell(1, 1).text
+        assert "2023" in table.cell(1, 2).text
+        assert "United States" in table.cell(2, 0).text
+        assert "22,456" in table.cell(2, 1).text
+        assert "20,892" in table.cell(2, 2).text
+        assert "Europe" in table.cell(3, 0).text
+        assert "8,147" in table.cell(3, 1).text
+        assert "7,634" in table.cell(3, 2).text
 
 if __name__ == "__main__":
     unittest.main()
