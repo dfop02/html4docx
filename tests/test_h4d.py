@@ -826,5 +826,185 @@ and blank lines.
             ), f"Unordered list item '{expected_text}' not found in List Bullet paragraphs"
 
 
+    def test_complex_colspan_rowspan_combinations(self):
+        self.document.add_heading('Test: Complex Colspan and Rowspan Combinations', level=1)
+
+        complex_table_html = """
+        <table border="1">
+            <tr>
+                <td rowspan="2">A1-A2</td>
+                <td colspan="3">B1-D1</td>
+                <td>E1</td>
+            </tr>
+            <tr>
+                <td>B2</td>
+                <td colspan="2" rowspan="2">C2-D3</td>
+                <td rowspan="3">E2-E4</td>
+            </tr>
+            <tr>
+                <td colspan="2">A3-B3</td>
+            </tr>
+            <tr>
+                <td>A4</td>
+                <td>B4</td>
+                <td>C4</td>
+                <td>D4</td>
+            </tr>
+        </table>
+        """
+
+        try:
+            self.parser.add_html_to_document(complex_table_html, self.document)
+            document = self.parser.parse_html_string(complex_table_html)
+
+            tables = document.tables
+            assert len(tables) == 1, "Should create a table"
+
+
+            table = tables[0]
+            assert len(table.rows) == 4, f"Expected 4 rows, but got {len(table.rows)} rows"
+            assert len(table.columns) == 5, f"Expected 5 columns, but got {len(table.columns)} columns"
+
+            assert "A1-A2" in table.cell(0, 0).text, "First merged cell content is incorrect"
+            assert "B1-D1" in table.cell(0, 1).text, "Second merged cell content is incorrect"
+
+        except IndexError as e:
+            self.fail(f"Complex table processing failed with IndexError: {e}")
+        except Exception as e:
+            self.fail(f"Processing complex table failed with unexpected error: {e}")
+
+    def test_extreme_colspan_rowspan_cases(self):
+        """ Test extreme colspan and rowspan cases """
+        self.document.add_heading('Test: Extreme Colspan and Rowspan Cases', level=1)
+
+        extreme_table_html = """
+        <table border="1">
+            <tr>
+                <td colspan="10">Extreme colspan cell</td>
+            </tr>
+            <tr>
+                <td rowspan="5">Extreme rowspan cell</td>
+                <td colspan="9">Extreme colspan cell</td>
+            </tr>
+            <tr>
+                <td colspan="3">Col 1-3</td>
+                <td colspan="3">Col 4-6</td>
+                <td colspan="3">Col 7-9</td>
+            </tr>
+            <tr>
+                <td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td>
+            </tr>
+            <tr>
+                <td colspan="2">1-2</td><td colspan="2">3-4</td><td colspan="2">5-6</td><td colspan="3">7-9</td>
+            </tr>
+            <tr>
+                <td colspan="9">The last row should span all columns</td>
+            </tr>
+        </table>
+        """
+
+        try:
+            self.parser.add_html_to_document(extreme_table_html, self.document)
+            document = self.parser.parse_html_string(extreme_table_html)
+
+            tables = document.tables
+            assert len(tables) == 1, "Should create a table"
+
+            table = tables[0]
+
+            assert len(table.rows) == 6, f"Expected 6 rows, but got {len(table.rows)} rows"
+            assert len(table.columns) == 10, f"Expected 10 columns, but got {len(table.columns)} columns"
+
+            assert "Extreme colspan cell" in table.cell(0, 0).text, "First cell content is incorrect"
+            assert "Extreme rowspan cell" in table.cell(1, 0).text, "Second cell content is incorrect"
+
+        except IndexError as e:
+            self.fail(f"Extreme table processing failed with IndexError: {e}")
+        except Exception as e:
+            self.fail(f"Processing extreme table failed with unexpected error: {e}")
+
+    def test_border_unit_converter_empty_values(self):
+        """ Test border unit converter handling of empty border values """
+
+        self.document.add_heading('Test: Border Unit Converter Empty Values', level=1)
+
+        empty_border_table_html = """
+        <table border="1">
+            <tr>
+                <td style="border: ;">Empty border style</td>
+                <td style="border: none;">No border</td>
+                <td style="border-width: ;">Empty border width</td>
+            </tr>
+            <tr>
+                <td style="border-top: ;">Empty top border</td>
+                <td style="border-right: '';">Empty right border</td>
+                <td style="border-bottom: ' ';">Empty bottom border</td>
+            </tr>
+        </table>
+        """
+
+        try:
+            self.parser.add_html_to_document(empty_border_table_html, self.document)
+            document = self.parser.parse_html_string(empty_border_table_html)
+
+            tables = document.tables
+            assert len(tables) == 1, "Should create a table"
+
+            table = tables[0]
+            assert len(table.rows) == 2, f"Expected 2 rows, but got {len(table.rows)} rows"
+            assert len(table.columns) == 3, f"Expected 3 columns, but got {len(table.columns)} columns"
+
+            assert "Empty border style" in table.cell(0, 0).text
+            assert "No border" in table.cell(0, 1).text
+            assert "Empty border width" in table.cell(0, 2).text
+
+        except Exception as e:
+            self.fail(f"Test border unit converter empty values failed with error: {e}")
+
+    def test_mixed_table_scenarios(self):
+        """ Test mixed table scenarios: complex merges and border styles """
+        self.document.add_heading('Test: Mixed Table Scenarios', level=1)
+
+        mixed_table_html = """
+        <table border="1" style="border-collapse: collapse;">
+            <tr>
+                <td rowspan="2" style="border: 2px solid red;">Merged cell A</td>
+                <td colspan="2" style="border-width: ;">Empty border width</td>
+                <td style="border: none;">No border</td>
+            </tr>
+            <tr>
+                <td style="border-top: ;">Empty top border</td>
+                <td colspan="2" style="border: 1px dashed blue;">Blue dashed border</td>
+            </tr>
+            <tr>
+                <td colspan="4" style="border-bottom: ;">Spanning all columns, empty bottom border</td>
+            </tr>
+            <tr>
+                <td style="border-left: ;">Empty left border</td>
+                <td style="border-right: ;">Empty right border</td>
+                <td style="border-top: ;">Empty top border</td>
+                <td style="border-bottom: ;">Empty bottom border</td>
+            </tr>
+        </table>
+        """
+
+        try:
+            self.parser.add_html_to_document(mixed_table_html, self.document)
+            document = self.parser.parse_html_string(mixed_table_html)
+
+            tables = document.tables
+            assert len(tables) == 1, "Should create a table"
+
+            table = tables[0]
+            assert len(table.rows) == 4, f"Expected 4 rows, but got {len(table.rows)} rows"
+            assert len(table.columns) == 4, f"Expected 4 columns, but got {len(table.columns)} columns"
+
+            assert "Merged cell A" in table.cell(0, 0).text
+            assert "Spanning all columns, empty bottom border" in table.cell(2, 0).text
+
+        except Exception as e:
+            self.fail(f"Test mixed table scenarios failed with error: {e}")
+
+
 if __name__ == "__main__":
     unittest.main()

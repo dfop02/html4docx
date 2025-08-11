@@ -147,8 +147,18 @@ class HtmlToDocx(HTMLParser):
         def border_unit_converter(unit_value: str):
             """Convert multiple units to pt that is used on Word table cell border"""
             unit_value = utils.remove_important_from_style(unit_value)
+            if not unit_value or unit_value.strip() == '':
+                return default_size
+
             unit = re.sub(r'[0-9\.]+', '', unit_value)
-            value = float(re.sub(r'[a-zA-Z\!\%]+', '', unit_value))  # Allow float values
+            value_str = re.sub(r'[a-zA-Z\!\%]+', '', unit_value)
+            if not value_str or value_str.strip() == '':
+                return default_size
+
+            try:
+                value = float(value_str)  # Allow float values
+            except ValueError:
+                return default_size
 
             if unit == 'px':
                 result = int(value * 0.75)  # 1 px = 0.75 pt
@@ -829,8 +839,30 @@ class HtmlToDocx(HTMLParser):
         # Thus the row dimensions and column dimensions are assumed to be 0
         # A table can have a varying number of columns per row,
         # so it is important to find the maximum number of columns in any row
-        cols = max(len(self.get_table_columns(row)) for row in rows) if rows else 0
-        return len(rows), cols
+        if not rows:
+            return 0, 0
+
+        # check colspan
+        max_cols = 0
+        for row in rows:
+            cols = self.get_table_columns(row)
+            row_cols = 0
+            for col in cols:
+                colspan = int(col.get('colspan', 1))
+                row_cols += colspan
+            max_cols = max(max_cols, row_cols)
+
+        # check rowspan
+        max_rows = len(rows)
+        for row_idx, row in enumerate(rows):
+            cols = self.get_table_columns(row)
+            for col in cols:
+                rowspan = int(col.get('rowspan', 1))
+                if rowspan > 1:
+                    required_rows = row_idx + rowspan
+                    max_rows = max(max_rows, required_rows)
+
+        return max_rows, max_cols
 
     def get_tables(self):
         if not hasattr(self, 'soup'):
