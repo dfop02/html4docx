@@ -26,6 +26,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import RGBColor
 
+from functools import lru_cache
+
 from html4docx.metadata import Metadata
 from html4docx import utils
 
@@ -139,22 +141,25 @@ class HtmlToDocx(HTMLParser):
             "inset": "inset",
             "outset": "outset"
         }
+        keywords = {
+            'thin': '1px',
+            'medium': '3px',
+            'thick': '5px',
+            '0': '0px',
+        }
+        border_sides = ("top", "right", "bottom", "left")
+        border_width_pattern = re.compile(r'^[0-9]*\.?[0-9]+(px|pt|cm|in|rem|em|%)$')
 
-        def parse_border_style(value: str):
+        def parse_border_style(value: str) -> str:
             """Parses border styles to match word standart"""
-            return border_styles[value] if value in border_styles.keys() else 'none'
+            return border_styles[value] if value in border_styles else 'none'
 
-        def check_unit_keywords(unit_value: str) -> str:
-            keywords = {
-                'thin': '1px',
-                'medium': '3px',
-                'thick': '5px'
-            }
-            if unit_value in keywords.keys():
-                return keywords[unit_value]
+        def check_unit_keywords(value: str) -> str:
+            """Convert medium, thin, thick keywords to numeric values (px)"""
+            lower_val = value.lower()
+            return keywords.get(lower_val, value)
 
-            return unit_value
-
+        @lru_cache(maxsize=None)
         def border_unit_converter(unit_value: str):
             """Convert multiple units to pt that is used on Word table cell border"""
             unit_value = utils.remove_important_from_style(unit_value)
@@ -180,63 +185,98 @@ class HtmlToDocx(HTMLParser):
             return result
 
         def parse_border_value(value: str):
-            """Parses a border value like '1px solid #000000' or '5px'"""
+            """
+            Parses a border value like:
+            '1px solid #000000', 'solid 1px red', or '#000000 medium dashed' in any order.
+            """
             parts = value.split()
-            size = border_unit_converter(parts[0]) if parts else default_size
-            style = parse_border_style(parts[1]) if len(parts) > 1 else default_style
-            color = utils.parse_color(parts[2], return_hex=True) if len(parts) > 2 else default_color
+            # Return all default if there is only 'none'
+            if len(parts) == 1 and parts[0] == 'none':
+                return default_size, default_style, default_color
+
+            size = None
+            style = default_style
+            color = default_color
+
+            for part in parts:
+                clean_part = utils.remove_important_from_style(part).lower()
+
+                # Detect size (units or keywords)
+                if border_width_pattern.match(clean_part) or clean_part in keywords:
+                    size = border_unit_converter(clean_part) or default_size
+                    continue
+
+                # Detect style
+                if clean_part in border_styles:
+                    style = parse_border_style(clean_part)
+                    continue
+
+                # Detect color
+                if utils.is_color(clean_part):
+                    color = utils.parse_color(clean_part, return_hex=True)
+                    continue
+
+            # If only style or color was given without size, we need to apply 1pt size to render it
+            if len(parts) >= 1 and size is None:
+                size = 1.0
+
             return size, style, color
 
-        for style, value in styles.items():
-            if "border" not in style:
+        for css_prop, css_value in styles.items():
+            if not css_prop.startswith("border"):
                 continue
 
-            if style == "border":  # Handle shorthand border
-                border_values = value.split()
-                num_values = len(border_values)
-
-                if num_values == 1 and value != "none":  # "5px"
-                    size, style, color = parse_border_value(value)
-                    for side in borders:
+            # Case 1: 'border' shorthand applies to all sides
+            if css_prop == "border":
+                values = css_value.split()
+                if len(values) in (1, 3):
+                    # Single value or full triple — parse all parts in any order
+                    size, style, color = parse_border_value(css_value)
+                    for side in border_sides:
                         borders[side].update({"size": size, "style": style, "color": color})
-                elif num_values == 2:  # "10px 20px"
-                    borders["top"].update({"size": border_unit_converter(border_values[0])})
-                    borders["bottom"].update({"size": border_unit_converter(border_values[0])})
-                    borders["left"].update({"size": border_unit_converter(border_values[1])})
-                    borders["right"].update({"size": border_unit_converter(border_values[1])})
-                elif num_values == 3:  # "5px solid #000000"
-                    size, style, color = parse_border_value(value)
-                    for side in borders:
-                        borders[side].update({"size": size, "style": style, "color": color})
-                elif num_values == 4:  # "1px 5px 10px 20px"
-                    borders["top"].update({"size": border_unit_converter(border_values[0])})
-                    borders["right"].update({"size": border_unit_converter(border_values[1])})
-                    borders["bottom"].update({"size": border_unit_converter(border_values[2])})
-                    borders["left"].update({"size": border_unit_converter(border_values[3])})
+                elif len(values) == 2:
+                    # Two widths (top/bottom, left/right)
+                    tb_size = border_unit_converter(values[0]) or default_size
+                    lr_size = border_unit_converter(values[1]) or default_size
+                    for side in ("top", "bottom"):
+                        borders[side]["size"] = tb_size
+                    for side in ("left", "right"):
+                        borders[side]["size"] = lr_size
+                elif len(values) == 4:
+                    # Four widths (top, right, bottom, left)
+                    for side, val in zip(border_sides, values):
+                        borders[side]["size"] = border_unit_converter(val) or default_size
 
-            elif style in ("border-width", "border-color", "border-style"):
-                for side in borders:
-                    prop = style.split("-")[-1]
-                    if prop == "width":
-                        borders[side]["size"] = border_unit_converter(value)
-                    elif prop == "color":
-                        borders[side]["color"] = utils.parse_color(value, return_hex=True)
-                    elif prop == "style":
-                        borders[side]["style"] = parse_border_style(value)
+            # Case 2: 'border-width', 'border-color', 'border-style' — apply to all sides
+            elif css_prop in ("border-width", "border-color", "border-style"):
+                prop_type = css_prop.split("-")[1]
+                if prop_type == "width":
+                    size = border_unit_converter(css_value) or default_size
+                    for side in border_sides:
+                        borders[side]["size"] = size
+                elif prop_type == "color":
+                    color = utils.parse_color(css_value, return_hex=True)
+                    for side in border_sides:
+                        borders[side]["color"] = color
+                elif prop_type == "style":
+                    style = parse_border_style(css_value.lower())
+                    for side in border_sides:
+                        borders[side]["style"] = style
 
-            elif re.match(r"^border-(top|right|bottom|left)(-(width|color|style))?$", style):
-                parts = style.split("-")
+            # Case 3: 'border-top', 'border-right-width', etc.
+            else:
+                parts = css_prop.split("-")
                 side = parts[1]
-                prop = parts[2] if len(parts) > 2 else None
-
-                if prop == "width":
-                    borders[side]["size"] = border_unit_converter(value)
-                elif prop == "color":
-                    borders[side]["color"] = utils.parse_color(value, return_hex=True)
-                elif prop == "style":
-                    borders[side]["style"] = parse_border_style(value)
+                prop_type = parts[2] if len(parts) > 2 else None
+                if prop_type == "width":
+                    borders[side]["size"] = border_unit_converter(css_value) or default_size
+                elif prop_type == "color":
+                    borders[side]["color"] = utils.parse_color(css_value, return_hex=True)
+                elif prop_type == "style":
+                    borders[side]["style"] = parse_border_style(css_value.lower())
                 else:
-                    size, style, color = parse_border_value(value)
+                    # Full side shorthand in any order
+                    size, style, color = parse_border_value(css_value)
                     borders[side].update({"size": size, "style": style, "color": color})
 
         # Check if w:tcBorders exists, otherwise create it

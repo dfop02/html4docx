@@ -6,7 +6,8 @@ from docx.oxml.ns import qn
 
 from html4docx import HtmlToDocx
 from html4docx.utils import unit_converter
-from .context import test_dir
+
+test_dir = os.path.abspath(os.path.dirname(__file__))
 
 class OutputTest(unittest.TestCase):
     @staticmethod
@@ -743,6 +744,88 @@ and blank lines.
                     assert size_in_pt == expected_sizes[cell_idx], (
                         f"Size mismatch for {side} in row {row_idx} column {column_idx}: "
                         f"expected {expected_sizes[cell_idx]}, got {size_in_pt}"
+                    )
+
+                cell_idx += 1
+
+    def test_border_style_with_diff_formats(self):
+        self.document.add_heading("Test: Cells border style with different formats", level=1)
+
+        size_keywords_html_example = """
+        <table>
+            <tr>
+                <td style="border-top: lightblue; border-left: medium none currentcolor; border-right: solid; border-bottom: none">Cell 1</td>
+                <td style="border-top: 5px; border-left: 1px solid black; border-right: thin #736;">Cell 2</td>
+                <td style="border-top: orange solid; border-bottom: magenta solid thick; border-left: medium dashed currentcolor;">Cell 3</td>
+            </tr>
+        </table>
+        """
+        self.parser.add_html_to_document(size_keywords_html_example, self.document)
+        document = self.parser.parse_html_string(size_keywords_html_example)
+
+        expected_sides = [
+            {
+                "top": {"color": "ADD8E6", "style": "single", "size": "1.0"},
+                "bottom": {"color": "none", "style": "none", "size": "none"},
+                "left": {"color": "000000", "style": "none", "size": "2.25"},
+                "right": {"color": "000000", "style": "single", "size": "1.0"}
+            },
+            {
+                "top": {"color": "000000", "style": "single", "size": "3.75"},
+                "bottom": {"color": "none", "style": "none", "size": "none"},
+                "left": {"color": "000000", "style": "single", "size": "0.75"},
+                "right": {"color": "773366", "style": "single", "size": "0.75"}
+            },
+            {
+                "top": {"color": "FFA500", "style": "single", "size": "1.0"},
+                "bottom": {"color": "FF00FF", "style": "single", "size": "3.75"},
+                "left": {"color": "000000", "style": "dashed", "size": "2.25"},
+                "right": {"color": "none", "style": "none", "size": "none"}
+            }
+        ]
+
+        cell_idx = 0
+        for row_idx, row in enumerate(document.tables[0].rows):
+            for column_idx, cell in enumerate(row.cells):
+                # Get the table cell element and properties
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcBorders = tcPr.find(qn('w:tcBorders'))
+
+                # Extract border properties
+                border_sides = {
+                    'top': tcBorders.find(qn('w:top')) if tcBorders is not None else None,
+                    'bottom': tcBorders.find(qn('w:bottom')) if tcBorders is not None else None,
+                    'left': tcBorders.find(qn('w:left')) if tcBorders is not None else None,
+                    'right': tcBorders.find(qn('w:right')) if tcBorders is not None else None,
+                }
+
+                for side, border in border_sides.items():
+                    if border is not None:
+                        color = border.get(qn('w:color'), "").upper()  # Ensure uppercase and no #
+                        size = border.get(qn('w:sz'))
+                        style = border.get(qn('w:val'))
+                    else:
+                        color, size, style = "none", "none", "none"
+
+                    # Convert size from eighths of a point to points
+                    size_in_pt = str(round(float(size) / 8, 3)) if size and size != "none" else "none"
+
+                    # Get expected properties for the current cell and side
+                    expected_properties = expected_sides[cell_idx][side]
+
+                    # Assertions
+                    assert color == expected_properties["color"], (
+                        f"Color mismatch for {side} in row {row_idx} column {column_idx}: "
+                        f"expected {expected_properties['color']}, got {color}"
+                    )
+                    assert size_in_pt == expected_properties["size"], (
+                        f"Size mismatch for {side} in row {row_idx} column {column_idx}: "
+                        f"expected {expected_properties['size']}, got {size_in_pt}"
+                    )
+                    assert style == expected_properties["style"], (
+                        f"Style mismatch for {side} in row {row_idx} column {column_idx}: "
+                        f"expected {expected_properties['style']}, got {style}"
                     )
 
                 cell_idx += 1
