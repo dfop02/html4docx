@@ -755,7 +755,7 @@ and blank lines.
         <table>
             <tr>
                 <td style="border-top: lightblue; border-left: medium none currentcolor; border-right: solid; border-bottom: none">Cell 1</td>
-                <td style="border-top: 5px; border-left: 1px solid black; border-right: thin #736;">Cell 2</td>
+                <td style="border-top: 5px; border-left:  1px  solid  black ; border-right: thin #736; border-bottom:  ;">Cell 2</td>
                 <td style="border-top: orange solid; border-bottom: magenta solid thick; border-left: medium dashed currentcolor;">Cell 3</td>
             </tr>
         </table>

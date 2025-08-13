@@ -164,6 +164,11 @@ class HtmlToDocx(HTMLParser):
             """Convert multiple units to pt that is used on Word table cell border"""
             unit_value = utils.remove_important_from_style(unit_value)
             unit_value = check_unit_keywords(unit_value)
+
+            # Return default if no value or empty
+            if not unit_value or unit_value == '':
+                return default_size
+
             unit = re.sub(r'[0-9\.]+', '', unit_value)
             value = float(re.sub(r'[a-zA-Z\!\%]+', '', unit_value))  # Allow float values
 
@@ -190,8 +195,9 @@ class HtmlToDocx(HTMLParser):
             '1px solid #000000', 'solid 1px red', or '#000000 medium dashed' in any order.
             """
             parts = value.split()
-            # Return all default if there is only 'none'
-            if len(parts) == 1 and parts[0] == 'none':
+
+            # Return all default if there is only 'none' or empty
+            if (len(parts) == 1 and parts[0] == 'none') or (not value or value.strip() == ''):
                 return default_size, default_style, default_color
 
             size = None
