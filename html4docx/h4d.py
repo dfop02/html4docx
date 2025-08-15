@@ -829,8 +829,26 @@ class HtmlToDocx(HTMLParser):
         # Thus the row dimensions and column dimensions are assumed to be 0
         # A table can have a varying number of columns per row,
         # so it is important to find the maximum number of columns in any row
-        cols = max(len(self.get_table_columns(row)) for row in rows) if rows else 0
-        return len(rows), cols
+        if not rows:
+            return 0, 0
+
+        default_span = 1
+        max_cols = 0
+        max_rows = len(rows)
+
+        for row_idx, row in enumerate(rows):
+            cols = self.get_table_columns(row)
+            # Handle colspan
+            row_col_count = sum(int(col.get('colspan', default_span)) for col in cols)
+            max_cols = max(max_cols, row_col_count)
+
+            # Handle rowspan
+            for col in cols:
+                rowspan = int(col.get('rowspan', default_span))
+                if rowspan > default_span:
+                    max_rows = max(max_rows, row_idx + rowspan)
+
+        return max_rows, max_cols
 
     def get_tables(self):
         if not hasattr(self, 'soup'):

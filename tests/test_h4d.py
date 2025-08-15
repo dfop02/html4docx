@@ -826,5 +826,105 @@ and blank lines.
             ), f"Unordered list item '{expected_text}' not found in List Bullet paragraphs"
 
 
+    def test_complex_colspan_rowspan_combinations(self):
+        self.document.add_heading('Test: Complex Colspan and Rowspan Combinations', level=1)
+
+        complex_table_html = """
+        <table border="1">
+            <tr>
+                <td rowspan="2">A1-A2</td>
+                <td colspan="3">B1-D1</td>
+                <td>E1</td>
+            </tr>
+            <tr>
+                <td>B2</td>
+                <td colspan="2" rowspan="2">C2-D3</td>
+                <td rowspan="3">E2-E4</td>
+            </tr>
+            <tr>
+                <td colspan="2">A3-B3</td>
+            </tr>
+            <tr>
+                <td>A4</td>
+                <td>B4</td>
+                <td>C4</td>
+                <td>D4</td>
+            </tr>
+        </table>
+        """
+
+        try:
+            self.parser.table_style = 'Table Grid'
+            self.parser.add_html_to_document(complex_table_html, self.document)
+            document = self.parser.parse_html_string(complex_table_html)
+
+            tables = document.tables
+            assert len(tables) == 1, "Should create a table"
+
+
+            table = tables[0]
+            assert len(table.rows) == 4, f"Expected 4 rows, but got {len(table.rows)} rows"
+            assert len(table.columns) == 5, f"Expected 5 columns, but got {len(table.columns)} columns"
+
+            assert "A1-A2" in table.cell(0, 0).text, "First merged cell content is incorrect"
+            assert "B1-D1" in table.cell(0, 1).text, "Second merged cell content is incorrect"
+
+        except IndexError as e:
+            self.fail(f"Complex table processing failed with IndexError: {e}")
+        except Exception as e:
+            self.fail(f"Processing complex table failed with unexpected error: {e}")
+
+    def test_extreme_colspan_rowspan_cases(self):
+        """ Test extreme colspan and rowspan cases """
+        self.document.add_heading('Test: Extreme Colspan and Rowspan Cases', level=1)
+
+        extreme_table_html = """
+        <table border="1">
+            <tr>
+                <td colspan="10">Extreme colspan cell</td>
+            </tr>
+            <tr>
+                <td rowspan="5">Extreme rowspan cell</td>
+                <td colspan="9">Extreme colspan cell</td>
+            </tr>
+            <tr>
+                <td colspan="3">Col 1-3</td>
+                <td colspan="3">Col 4-6</td>
+                <td colspan="3">Col 7-9</td>
+            </tr>
+            <tr>
+                <td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td>
+            </tr>
+            <tr>
+                <td colspan="2">1-2</td><td colspan="2">3-4</td><td colspan="2">5-6</td><td colspan="3">7-9</td>
+            </tr>
+            <tr>
+                <td colspan="9">The last row should span all columns</td>
+            </tr>
+        </table>
+        """
+
+        try:
+            self.parser.table_style = 'Table Grid'
+            self.parser.add_html_to_document(extreme_table_html, self.document)
+            document = self.parser.parse_html_string(extreme_table_html)
+
+            tables = document.tables
+            assert len(tables) == 1, "Should create a table"
+
+            table = tables[0]
+
+            assert len(table.rows) == 6, f"Expected 6 rows, but got {len(table.rows)} rows"
+            assert len(table.columns) == 10, f"Expected 10 columns, but got {len(table.columns)} columns"
+
+            assert "Extreme colspan cell" in table.cell(0, 0).text, "First cell content is incorrect"
+            assert "Extreme rowspan cell" in table.cell(1, 0).text, "Second cell content is incorrect"
+
+        except IndexError as e:
+            self.fail(f"Extreme table processing failed with IndexError: {e}")
+        except Exception as e:
+            self.fail(f"Processing extreme table failed with unexpected error: {e}")
+
+
 if __name__ == "__main__":
     unittest.main()
