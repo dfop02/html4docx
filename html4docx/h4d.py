@@ -147,18 +147,8 @@ class HtmlToDocx(HTMLParser):
         def border_unit_converter(unit_value: str):
             """Convert multiple units to pt that is used on Word table cell border"""
             unit_value = utils.remove_important_from_style(unit_value)
-            if not unit_value or unit_value.strip() == '':
-                return default_size
-
             unit = re.sub(r'[0-9\.]+', '', unit_value)
-            value_str = re.sub(r'[a-zA-Z\!\%]+', '', unit_value)
-            if not value_str or value_str.strip() == '':
-                return default_size
-
-            try:
-                value = float(value_str)  # Allow float values
-            except ValueError:
-                return default_size
+            value = float(re.sub(r'[a-zA-Z\!\%]+', '', unit_value))  # Allow float values
 
             if unit == 'px':
                 result = int(value * 0.75)  # 1 px = 0.75 pt
@@ -842,25 +832,21 @@ class HtmlToDocx(HTMLParser):
         if not rows:
             return 0, 0
 
-        # check colspan
+        default_span = 1
         max_cols = 0
-        for row in rows:
-            cols = self.get_table_columns(row)
-            row_cols = 0
-            for col in cols:
-                colspan = int(col.get('colspan', 1))
-                row_cols += colspan
-            max_cols = max(max_cols, row_cols)
-
-        # check rowspan
         max_rows = len(rows)
+
         for row_idx, row in enumerate(rows):
             cols = self.get_table_columns(row)
+            # Handle colspan
+            row_col_count = sum(int(col.get('colspan', default_span)) for col in cols)
+            max_cols = max(max_cols, row_col_count)
+
+            # Handle rowspan
             for col in cols:
-                rowspan = int(col.get('rowspan', 1))
-                if rowspan > 1:
-                    required_rows = row_idx + rowspan
-                    max_rows = max(max_rows, required_rows)
+                rowspan = int(col.get('rowspan', default_span))
+                if rowspan > default_span:
+                    max_rows = max(max_rows, row_idx + rowspan)
 
         return max_rows, max_cols
 
