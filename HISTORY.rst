@@ -4,6 +4,22 @@ Release History
 ---------------
 
 
+1.0.10 (2025-08-20)
+++++++++++++++++++
+
+**Updates**
+
+- Update tests for all new scenarios. | [Dfop02](https://github.com/dfop02) and [hxzrx](https://github.com/hxzrx)
+
+**Fixes**
+
+- Fix rowspan and colspan for complex tables | [hxzrx](https://github.com/hxzrx) from [PR](https://github.com/dfop02/html4docx/pull/33)
+
+**New Features**
+
+- Add support for border with more complex values and keywords | [Dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/31)
+
+
 1.0.9 (2025-07-18)
 ++++++++++++++++++
 
