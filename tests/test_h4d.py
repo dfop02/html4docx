@@ -6,7 +6,8 @@ from docx.oxml.ns import qn
 
 from html4docx import HtmlToDocx
 from html4docx.utils import unit_converter
-from .context import test_dir
+
+test_dir = os.path.abspath(os.path.dirname(__file__))
 
 class OutputTest(unittest.TestCase):
     @staticmethod
@@ -500,33 +501,33 @@ and blank lines.
             },
             {
                 "top": {"color": "FAC32A", "style": "single", "size": "1.0"},
-                "bottom": {"color": "FAC32A", "style": "single", "size": "1.0"},
+                "bottom": {"color": "FAC32A", "style": "single", "size": "1.125"},
                 "left": {"color": "none", "style": "none", "size": "none"},
                 "right": {"color": "FAC32A", "style": "single", "size": "12.0"}
             },
             {
-                "top": {"color": "30E667", "style": "none", "size": "5.0"},
-                "bottom": {"color": "30E667", "style": "single", "size": "5.0"},
-                "left": {"color": "30E667", "style": "single", "size": "5.0"},
-                "right": {"color": "30E667", "style": "single", "size": "5.0"}
+                "top": {"color": "30E667", "style": "none", "size": "5.67"},
+                "bottom": {"color": "30E667", "style": "single", "size": "5.67"},
+                "left": {"color": "30E667", "style": "single", "size": "5.67"},
+                "right": {"color": "30E667", "style": "single", "size": "5.67"}
             },
             {
                 "top": {"color": "none", "style": "none", "size": "none"},
-                "bottom": {"color": "D948CF", "style": "single", "size": "1.0"},
+                "bottom": {"color": "D948CF", "style": "single", "size": "1.5"},
                 "left": {"color": "none", "style": "none", "size": "none"},
-                "right": {"color": "D948CF", "style": "single", "size": "5.0"}
+                "right": {"color": "D948CF", "style": "single", "size": "5.67"}
             },
             {
-                "top": {"color": "EAAAA7", "style": "single", "size": "1.0"},
-                "bottom": {"color": "EAAAA7", "style": "single", "size": "1.0"},
-                "left": {"color": "EAAAA7", "style": "single", "size": "1.0"},
-                "right": {"color": "EAAAA7", "style": "single", "size": "1.0"}
+                "top": {"color": "EAAAA7", "style": "single", "size": "1.1"},
+                "bottom": {"color": "EAAAA7", "style": "single", "size": "1.1"},
+                "left": {"color": "EAAAA7", "style": "single", "size": "1.1"},
+                "right": {"color": "EAAAA7", "style": "single", "size": "1.1"}
             },
             {
                 "top": {"color": "none", "style": "none", "size": "none"},
-                "bottom": {"color": "ACC4AA", "style": "dashed", "size": "7.0"},
+                "bottom": {"color": "ACC4AA", "style": "dashed", "size": "7.2"},
                 "left": {"color": "none", "style": "none", "size": "none"},
-                "right": {"color": "ACC4AA", "style": "dotted", "size": "4.0"}
+                "right": {"color": "ACC4AA", "style": "dotted", "size": "4.8"}
             }
         ]
 
@@ -556,7 +557,7 @@ and blank lines.
                         color, size, style = "none", "none", "none"
 
                     # Convert size from eighths of a point to points
-                    size_in_pt = str(int(size) / 8) if size and size != "none" else "none"
+                    size_in_pt = str(round(float(size) / 8, 3)) if size and size != "none" else "none"
 
                     # Get expected properties for the current cell and side
                     expected_properties = expected_colors[cell_idx][side]
@@ -697,6 +698,138 @@ and blank lines.
                     f"expected {expected_height_px}px, got {cell_height_px}px"
                 )
 
+    def test_border_with_keywords(self):
+        self.document.add_heading("Test: Cells with size keywords", level=1)
+
+        size_keywords_html_example = """
+        <table>
+        <tr>
+            <td style="border: thin solid currentcolor">Hello World</td>
+            <td style="border: medium dashed orange">Thanks World</td>
+        </tr>
+        <tr>
+            <td style="border: thick double red">Goodbye World</td>
+            <td style="border: none">Bye World</td>
+        </tr>
+        </table>
+        """
+        self.parser.add_html_to_document(size_keywords_html_example, self.document)
+        document = self.parser.parse_html_string(size_keywords_html_example)
+
+        expected_sizes = ["0.75", "2.25", "3.75", "none"]
+
+        # Validate border properties for each cell
+        cell_idx = 0
+        for row_idx, row in enumerate(document.tables[0].rows):
+            for column_idx, cell in enumerate(row.cells):
+                # Get the table cell element and properties
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcBorders = tcPr.find(qn('w:tcBorders'))
+
+                # Extract border properties
+                border_sides = {
+                    'top': tcBorders.find(qn('w:top')) if tcBorders is not None else None,
+                    'bottom': tcBorders.find(qn('w:bottom')) if tcBorders is not None else None,
+                    'left': tcBorders.find(qn('w:left')) if tcBorders is not None else None,
+                    'right': tcBorders.find(qn('w:right')) if tcBorders is not None else None,
+                }
+
+                for side, border in border_sides.items():
+                    size = border.get(qn('w:sz')) if border is not None else "none"
+
+                    # Convert size from eighths of a point to points
+                    size_in_pt = str(float(size) / 8) if size and size != "none" else "none"
+
+                    assert size_in_pt == expected_sizes[cell_idx], (
+                        f"Size mismatch for {side} in row {row_idx} column {column_idx}: "
+                        f"expected {expected_sizes[cell_idx]}, got {size_in_pt}"
+                    )
+
+                cell_idx += 1
+
+    def test_border_style_with_diff_formats(self):
+        self.document.add_heading("Test: Cells border style with different formats", level=1)
+
+        size_keywords_html_example = """
+        <table>
+            <tr>
+                <td style="border-top: lightblue; border-left: medium none currentcolor; border-right: solid; border-bottom: none">Cell 1</td>
+                <td style="border-top: 5px; border-left:  1px  solid  black ; border-right: thin #736; border-bottom:  ;">Cell 2</td>
+                <td style="border-top: orange solid; border-bottom: magenta solid thick; border-left: medium dashed currentcolor;">Cell 3</td>
+            </tr>
+        </table>
+        """
+        self.parser.add_html_to_document(size_keywords_html_example, self.document)
+        document = self.parser.parse_html_string(size_keywords_html_example)
+
+        expected_sides = [
+            {
+                "top": {"color": "ADD8E6", "style": "single", "size": "1.0"},
+                "bottom": {"color": "none", "style": "none", "size": "none"},
+                "left": {"color": "000000", "style": "none", "size": "2.25"},
+                "right": {"color": "000000", "style": "single", "size": "1.0"}
+            },
+            {
+                "top": {"color": "000000", "style": "single", "size": "3.75"},
+                "bottom": {"color": "none", "style": "none", "size": "none"},
+                "left": {"color": "000000", "style": "single", "size": "0.75"},
+                "right": {"color": "773366", "style": "single", "size": "0.75"}
+            },
+            {
+                "top": {"color": "FFA500", "style": "single", "size": "1.0"},
+                "bottom": {"color": "FF00FF", "style": "single", "size": "3.75"},
+                "left": {"color": "000000", "style": "dashed", "size": "2.25"},
+                "right": {"color": "none", "style": "none", "size": "none"}
+            }
+        ]
+
+        cell_idx = 0
+        for row_idx, row in enumerate(document.tables[0].rows):
+            for column_idx, cell in enumerate(row.cells):
+                # Get the table cell element and properties
+                tc = cell._tc
+                tcPr = tc.get_or_add_tcPr()
+                tcBorders = tcPr.find(qn('w:tcBorders'))
+
+                # Extract border properties
+                border_sides = {
+                    'top': tcBorders.find(qn('w:top')) if tcBorders is not None else None,
+                    'bottom': tcBorders.find(qn('w:bottom')) if tcBorders is not None else None,
+                    'left': tcBorders.find(qn('w:left')) if tcBorders is not None else None,
+                    'right': tcBorders.find(qn('w:right')) if tcBorders is not None else None,
+                }
+
+                for side, border in border_sides.items():
+                    if border is not None:
+                        color = border.get(qn('w:color'), "").upper()  # Ensure uppercase and no #
+                        size = border.get(qn('w:sz'))
+                        style = border.get(qn('w:val'))
+                    else:
+                        color, size, style = "none", "none", "none"
+
+                    # Convert size from eighths of a point to points
+                    size_in_pt = str(round(float(size) / 8, 3)) if size and size != "none" else "none"
+
+                    # Get expected properties for the current cell and side
+                    expected_properties = expected_sides[cell_idx][side]
+
+                    # Assertions
+                    assert color == expected_properties["color"], (
+                        f"Color mismatch for {side} in row {row_idx} column {column_idx}: "
+                        f"expected {expected_properties['color']}, got {color}"
+                    )
+                    assert size_in_pt == expected_properties["size"], (
+                        f"Size mismatch for {side} in row {row_idx} column {column_idx}: "
+                        f"expected {expected_properties['size']}, got {size_in_pt}"
+                    )
+                    assert style == expected_properties["style"], (
+                        f"Style mismatch for {side} in row {row_idx} column {column_idx}: "
+                        f"expected {expected_properties['style']}, got {style}"
+                    )
+
+                cell_idx += 1
+
     def test_unbalanced_table(self):
         # A table with more td elements in latter rows than in the first
         self.document.add_heading('Test: Handling unbalanced tables', level=1)
@@ -824,6 +957,161 @@ and blank lines.
             assert any(
                 expected_text == p.text.strip() for p in unordered_list_paragraphs
             ), f"Unordered list item '{expected_text}' not found in List Bullet paragraphs"
+
+    def test_table_rowspan_and_colspan(self):
+        self.document.add_heading("Test: Table rowspan and colspan", level=1)
+
+        rowspan_and_colspan_html_example = """
+        <table border="1" cellspacing="0" cellpadding="4">
+          <tr>
+            <th rowspan="2" style="vertical-align:middle;text-align:center">Region</th>
+            <th colspan="2" style="vertical-align:middle;text-align:center">Sales (CHF millions)</th>
+          </tr>
+          <tr>
+            <th>2024</th>
+            <th>2023</th>
+          </tr>
+          <tr>
+            <td>United States</td>
+            <td>22,456</td>
+            <td>20,892</td>
+          </tr>
+          <tr>
+            <td>Europe</td>
+            <td>8,147</td>
+            <td>7,634</td>
+          </tr>
+        </table>"""
+        self.parser.table_style = 'Table Grid'
+        self.parser.add_html_to_document(rowspan_and_colspan_html_example, self.document)
+        document = self.parser.parse_html_string(rowspan_and_colspan_html_example)
+
+        # Find the first table
+        table = document.tables[0]
+
+        # Assertions on structure
+        assert len(table.rows) == 4, "Table should have 4 rows"
+        assert len(table.columns) == 3, "Table should have 3 columns"
+
+        # Cell (0, 0): Region (rowspan=2)
+        assert "Region" in table.cell(0, 0).text
+        assert table.cell(0, 0)._tc.tcPr.vMerge is not None, "Table Cell (0, 0) is not vertically merged"
+        assert table.cell(1, 0)._tc.tcPr.vMerge is not None, "Table Cell (1, 0) is not vertically merged"
+
+        # Cell (0, 1): Sales (CHF millions) (colspan=2)
+        sales_cell = table.cell(0, 1)
+        assert "Sales" in sales_cell.text
+        assert sales_cell._tc.tcPr.gridSpan is not None, "Table Cell (0, 1) is not horizontally merged"
+        assert int(sales_cell._tc.tcPr.gridSpan.val) == 2, "Table Cell (0, 2) is not horizontally merged"
+
+        # Verify unmerged data cells
+        assert "2024" in table.cell(1, 1).text
+        assert "2023" in table.cell(1, 2).text
+        assert "United States" in table.cell(2, 0).text
+        assert "22,456" in table.cell(2, 1).text
+        assert "20,892" in table.cell(2, 2).text
+        assert "Europe" in table.cell(3, 0).text
+        assert "8,147" in table.cell(3, 1).text
+        assert "7,634" in table.cell(3, 2).text
+
+    def test_complex_colspan_rowspan_combinations(self):
+        self.document.add_heading('Test: Complex Colspan and Rowspan Combinations', level=1)
+
+        complex_table_html = """
+        <table border="1">
+            <tr>
+                <td rowspan="2">A1-A2</td>
+                <td colspan="3">B1-D1</td>
+                <td>E1</td>
+            </tr>
+            <tr>
+                <td>B2</td>
+                <td colspan="2" rowspan="2">C2-D3</td>
+                <td rowspan="3">E2-E4</td>
+            </tr>
+            <tr>
+                <td colspan="2">A3-B3</td>
+            </tr>
+            <tr>
+                <td>A4</td>
+                <td>B4</td>
+                <td>C4</td>
+                <td>D4</td>
+            </tr>
+        </table>
+        """
+
+        try:
+            self.parser.table_style = 'Table Grid'
+            self.parser.add_html_to_document(complex_table_html, self.document)
+            document = self.parser.parse_html_string(complex_table_html)
+
+            tables = document.tables
+            assert len(tables) == 1, "Should create a table"
+
+
+            table = tables[0]
+            assert len(table.rows) == 4, f"Expected 4 rows, but got {len(table.rows)} rows"
+            assert len(table.columns) == 5, f"Expected 5 columns, but got {len(table.columns)} columns"
+
+            assert "A1-A2" in table.cell(0, 0).text, "First merged cell content is incorrect"
+            assert "B1-D1" in table.cell(0, 1).text, "Second merged cell content is incorrect"
+
+        except IndexError as e:
+            self.fail(f"Complex table processing failed with IndexError: {e}")
+        except Exception as e:
+            self.fail(f"Processing complex table failed with unexpected error: {e}")
+
+    def test_extreme_colspan_rowspan_cases(self):
+        """ Test extreme colspan and rowspan cases """
+        self.document.add_heading('Test: Extreme Colspan and Rowspan Cases', level=1)
+
+        extreme_table_html = """
+        <table border="1">
+            <tr>
+                <td colspan="10">Extreme colspan cell</td>
+            </tr>
+            <tr>
+                <td rowspan="5">Extreme rowspan cell</td>
+                <td colspan="9">Extreme colspan cell</td>
+            </tr>
+            <tr>
+                <td colspan="3">Col 1-3</td>
+                <td colspan="3">Col 4-6</td>
+                <td colspan="3">Col 7-9</td>
+            </tr>
+            <tr>
+                <td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td>
+            </tr>
+            <tr>
+                <td colspan="2">1-2</td><td colspan="2">3-4</td><td colspan="2">5-6</td><td colspan="3">7-9</td>
+            </tr>
+            <tr>
+                <td colspan="9">The last row should span all columns</td>
+            </tr>
+        </table>
+        """
+
+        try:
+            self.parser.table_style = 'Table Grid'
+            self.parser.add_html_to_document(extreme_table_html, self.document)
+            document = self.parser.parse_html_string(extreme_table_html)
+
+            tables = document.tables
+            assert len(tables) == 1, "Should create a table"
+
+            table = tables[0]
+
+            assert len(table.rows) == 6, f"Expected 6 rows, but got {len(table.rows)} rows"
+            assert len(table.columns) == 10, f"Expected 10 columns, but got {len(table.columns)} columns"
+
+            assert "Extreme colspan cell" in table.cell(0, 0).text, "First cell content is incorrect"
+            assert "Extreme rowspan cell" in table.cell(1, 0).text, "Second cell content is incorrect"
+
+        except IndexError as e:
+            self.fail(f"Extreme table processing failed with IndexError: {e}")
+        except Exception as e:
+            self.fail(f"Processing extreme table failed with unexpected error: {e}")
 
 
 if __name__ == "__main__":
