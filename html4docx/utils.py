@@ -177,6 +177,13 @@ def unit_converter(unit_value: str, target_unit: str = "pt"):
     else:
         raise ValueError(f"Unsupported target unit: {target_unit}")
 
+def is_color(color: str) -> bool:
+    is_rgb = 'rgb' in color
+    is_hex = color.startswith('#')
+    is_keyword = color == 'currentcolor'
+    is_color_name = color in Color.__members__
+    return is_rgb or is_hex or is_keyword or is_color_name
+
 def parse_color(color: str, return_hex: bool = False):
     color = remove_important_from_style(color.strip().lower())
 
@@ -185,8 +192,9 @@ def parse_color(color: str, return_hex: bool = False):
         colors = [int(x) for x in color.split(',')]
     elif color.startswith('#'):
         color = color.lstrip('#')
+        color = ''.join([x+x for x in color]) if len(color) == 3 else color # convert short hex to full hex
         colors = RGBColor.from_string(color)
-    elif color in Color.__members__.keys():
+    elif color in Color.__members__:
         colors = Color[color].value
     else:
         colors = [0, 0, 0]  # Default to black for unexpected colors
