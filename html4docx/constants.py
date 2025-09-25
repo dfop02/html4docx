@@ -71,6 +71,12 @@ BORDER_STYLES = {
     "inset": "inset",
     "outset": "outset"
 }
+BORDER_KEYWORDS = {
+    'thin': '1px',
+    'medium': '3px',
+    'thick': '5px',
+    '0': '0px',
+}
 
 def default_borders():
     return {
