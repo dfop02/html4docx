@@ -1,5 +1,6 @@
 # HTML FOR DOCX
 ![Tests](https://github.com/dfop02/html4docx/actions/workflows/tests.yml/badge.svg)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/html-for-docx?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/html-for-docx)
 ![Version](https://img.shields.io/pypi/v/html-for-docx.svg)
 ![Supported Versions](https://img.shields.io/pypi/pyversions/html-for-docx.svg)
 
@@ -13,7 +14,7 @@ Convert html to docx, this project is a fork from descontinued [pqzx/html2docx](
 
 #### The basic usage
 
-Add HTML formatted to an existing Docx
+Add HTML-formatted content to an existing `.docx` document
 
 ```python
 from html4docx import HtmlToDocx
@@ -23,30 +24,47 @@ html_string = '<h1>Hello world</h1>'
 parser.add_html_to_document(html_string, filename_docx)
 ```
 
-You can use `python-docx` to manipulate the file as well, here an example
+You can use `python-docx` to manipulate directly the file, here an example
 
 ```python
 from docx import Document
 from html4docx import HtmlToDocx
 
 document = Document()
-new_parser = HtmlToDocx()
+parser = HtmlToDocx()
 
 html_string = '<h1>Hello world</h1>'
-new_parser.add_html_to_document(html_string, document)
+parser.add_html_to_document(html_string, document)
 
 document.save('your_file_name.docx')
 ```
+
+or incrementally add new html to document and save it when finished, new content will always be added at the end
+
+```python
+from docx import Document
+from html4docx import HtmlToDocx
+
+document = Document()
+parser = HtmlToDocx()
+
+for part in ['First', 'Second', 'Third']:
+    parser.add_html_to_document(f'<h1>{part} Part</h1>', document)
+
+parser.save('your_file_name.docx')
+```
+
+When you pass a `Document` object, you can either use `document.save()` from python-docx or `parser.save()` from html4docx, both works well.
 
 #### Convert files directly
 
 ```python
 from html4docx import HtmlToDocx
 
-new_parser = HtmlToDocx()
-new_parser.parse_html_file(input_html_file_path, output_docx_file_path)
+parser = HtmlToDocx()
+parser.parse_html_file(input_html_file_path, output_docx_file_path)
 # You can also define a encoding, by default is utf-8
-new_parser.parse_html_file(input_html_file_path, output_docx_file_path, 'utf-8')
+parser.parse_html_file(input_html_file_path, output_docx_file_path, 'utf-8')
 ```
 
 #### Convert files from a string
@@ -54,8 +72,8 @@ new_parser.parse_html_file(input_html_file_path, output_docx_file_path, 'utf-8')
 ```python
 from html4docx import HtmlToDocx
 
-new_parser = HtmlToDocx()
-docx = new_parser.parse_html_string(input_html_file_string)
+parser = HtmlToDocx()
+docx = parser.parse_html_string(input_html_file_string)
 ```
 
 #### Change table styles
@@ -65,18 +83,39 @@ Tables are not styled by default. Use the `table_style` attribute on the parser 
 ```python
 from html4docx import HtmlToDocx
 
-new_parser = HtmlToDocx()
-new_parser.table_style = 'Light Shading Accent 4'
-docx = new_parser.parse_html_string(input_html_file_string)
+parser = HtmlToDocx()
+parser.table_style = 'Light Shading Accent 4'
+docx = parser.parse_html_string(input_html_file_string)
 ```
 
 To add borders to tables, use the `Table Grid` style:
 
 ```python
-new_parser.table_style = 'Table Grid'
+parser.table_style = 'Table Grid'
 ```
 
 All table styles we support can be found [here](https://python-docx.readthedocs.io/en/latest/user/styles-understanding.html#table-styles-in-default-template).
+
+#### Options
+
+There is 4 options that you can use to personalize your execution:
+- Disable Images: Ignore all images.
+- Disable Tables: If you do it, it will render just the raw tables content
+- Disable Styles: Ignore all CSS styles.
+- Disable Fix-HTML: Use BeautifulSoap to Fix possible HTML missing tags.
+
+This is how you could disable them if you want **(By default, is all True)**:
+
+```python
+from html4docx import HtmlToDocx
+
+parser = HtmlToDocx()
+parser.options['images'] = False
+parser.options['tables'] = False
+parser.options['styles'] = False
+parser.options['fix-html'] = False
+docx = parser.parse_html_string(input_html_file_string)
+```
 
 #### Metadata
 
@@ -87,9 +126,9 @@ from docx import Document
 from html4docx import HtmlToDocx
 
 document = Document()
-new_parser = HtmlToDocx()
-new_parser.set_initial_attrs(document)
-metadata = new_parser.metadata
+parser = HtmlToDocx()
+parser.set_initial_attrs(document)
+metadata = parser.metadata
 
 # You can get metadata as dict
 metadata_json = metadata.get_metadata()

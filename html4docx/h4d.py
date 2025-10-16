@@ -1,20 +1,7 @@
-"""
-Make 'span' in tags dict a stack
-maybe do the same for all tags in case of unclosed tags?
-optionally use bs4 to clean up invalid html?
-
-the idea is that there is a method that converts html files into docx
-but also have api methods that let user have more control e.g. so they
-can nest calls to something like 'convert_chunk' in loops
-
-user can pass existing document object as arg
-(if they want to manage rest of document themselves)
-
-How to deal with block level style applied over table elements? e.g. text align
-"""
 import argparse
 import os
 import re
+from io import BytesIO
 from html.parser import HTMLParser
 
 import docx
@@ -28,16 +15,9 @@ from docx.shared import RGBColor
 
 from functools import lru_cache
 
-from html4docx.metadata import Metadata
+from html4docx import constants
 from html4docx import utils
-
-# values in inches
-INDENT = 0.25
-LIST_INDENT = 0.5
-MAX_INDENT = 5.5 # To stop indents going off the page
-
-# Style to use with tables. By default no style is used.
-DEFAULT_TABLE_STYLE = None
+from html4docx.metadata import Metadata
 
 class HtmlToDocx(HTMLParser):
     """
@@ -46,49 +26,54 @@ class HtmlToDocx(HTMLParser):
     """
     def __init__(self):
         super().__init__()
-        self.options = {
-            'fix-html': True,
-            'images': True,
-            'tables': True,
-            'styles': True,
-        }
-        self.table_row_selectors = [
-            'table > tr',
-            'table > thead > tr',
-            'table > tbody > tr',
-            'table > tfoot > tr'
-        ]
-        self.table_style = DEFAULT_TABLE_STYLE
+        self.options = dict(constants.DEFAULT_OPTIONS)
+        self.table_row_selectors = constants.DEFAULT_TABLE_ROW_SELECTORS
+        self.table_style = constants.DEFAULT_TABLE_STYLE
 
-    def set_initial_attrs(self, document=None):
+    def set_initial_attrs(self, document = None):
         self.tags = {
             'span': [],
             'list': [],
         }
         self.doc = document if document else Document()
-        self.document = self.doc
         self.bs = self.options['fix-html'] # whether or not to clean with BeautifulSoup
-        self.include_tables = True # TODO add this option back in?
-        self.include_images = self.options['images']
-        self.include_styles = self.options['styles']
         self.paragraph = None
         self.skip = False
         self.skip_tag = None
         self.instances_to_skip = 0
         self.bookmark_id = 0
-        # This counter simulates unique numbering IDs for <ol> elements.
-        # Each new top-level ordered list increments this to trick python-docx into restarting list numbering.
-        # Required because python-docx doesn't expose fine-grained list numbering control.
         self.in_li = False
         self.list_restart_counter = 0
         self.current_ol_num_id = None
         self._list_num_ids = {}
 
     @property
-    def metadata(self):
+    def metadata(self) -> dict[str, any]:
         if not hasattr(self, '_metadata'):
             self._metadata = Metadata(self.doc)
         return self._metadata
+
+    @property
+    def include_tables(self) -> bool:
+        return self.options.get('tables', True)
+
+    @property
+    def include_images(self) -> bool:
+        return self.options.get('images', True)
+
+    @property
+    def include_styles(self) -> bool:
+        return self.options.get('styles', True)
+
+    def save(self, destination) -> None:
+        """Save the document to a file path or BytesIO object."""
+        if isinstance(destination, str):
+            destination, _ = os.path.splitext(destination)
+            self.doc.save(f'{destination}.docx')
+        elif isinstance(destination, BytesIO):
+            self.doc.save(destination)
+        else:
+            raise TypeError('destination must be a str path or BytesIO object')
 
     def copy_settings_from(self, other):
         """Copy settings from another instance of HtmlToDocx"""
@@ -125,38 +110,18 @@ class HtmlToDocx(HTMLParser):
         tcPr = tc.get_or_add_tcPr()  # Get or add the table cell properties
 
         # Default border properties
-        default_size = 0
-        default_color = "#000000"
-        default_style = "single"
-        borders = {
-            "top": {"size": default_size, "color": default_color, "style": default_style},
-            "right": {"size": default_size, "color": default_color, "style": default_style},
-            "bottom": {"size": default_size, "color": default_color, "style": default_style},
-            "left": {"size": default_size, "color": default_color, "style": default_style},
-        }
-        border_styles = {
-            "none": "none",
-            "hidden": "none",
-            "initial": "none",
-            "solid": "single",
-            "dotted": "dotted",
-            "dashed": "dashed",
-            "double": "double",
-            "inset": "inset",
-            "outset": "outset"
-        }
-        keywords = {
-            'thin': '1px',
-            'medium': '3px',
-            'thick': '5px',
-            '0': '0px',
-        }
+        default_size = constants.DEFAULT_BORDER_SIZE
+        default_color = constants.DEFAULT_BORDER_COLOR
+        default_style = constants.DEFAULT_BORDER_STYLE
+        borders = constants.default_borders()
+        border_styles = constants.BORDER_STYLES
+        keywords = constants.BORDER_KEYWORDS
         border_sides = ("top", "right", "bottom", "left")
         border_width_pattern = re.compile(r'^[0-9]*\.?[0-9]+(px|pt|cm|in|rem|em|%)$')
 
         def parse_border_style(value: str) -> str:
             """Parses border styles to match word standart"""
-            return border_styles[value] if value in border_styles else 'none'
+            return constants.BORDER_STYLES[value] if value in constants.BORDER_STYLES.keys() else 'none'
 
         def check_unit_keywords(value: str) -> str:
             """Convert medium, thin, thick keywords to numeric values (px)"""
@@ -187,7 +152,7 @@ class HtmlToDocx(HTMLParser):
             elif unit == 'rem' or unit == 'em':
                 result = value * 12  # Assuming 1rem/em = 16px, converted to pt
             elif unit == '%':
-                result = MAX_INDENT * (value / 100)
+                result = constants.MAX_INDENT * (value / 100)
             else:
                 return None  # Unsupported units return None
 
@@ -419,7 +384,7 @@ class HtmlToDocx(HTMLParser):
         list_type = self.tags['list'][-1] if self.tags['list'] else 'ul'
         level = min(list_depth, 3)
         style_key = list_type if level <= 1 else f"{list_type}{level}"
-        list_style = utils.styles.get(style_key, 'List Number' if list_type == 'ol' else 'List Bullet')
+        list_style = constants.STYLES.get(style_key, 'List Number' if list_type == 'ol' else 'List Bullet')
 
         self.paragraph = self.doc.add_paragraph(style=list_style)
         self.in_li = True
@@ -485,9 +450,6 @@ class HtmlToDocx(HTMLParser):
         if 'src' not in current_attrs:
             self.doc.add_paragraph("<image: no_src>")
             return
-
-        if not self.paragraph:
-            self.paragraph = self.doc.add_paragraph()
 
         src = current_attrs['src']
 
@@ -763,8 +725,9 @@ class HtmlToDocx(HTMLParser):
             self.paragraph = self.doc.paragraphs[-1]
 
         elif tag == 'table':
-            self.handle_table(current_attrs)
-            return
+            if self.include_tables:
+                self.handle_table(current_attrs)
+                return
 
         elif tag == 'div':
             self.handle_div(current_attrs)
@@ -808,10 +771,10 @@ class HtmlToDocx(HTMLParser):
                 self.current_ol_num_id = None
             return
         elif tag == 'table':
-            self.table_no += 1
-            self.table = None
-            self.doc = self.document
-            self.paragraph = None
+            if self.include_tables:
+                self.table_no += 1
+                self.table = None
+                self.paragraph = None
         elif tag == 'li':
             self.in_li = False
 
@@ -852,12 +815,12 @@ class HtmlToDocx(HTMLParser):
 
         # add font style and name
         for tag, attrs in self.tags.items():
-            if tag in utils.font_styles:
-                font_style = utils.font_styles[tag]
+            if tag in constants.FONT_STYLES:
+                font_style = constants.FONT_STYLES[tag]
                 setattr(self.run.font, font_style, True)
 
-            if tag in utils.font_names:
-                font_name = utils.font_names[tag]
+            if tag in constants.FONT_NAMES:
+                font_name = constants.FONT_NAMES[tag]
                 self.run.font.name = font_name
 
             if 'style' in attrs and (tag in ['div', 'li', 'p', 'pre'] or re.match(r'h[1-9]', tag)):
@@ -918,15 +881,15 @@ class HtmlToDocx(HTMLParser):
 
         return max_rows, max_cols
 
-    def get_tables(self):
+    def get_tables(self) -> None:
         if not hasattr(self, 'soup'):
-            self.include_tables = False
+            self.options['tables'] = False
             return
 
         self.tables = self.ignore_nested_tables(self.soup.find_all('table'))
         self.table_no = 0
 
-    def run_process(self, html):
+    def run_process(self, html: str) -> None:
         if self.bs and BeautifulSoup:
             self.soup = BeautifulSoup(html, 'html.parser')
 
@@ -935,17 +898,19 @@ class HtmlToDocx(HTMLParser):
             self.get_tables()
         self.feed(html)
 
-    def add_html_to_document(self, html, document):
+    def add_html_to_document(self, html: str, document) -> None:
         if not isinstance(html, str):
             raise ValueError(f'First argument needs to be a {str}')
         elif not isinstance(document, docx.document.Document) and not isinstance(document, docx.table._Cell):
             raise ValueError(f'Second argument needs to be a {docx.document.Document}')
+
         self.set_initial_attrs(document)
         self.run_process(html)
 
-    def add_html_to_cell(self, html, cell):
+    def add_html_to_cell(self, html: str, cell: docx.table._Cell) -> None:
         if not isinstance(cell, docx.table._Cell):
             raise ValueError(f'Second argument needs to be a {docx.table._Cell}')
+
         unwanted_paragraph = cell.paragraphs[0]
         utils.delete_paragraph(unwanted_paragraph)
         self.set_initial_attrs(cell)
@@ -955,17 +920,20 @@ class HtmlToDocx(HTMLParser):
         if not self.doc.paragraphs:
             self.doc.add_paragraph('')
 
-    def parse_html_file(self, filename_html, filename_docx=None, encoding='utf-8'):
+    def parse_html_file(self, filename_html: str, filename_docx, encoding: str = 'utf-8') -> None:
         with open(filename_html, 'r', encoding=encoding) as infile:
             html = infile.read()
+
         self.set_initial_attrs()
         self.run_process(html)
+
         if not filename_docx:
             path, filename = os.path.split(filename_html)
             filename_docx = f'{path}/new_docx_file_{filename}'
-        self.doc.save(f'{filename_docx}.docx')
 
-    def parse_html_string(self, html):
+        self.save(filename_docx)
+
+    def parse_html_string(self, html: str) -> docx.document.Document:
         self.set_initial_attrs()
         self.run_process(html)
         return self.doc

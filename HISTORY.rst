@@ -3,6 +3,26 @@
 Release History
 ---------------
 
+1.1.0 (2025-08-xx)
+++++++++++++++++++
+
+Major Changes
+-------------
+
+**Updates**
+
+- Modularize HtmlToDocx class
+- Add Typing hint for few relevant methods
+
+**Fixes**
+
+- Fixed skip table was not working correctly
+
+**New Features**
+
+- Add built-in save for save docx
+- Able to save in memory (BytesIO)
+
 
 1.0.10 (2025-08-20)
 ++++++++++++++++++

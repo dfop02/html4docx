@@ -1,4 +1,5 @@
 import os
+from io import BytesIO
 from pathlib import Path
 import unittest
 from docx import Document
@@ -42,6 +43,20 @@ class OutputTest(unittest.TestCase):
     def setUp(self):
         self.parser = HtmlToDocx()
 
+    def test_save_docx_by_filename(self):
+        filename = os.path.join(test_dir, 'new_test.docx')
+        self.parser.set_initial_attrs(self.document)
+        self.parser.save(filename)
+        self.assertTrue(os.path.exists(filename))
+        os.remove(filename)
+
+    def test_save_docx_by_buffer(self):
+        buffer = BytesIO()
+        self.parser.set_initial_attrs(self.document)
+        self.parser.save(buffer)
+        buffer.seek(0)
+        self.assertTrue(buffer.getvalue())
+
     def test_html_with_images_links_style(self):
         self.document.add_heading(
             'Test: add regular html with images, links and some formatting to document',
@@ -63,8 +78,8 @@ class OutputTest(unittest.TestCase):
             level=1
         )
         self.parser.paragraph_style = 'Quote'
-        table = self.document.add_table(2, 2, style='Table Grid')
-        cell = table.cell(1, 1)
+        table = self.document.add_table(1, 2, style='Table Grid')
+        cell = table.cell(0, 1)
         self.parser.add_html_to_document(self.text1, cell)
 
     def test_add_html_to_table_cell(self):
@@ -72,8 +87,8 @@ class OutputTest(unittest.TestCase):
             'Test: regular html with images, links, some formatting to table cell',
             level=1
         )
-        table = self.document.add_table(2, 2, style='Table Grid')
-        cell = table.cell(1, 1)
+        table = self.document.add_table(1, 2, style='Table Grid')
+        cell = table.cell(0, 1)
         self.parser.add_html_to_document(self.text1, cell)
 
     def test_add_html_skip_images(self):
@@ -89,7 +104,7 @@ class OutputTest(unittest.TestCase):
 
     def test_add_html_with_tables(self):
         self.document.add_heading(
-            'Test: add html with tables',
+            'Test: add html with tables (by default no borders)',
             level=1
         )
         self.parser.add_html_to_document(self.table_html, self.document)
