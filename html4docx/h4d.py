@@ -40,6 +40,10 @@ MAX_INDENT = 5.5 # To stop indents going off the page
 DEFAULT_TABLE_STYLE = None
 
 class HtmlToDocx(HTMLParser):
+    """
+        Class to convert HTML to Docx
+        source: https://docs.python.org/3/library/html.parser.html
+    """
     def __init__(self):
         super().__init__()
         self.options = {
@@ -620,6 +624,8 @@ class HtmlToDocx(HTMLParser):
         self.table = None
 
     def handle_div(self, current_attrs):
+        self.paragraph = self.doc.add_paragraph()
+
         # handle page break
         if 'style' in current_attrs and 'page-break-after: always' in current_attrs['style']:
             self.doc.add_page_break()
@@ -838,14 +844,14 @@ class HtmlToDocx(HTMLParser):
 
         # If there's a link, dont put the data directly in the run
         self.run = self.paragraph.add_run(data)
-        spans = self.tags['span']
-        for span in spans:
+
+        for span in self.tags['span']:
             if 'style' in span:
                 style = utils.parse_dict_string(span['style'])
                 self.add_styles_to_run(style)
 
         # add font style and name
-        for tag in self.tags:
+        for tag, attrs in self.tags.items():
             if tag in utils.font_styles:
                 font_style = utils.font_styles[tag]
                 setattr(self.run.font, font_style, True)
@@ -853,6 +859,10 @@ class HtmlToDocx(HTMLParser):
             if tag in utils.font_names:
                 font_name = utils.font_names[tag]
                 self.run.font.name = font_name
+
+            if 'style' in attrs and (tag in ['div', 'li', 'p', 'pre'] or re.match(r'h[1-9]', tag)):
+                style = utils.parse_dict_string(attrs['style'])
+                self.add_styles_to_run(style)
 
     def ignore_nested_tables(self, tables_soup):
         """
