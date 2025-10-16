@@ -4,9 +4,11 @@ from pathlib import Path
 import unittest
 from docx import Document
 from docx.oxml.ns import qn
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from html4docx import HtmlToDocx
 from html4docx.utils import unit_converter
+from html4docx.colors import Color
 
 test_dir = os.path.abspath(os.path.dirname(__file__))
 
@@ -1128,6 +1130,68 @@ and blank lines.
         except Exception as e:
             self.fail(f"Processing extreme table failed with unexpected error: {e}")
 
+    def test_nested_styles_on_multiple_tags(self):
+        """ Test nested styles on multiple tags """
+        self.document.add_heading('Test: Test nested styles on multiple tags', level=1)
+
+        nested_styles_html = """
+        <h3 style="color: red; font-size:24px">Title Text</h3>
+        <div style="background-color: black; color: #fff; font-size:1rem; text-align: center">
+            Div Text
+            <p style="color: lightgreen; text-align: center">
+                P Text
+            </p>
+
+            <br>
+
+            <ol>
+                <li style="color: lightblue; font-size: 12px">Li Text 1</li>
+                <li style="color: lightyellow; font-size: 8px">Li Text 2</li>
+            <ol>
+        </div>
+        """
+
+        self.parser.add_html_to_document(nested_styles_html, self.document)
+        document = self.parser.parse_html_string(nested_styles_html)
+
+        # -------- H3 ----------
+        h3_paragraphs = [p for p in document.paragraphs if 'Title Text' in p.text]
+        assert len(h3_paragraphs) == 1
+        h3_run = h3_paragraphs[0].runs[0]
+        assert h3_run.text == 'Title Text'
+        assert h3_run.font.color.rgb == Color['red'].value
+        assert h3_run.font.size is not None
+
+        # -------- Div ----------
+        div_paragraphs = [p for p in document.paragraphs if 'Div Text' in p.text]
+        assert len(div_paragraphs) == 1
+        div_run = div_paragraphs[0].runs[0]
+        assert div_run.text.strip() == 'Div Text'
+        assert div_run.font.color.rgb == Color['white'].value
+        assert div_paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.CENTER
+
+        # -------- P inside div ----------
+        p_paragraphs = [p for p in document.paragraphs if 'P Text' in p.text]
+        assert len(p_paragraphs) == 1
+        p_run = p_paragraphs[0].runs[1]
+        assert p_run.text.strip() == 'P Text'
+        assert p_run.font.color.rgb == Color['lightgreen'].value
+        assert p_paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.CENTER
+
+        # -------- List items ----------
+        li1_paragraphs = [p for p in document.paragraphs if 'Li Text 1' in p.text]
+        assert len(li1_paragraphs) == 1
+        li1_run = li1_paragraphs[0].runs[1]
+        assert li1_run.text.strip() == 'Li Text 1'
+        assert li1_run.font.color.rgb == Color['lightblue'].value
+        assert li1_run.font.size is not None
+
+        li2_paragraphs = [p for p in document.paragraphs if 'Li Text 2' in p.text]
+        assert len(li2_paragraphs) == 1
+        li2_run = li2_paragraphs[0].runs[1]
+        assert li2_run.text.strip() == 'Li Text 2'
+        assert li2_run.font.color.rgb == Color['lightyellow'].value
+        assert li2_run.font.size is not None
 
 if __name__ == "__main__":
     unittest.main()
