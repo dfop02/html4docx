@@ -3,7 +3,7 @@
 Release History
 ---------------
 
-1.1.0 (2025-08-xx)
+1.1.0 (2025-10-xx)
 ++++++++++++++++++
 
 Major Changes
@@ -11,12 +11,14 @@ Major Changes
 
 **Updates**
 
-- Modularize HtmlToDocx class
-- Add Typing hint for few relevant methods
+- Start Modularization of HtmlToDocx class.
+- Add Typing hint for few relevant methods.
 
 **Fixes**
 
-- Fixed skip table was not working correctly
+- Fixed skip table was not working correctly.
+- Fixed bug on styles parsing when style contains multiple colon.
+- [PR](https://github.com/dfop02/html4docx/issues/40) Fixed styles was only being applied to span tag.
 
 **New Features**
 
