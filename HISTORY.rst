@@ -24,6 +24,7 @@ Major Changes
 
 - Add built-in save for save docx
 - Able to save in memory (BytesIO)
+- Support to Python 3.14
 
 
 1.0.10 (2025-08-20)
