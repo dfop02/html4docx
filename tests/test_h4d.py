@@ -1,11 +1,14 @@
 import os
+from io import BytesIO
 from pathlib import Path
 import unittest
 from docx import Document
 from docx.oxml.ns import qn
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from html4docx import HtmlToDocx
 from html4docx.utils import unit_converter
+from html4docx.colors import Color
 
 test_dir = os.path.abspath(os.path.dirname(__file__))
 
@@ -39,6 +42,20 @@ class OutputTest(unittest.TestCase):
     def setUp(self):
         self.parser = HtmlToDocx()
 
+    def test_save_docx_by_filename(self):
+        filename = os.path.join(test_dir, 'new_test.docx')
+        self.parser.set_initial_attrs(self.document)
+        self.parser.save(filename)
+        self.assertTrue(os.path.exists(filename))
+        os.remove(filename)
+
+    def test_save_docx_by_buffer(self):
+        buffer = BytesIO()
+        self.parser.set_initial_attrs(self.document)
+        self.parser.save(buffer)
+        buffer.seek(0)
+        self.assertTrue(buffer.getvalue())
+
     def test_html_with_images_links_style(self):
         self.document.add_heading(
             'Test: add regular html with images, links and some formatting to document',
@@ -60,8 +77,8 @@ class OutputTest(unittest.TestCase):
             level=1
         )
         self.parser.paragraph_style = 'Quote'
-        table = self.document.add_table(2, 2, style='Table Grid')
-        cell = table.cell(1, 1)
+        table = self.document.add_table(1, 2, style='Table Grid')
+        cell = table.cell(0, 1)
         self.parser.add_html_to_document(self.text1, cell)
 
     def test_add_html_to_table_cell(self):
@@ -69,8 +86,8 @@ class OutputTest(unittest.TestCase):
             'Test: regular html with images, links, some formatting to table cell',
             level=1
         )
-        table = self.document.add_table(2, 2, style='Table Grid')
-        cell = table.cell(1, 1)
+        table = self.document.add_table(1, 2, style='Table Grid')
+        cell = table.cell(0, 1)
         self.parser.add_html_to_document(self.text1, cell)
 
     def test_add_html_skip_images(self):
@@ -86,7 +103,7 @@ class OutputTest(unittest.TestCase):
 
     def test_add_html_with_tables(self):
         self.document.add_heading(
-            'Test: add html with tables',
+            'Test: add html with tables (by default no borders)',
             level=1
         )
         self.parser.add_html_to_document(self.table_html, self.document)
@@ -1113,6 +1130,68 @@ and blank lines.
         except Exception as e:
             self.fail(f"Processing extreme table failed with unexpected error: {e}")
 
+    def test_nested_styles_on_multiple_tags(self):
+        """ Test nested styles on multiple tags """
+        self.document.add_heading('Test: Test nested styles on multiple tags', level=1)
+
+        nested_styles_html = """
+        <h3 style="color: red; font-size:24px">Title Text</h3>
+        <div style="background-color: black; color: #fff; font-size:1rem; text-align: center">
+            Div Text
+            <p style="color: lightgreen; text-align: center">
+                P Text
+            </p>
+
+            <br>
+
+            <ol>
+                <li style="color: lightblue; font-size: 12px">Li Text 1</li>
+                <li style="color: lightyellow; font-size: 8px">Li Text 2</li>
+            <ol>
+        </div>
+        """
+
+        self.parser.add_html_to_document(nested_styles_html, self.document)
+        document = self.parser.parse_html_string(nested_styles_html)
+
+        # -------- H3 ----------
+        h3_paragraphs = [p for p in document.paragraphs if 'Title Text' in p.text]
+        assert len(h3_paragraphs) == 1
+        h3_run = h3_paragraphs[0].runs[0]
+        assert h3_run.text == 'Title Text'
+        assert h3_run.font.color.rgb == Color['red'].value
+        assert h3_run.font.size is not None
+
+        # -------- Div ----------
+        div_paragraphs = [p for p in document.paragraphs if 'Div Text' in p.text]
+        assert len(div_paragraphs) == 1
+        div_run = div_paragraphs[0].runs[0]
+        assert div_run.text.strip() == 'Div Text'
+        assert div_run.font.color.rgb == Color['white'].value
+        assert div_paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.CENTER
+
+        # -------- P inside div ----------
+        p_paragraphs = [p for p in document.paragraphs if 'P Text' in p.text]
+        assert len(p_paragraphs) == 1
+        p_run = p_paragraphs[0].runs[1]
+        assert p_run.text.strip() == 'P Text'
+        assert p_run.font.color.rgb == Color['lightgreen'].value
+        assert p_paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.CENTER
+
+        # -------- List items ----------
+        li1_paragraphs = [p for p in document.paragraphs if 'Li Text 1' in p.text]
+        assert len(li1_paragraphs) == 1
+        li1_run = li1_paragraphs[0].runs[1]
+        assert li1_run.text.strip() == 'Li Text 1'
+        assert li1_run.font.color.rgb == Color['lightblue'].value
+        assert li1_run.font.size is not None
+
+        li2_paragraphs = [p for p in document.paragraphs if 'Li Text 2' in p.text]
+        assert len(li2_paragraphs) == 1
+        li2_run = li2_paragraphs[0].runs[1]
+        assert li2_run.text.strip() == 'Li Text 2'
+        assert li2_run.font.color.rgb == Color['lightyellow'].value
+        assert li2_run.font.size is not None
 
 if __name__ == "__main__":
     unittest.main()

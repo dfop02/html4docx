@@ -65,7 +65,7 @@ def test_metadata_integration_with_html4docx(empty_doc):
     metadata.set_metadata(author="Jane", created="2025-07-18T09:30:00")
 
     buffer = BytesIO()
-    empty_doc.save(buffer)
+    docx_obj.save(buffer)
     buffer.seek(0)
 
     reloaded_doc = Document(buffer)

@@ -9,47 +9,8 @@ from urllib.parse import urlparse
 
 from docx.shared import Cm, Inches, Mm, Pt, RGBColor
 
+from html4docx import constants
 from html4docx.colors import Color
-
-font_styles = {
-    'b': 'bold',
-    'strong': 'bold',
-    'em': 'italic',
-    'i': 'italic',
-    'u': 'underline',
-    's': 'strike',
-    'sup': 'superscript',
-    'sub': 'subscript',
-    'th': 'bold',
-}
-
-font_names = {
-    'code': 'Courier',
-    'pre': 'Courier',
-}
-
-font_sizes_named = {
-    'xx-small': '9px',
-    'x-small': '10px',
-    'small': '13px',
-    'medium': '16px',
-    'large': '18px',
-    'x-large': '24px',
-    'xx-large': '32px'
-}
-
-styles = {
-    'ul': 'List Bullet',
-    'ul2': 'List Bullet 2',
-    'ul3': 'List Bullet 3',
-    'ol': 'List Number',
-    'ol2': 'List Number 2',
-    'ol3': 'List Number 3',
-}
-
-# values in inches
-INDENT = 0.25
-MAX_INDENT = 5.5 # To stop indents going off the page
 
 class ImageAlignment(Enum):
     LEFT = 1
@@ -71,8 +32,8 @@ def rgb_to_hex(rgb: str):
     return '#' + ''.join(f'{i:02X}' for i in rgb)
 
 def adapt_font_size(size: str):
-    if size in font_sizes_named.keys():
-        return font_sizes_named[size]
+    if size in constants.FONT_SIZES_NAMED.keys():
+        return constants.FONT_SIZES_NAMED[size]
 
     return size
 
@@ -113,7 +74,11 @@ def parse_dict_string(string: str, separator: str = ';'):
         return dict()
 
     new_string = re.sub(r'\s+', ' ', string.replace("\n", '')).split(separator)
-    string_dict = dict((k.strip(), v.strip()) for x in new_string if ':' in x for k, v in [x.split(':')])
+    string_dict = dict(
+        (k.strip(), v.strip())
+        for x in new_string if ':' in x
+        for k, v in [x.split(':', 1)]
+    )
     return string_dict
 
 def unit_converter(unit_value: str, target_unit: str = "pt"):
@@ -161,7 +126,7 @@ def unit_converter(unit_value: str, target_unit: str = "pt"):
         return None
 
     # Clamp the value to MAX_INDENT (in points)
-    value_in_pt = min(value_in_pt, MAX_INDENT * 72.0)  # MAX_INDENT is in inches
+    value_in_pt = min(value_in_pt, constants.MAX_INDENT * 72.0)  # MAX_INDENT is in inches
 
     # Convert from points (pt) to the target unit
     conversion_from_pt = {

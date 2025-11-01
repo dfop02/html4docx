@@ -3,6 +3,29 @@
 Release History
 ---------------
 
+1.1.0 (2025-10-xx)
+++++++++++++++++++
+
+Major Changes
+-------------
+
+**Updates**
+
+- Start Modularization of HtmlToDocx class.
+- Add Typing hint for few relevant methods.
+
+**Fixes**
+
+- Fixed skip table was not working correctly.
+- Fixed bug on styles parsing when style contains multiple colon.
+- [PR](https://github.com/dfop02/html4docx/issues/40) Fixed styles was only being applied to span tag.
+
+**New Features**
+
+- Add built-in save for save docx
+- Able to save in memory (BytesIO)
+- Support to Python 3.14
+
 
 1.0.10 (2025-08-20)
 ++++++++++++++++++
