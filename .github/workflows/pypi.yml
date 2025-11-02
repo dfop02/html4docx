@@ -10,7 +10,7 @@ jobs:
   build:
     name: Build distribution 📦
     runs-on: ubuntu-latest
-    if: endsWith(github.ref, 'main') == false
+    if: endsWith(github.ref, 'main') == true # Only run if on main
 
     steps:
     - uses: actions/checkout@v4

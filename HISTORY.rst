@@ -3,6 +3,22 @@
 Release History
 ---------------
 
+1.1.1 (2025-xx-xx)
+++++++++++++++++++
+
+**Updates**
+
+- Fix Pypi Workflow
+
+**Fixes**
+
+- None
+
+**New Features**
+
+- None
+
+
 1.1.0 (2025-11-01)
 ++++++++++++++++++
 
