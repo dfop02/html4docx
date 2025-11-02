@@ -5,13 +5,12 @@ on:
   push:
     tags:
       - '[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?'
-    branches:
-      - main
 
 jobs:
   build:
     name: Build distribution 📦
     runs-on: ubuntu-latest
+    if: endsWith(github.ref, 'main') == false
 
     steps:
     - uses: actions/checkout@v4
