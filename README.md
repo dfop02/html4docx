@@ -1,4 +1,5 @@
 # HTML FOR DOCX
+
 ![Tests](https://github.com/dfop02/html4docx/actions/workflows/tests.yml/badge.svg)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/html-for-docx?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/html-for-docx)
 ![Version](https://img.shields.io/pypi/v/html-for-docx.svg)
@@ -98,11 +99,14 @@ All table styles we support can be found [here](https://python-docx.readthedocs.
 
 #### Options
 
-There is 4 options that you can use to personalize your execution:
+There is 6 options that you can use to personalize your execution:
+
 - Disable Images: Ignore all images.
 - Disable Tables: If you do it, it will render just the raw tables content
 - Disable Styles: Ignore all CSS styles.
 - Disable Fix-HTML: Use BeautifulSoap to Fix possible HTML missing tags.
+- Disable Style-Map: Ignore style mappings
+- Disable Tag-Override: Ignore Tag Overrides
 
 This is how you could disable them if you want **(By default, is all True)**:
 
@@ -114,8 +118,98 @@ parser.options['images'] = False
 parser.options['tables'] = False
 parser.options['styles'] = False
 parser.options['fix-html'] = False
+parser.options['style-map'] = False
+parser.options['tag-override'] = False
 docx = parser.parse_html_string(input_html_file_string)
 ```
+
+## Extended Styling Features
+
+### CSS Class to Word Style Mapping
+
+Map HTML CSS classes to Word document styles:
+
+```python
+from html4docx import HtmlToDocx
+
+style_map = {
+    'code-block': 'Code Block',
+    'numbered-heading-1': 'Heading 1 Numbered',
+    'finding-critical': 'Finding Critical'
+}
+
+parser = HtmlToDocx(style_map=style_map)
+parser.add_html_to_document(html, document)
+```
+
+### Tag Style Overrides
+
+Override default tag-to-style mappings:
+
+```python
+tag_overrides = {
+    'h1': 'Custom Heading 1',  # All <h1> use this style
+    'pre': 'Code Block'        # All <pre> use this style
+}
+
+parser = HtmlToDocx(tag_style_overrides=tag_overrides)
+```
+
+### Default Paragraph Style
+
+Set custom default paragraph style:
+
+```python
+# Use 'Body' as default (default behavior)
+parser = HtmlToDocx(default_paragraph_style='Body')
+
+# Use Word's default 'Normal' style
+parser = HtmlToDocx(default_paragraph_style=None)
+```
+
+### Inline CSS Styles
+
+Full support for inline CSS styles on any element:
+
+```html
+<p style="color: red; font-size: 14pt">Red 14pt paragraph</p>
+<span style="font-weight: bold; color: blue">Bold blue text</span>
+```
+
+Supported CSS properties:
+
+- color
+- font-size
+- font-weight (bold)
+- font-style (italic)
+- text-decoration (underline, line-through)
+- font-family
+- text-align
+- background-color
+- Border (for tables)
+- Verticial Align (for tables)
+
+### !important Flag Support
+
+Proper CSS precedence with !important:
+
+```html
+<span style="color: gray">
+  Gray text with <span style="color: red !important">red important</span>.
+</span>
+```
+
+The !important flag ensures highest priority.
+
+### Style Precedence Order
+
+Styles are applied in this order (lowest to highest priority):
+
+1. Base HTML tag styles (`<b>`, `<em>`, `<code>`)
+2. Parent span styles
+3. CSS class-based styles (from `style_map`)
+4. Inline CSS styles (from `style` attribute)
+5. !important inline CSS styles (highest priority)
 
 #### Metadata
 
@@ -150,6 +244,7 @@ My goal in forking and fixing/updating this package was to complete my current t
 ### Differences (fixes and new features)
 
 **Fixes**
+
 - Fix `table_style` not working | [Dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/11)
 - Handle missing run for leading br tag | [dashingdove](https://github.com/dashingdove) from [PR](https://github.com/pqzx/html2docx/pull/53)
 - Fix base64 images | [djplaner](https://github.com/djplaner) from [Issue](https://github.com/pqzx/html2docx/issues/28#issuecomment-1052736896)
@@ -161,6 +256,11 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Fix Ordered and Unordered Lists | [TaylorN15](https://github.com/TaylorN15) from [PR](https://github.com/dfop02/html4docx/pull/16)
 
 **New Features**
+
+- Support for class to word style mapping | [raithedavion](https://github.com/raithedavion) from [PR](https://github.com/dfop02/html4docx/pull/44)
+- Support for overriding html tag to word style mapping | [raithedavion](https://github.com/raithedavion) from [PR](https://github.com/dfop02/html4docx/pull/44)
+- Support for !important style tags to take precedence | [raithedavion](https://github.com/raithedavion) from [PR](https://github.com/dfop02/html4docx/pull/44)
+- Support for default word style to use in new documents (default 'Normal') | [raithedavion](https://github.com/raithedavion) from [PR](https://github.com/dfop02/html4docx/pull/44)
 - Add Witdh/Height style to images | [maifeeulasad](https://github.com/maifeeulasad) from [PR](https://github.com/pqzx/html2docx/pull/29)
 - Support px, cm, pt, in, rem, em, mm, pc and % units for styles | [Dfop02](https://github.com/dfop02)
 - Improve performance on large tables | [dashingdove](https://github.com/dashingdove) from [PR](https://github.com/pqzx/html2docx/pull/58)
