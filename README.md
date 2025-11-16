@@ -120,22 +120,24 @@ All table styles we support can be found [here](https://python-docx.readthedocs.
 
 #### Options
 
-There is 4 options that you can use to personalize your execution:
+There is 5 options that you can use to personalize your execution:
 - Disable Images: Ignore all images.
 - Disable Tables: If you do it, it will render just the raw tables content
 - Disable Styles: Ignore all CSS styles.
 - Disable Fix-HTML: Use BeautifulSoap to Fix possible HTML missing tags.
+- Disable HTML-Comments: Ignore all "<!-- ... -->" comments from HTML.
 
-This is how you could disable them if you want **(By default, is all True)**:
+This is how you could disable them if you want:
 
 ```python
 from html4docx import HtmlToDocx
 
 parser = HtmlToDocx()
-parser.options['images'] = False
-parser.options['tables'] = False
-parser.options['styles'] = False
-parser.options['fix-html'] = False
+parser.options['images'] = False # Default True
+parser.options['tables'] = False # Default True
+parser.options['styles'] = False # Default True
+parser.options['fix-html'] = False # Default True
+parser.options['html-comments'] = False # Default False
 docx = parser.parse_html_string(input_html_file_string)
 ```
 
