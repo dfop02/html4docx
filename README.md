@@ -56,6 +56,28 @@ parser.save('your_file_name.docx')
 
 When you pass a `Document` object, you can either use `document.save()` from python-docx or `parser.save()` from html4docx, both works well.
 
+Both supports saving it in-memory, using `BytesIO`.
+
+```python
+from io import BytesIO
+from docx import Document
+from html4docx import HtmlToDocx
+
+buffer = BytesIO()
+document = Document()
+parser = HtmlToDocx()
+
+html_string = '<h1>Hello world</h1>'
+parser.add_html_to_document(html_string, document)
+
+# Save the document to the in-memory buffer
+parser.save(buffer)
+
+# If you need to read from the buffer again after saving,
+# you might need to reset its position to the beginning
+buffer.seek(0)
+```
+
 #### Convert files directly
 
 ```python
@@ -159,6 +181,8 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Fix `background-color` not working | [Dfop02](https://github.com/dfop02)
 - Fix crashes when img or bookmark is created without paragraph | [Dfop02](https://github.com/dfop02)
 - Fix Ordered and Unordered Lists | [TaylorN15](https://github.com/TaylorN15) from [PR](https://github.com/dfop02/html4docx/pull/16)
+- Fixed styles was only being applied to span tag. | [Dfop02](https://github.com/dfop02) from [PR](https://github.com/dfop02/html4docx/issues/40)
+- Fixed bug on styles parsing when style contains multiple colon. | [Dfop02](https://github.com/dfop02)
 
 **New Features**
 - Add Witdh/Height style to images | [maifeeulasad](https://github.com/maifeeulasad) from [PR](https://github.com/pqzx/html2docx/pull/29)

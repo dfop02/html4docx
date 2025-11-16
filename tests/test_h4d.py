@@ -5,9 +5,10 @@ import unittest
 from docx import Document
 from docx.oxml.ns import qn
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import RGBColor
 
 from html4docx import HtmlToDocx
-from html4docx.utils import unit_converter
+from html4docx.utils import unit_converter, parse_color
 from html4docx.colors import Color
 
 test_dir = os.path.abspath(os.path.dirname(__file__))
@@ -873,6 +874,50 @@ and blank lines.
         assert table.rows[0].cells[0].text.strip() == "Hello"
         assert table.rows[1].cells[0].text.strip() == "One"
         assert table.rows[1].cells[1].text.strip() == "Two"
+
+    def test_html_comment_rendering(self):
+        self.document.add_heading("Test: HTML Comment Rendering", level=1)
+
+        html_with_comment = """
+        <p>Hello</p>
+        <!-- This is a comment -->
+        <p>World</p>
+        """
+
+        # Process document using parser
+        self.parser.options['html-comments'] = True
+        self.parser.add_html_to_document(html_with_comment, self.document)
+        document = self.parser.parse_html_string(html_with_comment)
+
+        # Extract all paragraph texts
+        paragraph_texts = [p.text.strip() for p in document.paragraphs]
+
+        # Expected comment result
+        expected_comment = "# This is a comment"
+
+        # Assert the comment paragraph exists
+        assert any(
+            expected_comment == text for text in paragraph_texts
+        ), f"Expected comment '{expected_comment}' to appear in the document, but it was not found."
+
+        # (Optional) Check styling if needed: green color or italic
+        comment_paragraph = next(
+            (p for p in document.paragraphs if p.text.strip() == expected_comment),
+            None
+        )
+        assert comment_paragraph is not None, "Comment paragraph not found for style checks."
+
+        comment_run = comment_paragraph.runs[0]
+
+        # italic assertion
+        assert comment_run.italic, "HTML comment should be italic."
+
+        # color assertion (dark-ish green #008000)
+        expected_rgb = parse_color("#008000")
+        assert (
+            comment_run.font.color.rgb is not None
+            and comment_run.font.color.rgb == RGBColor(*expected_rgb)
+        ), f"Comment run color should be green ({expected_rgb})."
 
     def test_emojis_and_special_characters(self):
         emojis_and_special_chars_html_example = """
