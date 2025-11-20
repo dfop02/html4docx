@@ -468,6 +468,403 @@ and blank lines.
         font_sizes = [str(p.runs[1].font.size) for p in document.paragraphs]
         assert ['76200', '355600', '914400', '431800', 'None', '762000', '177800', '203200', '69850', '120650'] == font_sizes
 
+    def test_font_size_paragraph(self):
+        font_size_html_example = (
+            "<p style=\"font-size:8px\">paragraph 8px</p>"
+            "<p style=\"font-size: 1cm\">paragraph 1cm</p>"
+            "<p style=\"font-size: 6em !important\">paragraph 6em</p>"
+            "<p style=\"font-size: 1.2cm\">paragraph 12cm</p>"
+            "<p style=\"font-size: 1.2vh\">paragraph 12vh not supported</p>"
+            "<p style=\"font-size: 5pc\">paragraph 5pc</p>"
+            "<p style=\"font-size:14pt!important\">paragraph 14pt</p>"
+            "<p style=\"font-size: 16pt!IMPORTANT\">paragraph 16pt</p>"
+            "<p style=\"font-size:2mm!IMPORTANT\">paragraph 2mm</p>"
+            "<p style=\"font-size:small!IMPORTANT\">paragraph small</p>"
+        )
+
+        self.document.add_heading(
+            'Test: Font-Size on <p>',
+            level=1
+        )
+        self.parser.add_html_to_document(font_size_html_example, self.document)
+
+        document = self.parser.parse_html_string(font_size_html_example)
+        font_sizes = [str(p.runs[0].font.size) for p in document.paragraphs]
+        assert ['76200', '355600', '914400', '431800', 'None', '762000', '177800', '203200', '69850', '120650'] == font_sizes
+
+    def test_font_weight_paragraph(self):
+        self.document.add_heading('Test: font weight on <p>', level=1)
+        font_weight_html_example = (
+            "<p style=\"font-weight: bold\">bold text</p>"
+            "<p style=\"font-weight: bolder\">bolder text</p>"
+            "<p style=\"font-weight: 700\">700 weight</p>"
+            "<p style=\"font-weight: 900\">900 weight</p>"
+            "<p style=\"font-weight: normal\">normal text</p>"
+            "<p style=\"font-weight: lighter\">lighter text</p>"
+            "<p style=\"font-weight: 400\">400 weight</p>"
+            "<p style=\"font-weight: 100\">100 weight</p>"
+        )
+
+        self.parser.add_html_to_document(font_weight_html_example, self.document)
+
+        document = self.parser.parse_html_string(font_weight_html_example)
+
+        font_weights = [p.runs[0].font.bold for p in document.paragraphs]
+
+        expected_weights = [
+            True,   # bold
+            True,   # bolder
+            True,   # 700
+            True,   # 900
+            False,  # normal
+            False,  # lighter
+            False,  # 400
+            False,  # 100
+        ]
+
+        self.assertEqual(font_weights, expected_weights)
+
+    def test_font_style_paragraph(self):
+        self.document.add_heading('Test: font style on <p>', level=1)
+        font_style_html_example = (
+            "<p style=\"font-style: italic\">italic text</p>"
+            "<p style=\"font-style: oblique\">oblique text</p>"
+            "<p style=\"font-style: normal\">normal text</p>"
+        )
+
+        self.parser.add_html_to_document(font_style_html_example, self.document)
+
+        document = self.parser.parse_html_string(font_style_html_example)
+
+        font_styles = [p.runs[0].font.italic for p in document.paragraphs]
+
+        expected_styles = [
+            True,   # italic
+            True,   # oblique (should be treated as italic)
+            False,  # normal
+        ]
+
+        self.assertEqual(font_styles, expected_styles)
+
+    def test_font_family_paragraph(self):
+        self.document.add_heading('Test: font family on <p>', level=1)
+        font_family_html_example = (
+            "<p style=\"font-family: Arial, sans-serif\">Arial font text</p>"
+            "<p style=\"font-family: 'Helvetica', sans-serif\">Helvetica font text</p>"
+            "<p style=\"font-family: 'Noto Sans', sans-serif\">Noto Sans font text</p>"
+            "<p style=\"font-family: 'Times New Roman', serif\">Times New Roman font text</p>"
+            "<p style=\"font-family: serif\">Generic serif font text</p>"
+            "<p style=\"font-family: sans-serif\">Generic sans-serif font text</p>"
+            "<p style=\"font-family: monospace\">Generic monospace font text</p>"
+            "<p style=\"font-family: 'Courier New', monospace\">Courier New font text</p>"
+            "<p style=\"font-family: inherit\">Inherit font text</p>"
+        )
+
+        self.parser.add_html_to_document(font_family_html_example, self.document)
+
+    def test_text_transform_paragraph(self):
+        self.document.add_heading('Test: text-transform on <p>', level=1)
+        text_transform_html_example = (
+            "<p style=\"text-transform: uppercase\">uppercase text</p>"
+            "<p style=\"text-transform: lowercase\">LOWERCASE TEXT</p>"
+            "<p style=\"text-transform: capitalize\">capitalize each word</p>"
+            "<p style=\"text-transform: none\">normal text</p>"
+            "<p>default text</p>"
+        )
+
+        self.parser.add_html_to_document(text_transform_html_example, self.document)
+
+    def test_text_decoration_paragraph(self):
+        self.document.add_heading('Test: text-decoration on <p>', level=1)
+        text_decoration_html_example = (
+            "<p style=\"text-decoration: underline\">underlined text</p>"
+            "<p style=\"text-decoration: none\">no decoration text</p>"
+            "<p style=\"text-decoration: line-through\">strikethrough text</p>"
+            "<p style=\"text-decoration: underline line-through\">both decorations</p>"
+            "<p style=\"text-decoration: underline wavy\">wavy underline</p>"
+            "<p style=\"text-decoration: underline dotted\">dotted underline</p>"
+            "<p style=\"text-decoration: underline dashed\">dashed underline</p>"
+            "<p style=\"text-decoration: underline double\">double underline</p>"
+            "<p style=\"text-decoration: overline\">overline text</p>"
+            "<p style=\"text-decoration: blink\">blink text</p>"
+            "<p>default text</p>"
+        )
+
+        self.parser.add_html_to_document(text_decoration_html_example, self.document)
+
+        document = self.parser.parse_html_string(text_decoration_html_example)
+
+        from docx.enum.text import WD_UNDERLINE
+
+        underline_states = []
+        for p in document.paragraphs:
+            underline = p.runs[0].font.underline
+            if underline is None:
+                underline_states.append(None)
+            elif underline is True:
+                underline_states.append(True)
+            elif underline is False:
+                underline_states.append(False)
+            else:
+                underline_states.append(underline)
+
+        expected_states = [
+            True,                   # underline (default single)
+            False,                  # none
+            None,                   # line-through (not supported)
+            True,                   # underline + line-through
+            WD_UNDERLINE.WAVY,      # wavy underline
+            WD_UNDERLINE.DOTTED,    # dotted underline
+            WD_UNDERLINE.DASH,      # dashed underline
+            WD_UNDERLINE.DOUBLE,    # double underline
+            None,                   # overline (not supported)
+            None,                   # blink (not supported)
+            None,                   # default
+        ]
+
+        self.assertEqual(underline_states, expected_states)
+
+    def test_color_paragraph(self):
+        self.document.add_heading('Test: color on p tags', level=1)
+        color_html_example = (
+            "<p style=\"color: red\">red text</p>"
+            "<p style=\"color: #00ff00\">green hex text</p>"
+            "<p style=\"color: rgb(0, 0, 255)\">blue rgb text</p>"
+            "<p style=\"color: inherit\">inherit color text</p>"
+            "<p style=\"color: transparent\">transparent color text</p>"
+            "<p style=\"color: currentcolor\">current color text</p>"
+            "<p style=\"color: #ff0000; font-size: 14pt\">red with other styles</p>"
+            "<p>default text</p>"
+        )
+
+        self.parser.add_html_to_document(color_html_example, self.document)
+
+        document = self.parser.parse_html_string(color_html_example)
+
+        color_states = []
+        for p in document.paragraphs:
+            if p.runs and p.runs[0].font.color:
+                color_rgb = p.runs[0].font.color.rgb
+                if color_rgb:
+                    color_states.append((color_rgb[0], color_rgb[1], color_rgb[2]))
+                else:
+                    color_states.append(None)
+            else:
+                color_states.append(None)
+
+        expected_colors = [
+            (255, 0, 0),  # red
+            (0, 255, 0),  # #00ff00 (green)
+            (0, 0, 255),  # rgb(0, 0, 255) (blue)
+            None,  # inherit (should not apply color)
+            None,  # transparent (should not apply color)
+            None,  # currentcolor (should not apply color)
+            (255, 0, 0),  # #ff0000 (red) with other styles
+            None,  # default text
+        ]
+
+        self.assertEqual(color_states, expected_colors)
+
+    def test_line_height_paragraph(self):
+        self.document.add_heading('Test: line-height on <p>', level=1)
+        line_height_html_example = (
+            "<p style=\"line-height: 1\">line height 1: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>"
+            "<p style=\"line-height: 1.15\">line height 1.15: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>"
+            "<p style=\"line-height: 1.5\">line height 1.5: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>"
+            "<p style=\"line-height: 2\">line height 2: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>"
+            "<p style=\"line-height: 20px\">line height 20px: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>"
+            "<p style=\"line-height: 1.2em\">line height 1.2em: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>"
+            "<p style=\"line-height: 1.5em\">line height 1.5em: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>"
+            "<p style=\"line-height: 2em\">line height 2em: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>"
+            "<p style=\"line-height: 1.2rem\">line height 1.2rem: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>"
+            "<p style=\"line-height: 1.5rem\">line height 1.5rem: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>"
+            "<p style=\"line-height: 2rem\">line height 2rem: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>"
+            "<p style=\"line-height: 150%\">line height 150%: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>"
+            "<p style=\"line-height: 200%\">line height 200%: Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur?</p>"
+        )
+
+        self.parser.add_html_to_document(line_height_html_example, self.document)
+        document = self.parser.parse_html_string(line_height_html_example)
+
+        line_heights = []
+        line_rules = []
+
+        for p in document.paragraphs:
+            line_spacing = p.paragraph_format.line_spacing
+            line_rule = p.paragraph_format.line_spacing_rule
+            line_heights.append(str(line_spacing) if line_spacing is not None else 'None')
+            line_rules.append(str(line_rule) if line_rule is not None else 'None')
+
+        expected_line_heights = [
+            '1.0',
+            '1.15',
+            '1.5',
+            '2.0',
+            '190500',   # line-height: 20px
+            '182880',   # line-height: 1.2em
+            '228600',   # line-height: 1.5em
+            '304800',   # line-height: 2em
+            '182880',   # line-height: 1.2rem
+            '228600',   # line-height: 1.5rem
+            '304800',   # line-height: 2rem
+            '1.5',      # line-height: 150%
+            '2.0',      # line-height: 200%
+        ]
+
+        self.assertEqual(line_heights, expected_line_heights,
+                         f"Line heights don't match expected values. Got {line_heights}, expected {expected_line_heights}")
+
+    def test_margins_paragraph(self):
+        """Visual check only since there is a rounding error with twips inside python-docx"""
+        margins_html_example = (
+            "<p style=\"margin-left: auto; margin-right: auto\">centered paragraph</p>"
+            "<p style=\"margin-left: 20px\">left margin 20px</p>"
+            "<p style=\"margin-right: 1.5cm\">right margin 1.5cm</p>"
+            "<p style=\"margin-left: 1cm\">left margin 1cm</p>"
+            "<p style=\"margin-left: 10px; margin-right: 15px\">both margins set</p>"
+            "<p style=\"margin-left: auto\">only left auto</p>"
+            "<p style=\"margin-right: auto\">only right auto</p>"
+            "<p style=\"margin-left: 0px; margin-right: 0px\">zero margins</p>"
+            "<p style=\"margin-left: 2in\">left margin 2in</p>"
+        )
+
+        self.document.add_heading(
+            'Test: Margins',
+            level=1
+        )
+
+        self.parser.add_html_to_document(margins_html_example, self.document)
+
+    def test_paragraph_styles(self):
+        self.document.add_heading('All test on <p>', level=1)
+        html_example = "<p style=\"font-family: 'Noto Sans'; font-size: 10pt; line-height: 1.5; margin-left: 1cm; margin-right: auto; color: rgb(0, 0, 255); text-align: justify; text-decoration: underline wavy; text-transform: uppercase\">Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore</p>"
+
+        self.parser.add_html_to_document(html_example, self.document)
+
+    def test_background_color_styles(self):
+        html_example1 = "<p style=\"background-color: green;\"><span style=\"background-color: black; color: #fff;\"> Sed ut perspiciatis unde </span> omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore</p>"
+        self.parser.add_html_to_document(html_example1, self.document)
+
+        html_example2 = """
+        <p style="background-color: lightblue;">
+            Start of paragraph 
+            <span style="background-color: yellow;">First yellow span</span> 
+            middle text 
+            <span style="background-color: red; color: white;">Red span with white text</span> 
+            end of paragraph
+            <span style="background-color: purple; color: white;">
+                Purple span with 
+                <span style="background-color: orange;">nested orange</span> 
+                inside
+            </span>
+        </p>
+        """
+        self.parser.add_html_to_document(html_example2, self.document)
+
+        html_example3 = """
+        <p style="background-color: #f0f0f0;">
+            Base paragraph background
+            <span style="background-color: #ffcccc; font-weight: bold;">Bold pink span</span>
+            regular text
+            <span style="background-color: #ccffcc;">
+                Green span with 
+                <span style="background-color: #ccccff; font-style: italic;">italic blue nested</span>
+                and more green
+            </span>
+            <span style="background-color: #ffffcc;">
+                Yellow span with
+                <span style="background-color: #ffccff;">pink nested</span>
+                and 
+                <span style="background-color: #ccffff; text-decoration: underline;">cyan underlined</span>
+            </span>
+        </p>
+        """
+        self.parser.add_html_to_document(html_example3, self.document)
+
+        html_example4 = """
+        <div style="background-color: lightgray;">
+            <p style="background-color: white;">
+                White paragraph in gray div
+                <span style="background-color: yellow;">Yellow span</span>
+                <span style="background-color: transparent;">Transparent span</span>
+                <span style="background-color: rgba(255,0,0,0.5);">Semi-transparent red</span>
+            </p>
+        </div>
+        """
+        self.parser.add_html_to_document(html_example4, self.document)
+
+        html_example5 = """
+        <p style="background-color: rgb(200, 200, 255);">
+            RGB color background
+            <span style="background-color: hsl(120, 100%, 75%);">HSL green</span>
+            <span style="background-color: #ff0000;">Hex red</span>
+            <span style="background-color: inherit;">Inherit background</span>
+            <span style="background-color: initial;">Initial background</span>
+        </p>
+        """
+        self.parser.add_html_to_document(html_example5, self.document)
+
+        html_example6 = """
+        <p style="background-color: #e8e8e8;">
+            Level 0
+            <span style="background-color: #d0d0ff;">
+                Level 1
+                <span style="background-color: #ffd0d0;">
+                    Level 2
+                    <span style="background-color: #d0ffd0;">
+                        Level 3
+                        <span style="background-color: #ffffd0;">
+                            Level 4
+                            <span style="background-color: #ffd0ff;">
+                                Level 5
+                            </span>
+                        </span>
+                    </span>
+                </span>
+            </span>
+            Back to level 0
+        </p>
+        """
+        self.parser.add_html_to_document(html_example6, self.document)
+
+        html_example7 = """
+        <p style="background-color: #f5f5f5; padding: 10px;">
+            Paragraph with padding
+            <span style="background-color: yellow; font-size: 14pt; font-weight: bold;">Styled span</span>
+            <span style="background-color: lightgreen; text-decoration: underline; color: darkblue;">Underlined green</span>
+            <span style="background-color: pink; font-family: 'Arial'; font-style: italic;">Italic Arial pink</span>
+        </p>
+        """
+        self.parser.add_html_to_document(html_example7, self.document)
+
+        html_example8 = """
+        <p>
+            Normal paragraph
+            <span style="background-color: #ffeb3b;">Highlighted text</span>
+            normal text
+            <span style="background-color: #4caf50; color: white;">Green highlight</span>
+            more normal text
+        </p>
+        """
+        self.parser.add_html_to_document(html_example8, self.document)
+
+        html_example9 = """
+        <p style="background-color: #fffacd;">
+            Light yellow background entire paragraph
+        </p>
+        <p>
+            No background
+            <span style="background-color: #ffcdd2;">Light red span only</span>
+        </p>
+        <p style="background-color: #e1f5fe;">
+            Light blue background
+            <span style="background-color: #c8e6c9;">Light green span</span>
+            <span style="background-color: #ffecb3;">Light orange span</span>
+        </p>
+        """
+        self.parser.add_html_to_document(html_example9, self.document)
+
+
     def test_color_by_name(self):
         color_html_example = (
             "<p><span style=\"color:red\">paragraph red</span></p>"

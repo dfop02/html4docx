@@ -1,23 +1,58 @@
 import argparse
+import inspect
+import logging
 import os
 import re
+from cgitb import handler
 from io import BytesIO
 from html.parser import HTMLParser
 
 import docx
 from bs4 import BeautifulSoup
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_UNDERLINE
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import RGBColor
+from docx.shared import RGBColor, Pt
 
 from functools import lru_cache
 
 from html4docx import constants
 from html4docx import utils
+from html4docx.constants import FONT_SIZES_NAMED
 from html4docx.metadata import Metadata
+
+# Paragraph-level styles (ParagraphFormat)
+PARAGRAPH_FORMAT_STYLES = {
+    'text-align': '_apply_alignment_paragraph',
+    'line-height': '_apply_line_height_paragraph',
+    'margin-left': '_apply_margins_paragraph',
+    'margin-right': '_apply_margins_paragraph',
+}
+
+# Run-level styles (affect text formatting within runs)
+PARAGRAPH_RUN_STYLES = {
+    'font-weight': '_apply_font_weight_paragraph',
+    'font-style': '_apply_font_style_paragraph',
+    'text-decoration': '_apply_text_decoration_paragraph',
+    'text-transform': '_apply_text_transform_paragraph',
+    'font-size': '_apply_font_size_paragraph',
+    'font-family': '_apply_font_family_paragraph',
+    'color': '_apply_color_paragraph',
+    'background-color': '_apply_background_color_paragraph'
+}
+
+RUN_STYLES = {
+'font-weight': '_apply_font_weight_to_run',
+    'font-style': '_apply_font_style_to_run',
+    'text-decoration': '_apply_text_decoration_to_run',
+    'text-transform': '_apply_text_transform_to_run',
+    'font-size': '_apply_font_size_to_run',
+    'font-family': '_apply_font_family_to_run',
+    'color': '_apply_color_to_run',
+    'background-color': '_apply_background_color_to_run'
+}
 
 class HtmlToDocx(HTMLParser):
     """
@@ -285,6 +320,383 @@ class HtmlToDocx(HTMLParser):
         self.paragraph._element.append(bookmark_end)
         self.bookmark_id += 1
 
+    def apply_styles_to_run(self, run, style):
+        if not style or not hasattr(run, 'font'):
+            return
+
+        for style_name, style_value in style.items():
+            # Skip paragraph-level styles for runs
+            if style_name in PARAGRAPH_FORMAT_STYLES:
+                continue
+
+            elif style_name in RUN_STYLES:
+                handler = getattr(self, RUN_STYLES[style_name])
+
+                param_name = style_name.replace('-', '_')
+                handler(
+                    run=run,
+                    **{param_name: style_value}
+                )
+
+            else:
+                logging.warning(f"Warning: Unrecognized style '{style_name}', will be skipped.")
+
+    def apply_styles_to_paragraph(self, paragraph, style, init=False):
+        if not style or not hasattr(paragraph, 'paragraph_format'):
+            return
+
+        for style_name, style_value in style.items():
+            if init and style_name in PARAGRAPH_FORMAT_STYLES:
+                handler = getattr(self, PARAGRAPH_FORMAT_STYLES[style_name])
+            elif not init and style_name in PARAGRAPH_RUN_STYLES:
+                handler = getattr(self, PARAGRAPH_RUN_STYLES[style_name])
+            else:
+                logging.warning(f"Warning: Unrecognized paragraph style '{style_name}', will be skipped.")
+                continue
+
+            handler(
+                paragraph=paragraph,
+                style_name=style_name,
+                value=style_value,
+                all_styles=style
+            )
+
+    def _apply_alignment_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        align = utils.remove_important_from_style(value)
+
+        if 'center' in align:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        elif 'left' in align:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        elif 'right' in align:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        elif 'justify' in align:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
+    def _apply_line_height_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        line_height = utils.remove_important_from_style(value)
+
+        if line_height in ('normal', 'inherit'):
+            paragraph.paragraph_format.line_spacing = None
+        else:
+            try:
+                if line_height.replace('.', '').replace('%', '').isdigit():
+                    multiplier = float(line_height[:-1]) / 100.0 if line_height.endswith('%') else float(line_height)
+                    paragraph.paragraph_format.line_spacing = multiplier
+                else:
+                    converted = utils.unit_converter(line_height, target_unit="pt")
+                    if converted is not None:
+                        paragraph.paragraph_format.line_spacing = converted
+            except (ValueError, TypeError):
+                paragraph.paragraph_format.line_spacing = None
+
+    def _apply_margins_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        style_name = kwargs['style_name']
+        all_styles = kwargs['all_styles']
+
+        margin_left = all_styles.get('margin-left')
+        margin_right = all_styles.get('margin-right')
+
+        if margin_left and margin_right:
+            if 'auto' in margin_left and 'auto' in margin_right:
+                paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                return
+
+        if style_name == 'margin-left' and margin_left and 'auto' not in margin_left:
+            paragraph.paragraph_format.left_indent = utils.unit_converter(margin_left)
+
+        if style_name == 'margin-right' and margin_right and 'auto' not in margin_right:
+            paragraph.paragraph_format.right_indent = utils.unit_converter(margin_right)
+
+    def _apply_font_weight_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        font_weight = utils.remove_important_from_style(value).lower()
+
+        for run in paragraph.runs:
+            self._apply_font_weight_to_run(
+                run=run,
+                font_weight=font_weight,
+            )
+
+    def _apply_font_weight_to_run(self, **kwargs):
+        font_weight = kwargs['font_weight']
+        run = kwargs['run']
+        if font_weight in ('bold', 'bolder', '700', '800', '900'):
+            run.font.bold = True
+        elif font_weight in ('normal', 'lighter', '400', '300', '100'):
+            run.font.bold = False
+        # Note: Decide what to do for values between 400-700
+        elif font_weight.isdigit():
+            weight = int(font_weight)
+            run.font.bold = weight >= 700
+
+    def _apply_font_style_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        font_style = utils.remove_important_from_style(value).lower()
+
+        for run in paragraph.runs:
+            self._apply_font_style_to_run(
+                run=run,
+                font_style=font_style,
+            )
+
+    def _apply_font_style_to_run(self, **kwargs):
+        font_style = kwargs['font_style']
+        run = kwargs['run']
+
+        if font_style in ('italic', 'oblique'):
+            run.font.italic = True
+        elif font_style == 'normal':
+            run.font.italic = False
+
+    def _apply_font_size_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        font_size = utils.remove_important_from_style(value).lower()
+
+        if font_size in FONT_SIZES_NAMED:
+            font_size = FONT_SIZES_NAMED[font_size]
+
+        for run in paragraph.runs:
+            self._apply_font_size_to_run(
+                run=run,
+                font_size=font_size,
+            )
+
+    def _apply_font_size_to_run(self, **kwargs):
+        run = kwargs['run']
+        font_size = kwargs['font_size']
+
+        font_size = utils.remove_important_from_style(font_size).lower()
+        font_size = utils.adapt_font_size(font_size)
+
+        try:
+            if font_size in ('normal', 'initial', 'inherit'):
+                run.font.size = None
+            else:
+                converted_size = utils.unit_converter(font_size, target_unit="pt")
+                if converted_size is not None:
+                    run.font.size = converted_size
+
+        except (ValueError, TypeError) as e:
+            logging.warning(f"Warning: Could not parse font-size '{font_size}': {e}")
+
+    def _apply_font_family_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        font_family = utils.remove_important_from_style(value).strip()
+
+        for run in paragraph.runs:
+            self._apply_font_family_to_run(
+                run=run,
+                font_family=font_family,
+            )
+
+    def _apply_font_family_to_run(self, **kwargs):
+        run = kwargs['run']
+        font_family = kwargs['font_family']
+
+        if not font_family or font_family in ('inherit', 'initial', 'unset'):
+            return
+
+        try:
+            font_families = [f.strip().strip('"\'') for f in font_family.split(',')]
+
+            for font_name in font_families:
+                if font_name and font_name not in ('inherit', 'initial', 'unset', 'serif', 'sans-serif', 'monospace',
+                                                   'cursive', 'fantasy', 'system-ui'):
+                    run.font.name = font_name
+                    break
+                elif font_name in ('serif', 'sans-serif', 'monospace'):
+                    generic_font_map = {
+                        'serif': 'Times New Roman',
+                        'sans-serif': 'Arial',
+                        'monospace': 'Courier New'
+                    }
+                    run.font.name = generic_font_map[font_name]
+                    break
+
+        except (AttributeError, Exception) as e:
+            logging.warning(f"Warning: Could not apply font-family '{font_family}': {e}")
+
+    def _apply_color_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        all_styles = kwargs['all_styles']
+
+        color_value = utils.remove_important_from_style(all_styles.get('color', '')).lower().strip()
+        if color_value in ('inherit', 'initial', 'transparent', 'currentcolor'):
+            return
+
+        for run in paragraph.runs:
+            self._apply_color_to_run(
+                run=run,
+                color=color_value,
+            )
+
+    def _apply_color_to_run(self, **kwargs):
+        run = kwargs['run']
+        color_value = kwargs['color']
+
+        try:
+            colors = utils.parse_color(color_value)
+            run.font.color.rgb = RGBColor(*colors)
+        except (ValueError, AttributeError) as e:
+            logging.warning(f"Could not apply color '{color_value}': {e}")
+
+    def _apply_text_transform_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        text_transform = utils.remove_important_from_style(value).lower()
+
+        for run in paragraph.runs:
+            self._apply_text_transform_to_run(
+                run=run,
+                text_transform=text_transform,
+            )
+
+    def _apply_text_transform_to_run(self, **kwargs):
+        run = kwargs['run']
+        text_transform = kwargs['text_transform']
+
+        if not run.text:
+            return
+
+        try:
+            if text_transform == 'uppercase':
+                run.text = run.text.upper()
+            elif text_transform == 'lowercase':
+                run.text = run.text.lower()
+            elif text_transform == 'capitalize':
+                run.text = run.text.title()
+            elif text_transform in ('none', 'initial', 'inherit'):
+                # No transformation needed
+                pass
+            elif text_transform in ('full-width', 'math-auto', 'full-size-kana'):
+                logging.warning(f"Warning: Unsupported text transform '{text_transform}'")
+
+        except (AttributeError, Exception) as e:
+            logging.warning(f"Warning: Could not apply text-transform '{text_transform}': {e}")
+
+    def _apply_text_decoration_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        text_decoration = utils.remove_important_from_style(value).lower()
+
+        for run in paragraph.runs:
+            self._apply_text_decoration_to_run(
+                run=run,
+                text_decoration=text_decoration,
+            )
+
+    def _apply_text_decoration_to_run(self, **kwargs):
+        run = kwargs['run']
+        text_decoration = kwargs['text_decoration']
+
+        decorations = text_decoration.split()
+
+        for decoration in decorations:
+            if decoration in ('underline', 'overline', 'line-through', 'blink'):
+                if decoration == 'underline':
+                    run.font.underline = True
+                elif decoration == 'line-through':
+                    run.font.strike = True
+                else:
+                    logging.warning(f"Warning: Unsupported text decoration '{decoration}'")
+
+            elif decoration == 'none':
+                run.font.underline = False
+
+            elif decoration in ('solid', 'double', 'dotted', 'dashed', 'wavy'):
+                if run.font.underline:
+                    if decoration == 'double':
+                        run.font.underline = WD_UNDERLINE.DOUBLE
+                    elif decoration == 'dotted':
+                        run.font.underline = WD_UNDERLINE.DOTTED
+                    elif decoration == 'dashed':
+                        run.font.underline = WD_UNDERLINE.DASH
+                    elif decoration == 'wavy':
+                        run.font.underline = WD_UNDERLINE.WAVY
+
+                    # 'solid' is the default, no change needed
+
+        # Note: Check if adding color support is possible.
+
+    def _apply_background_color_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        background_color = utils.remove_important_from_style(value).lower().strip()
+
+        if background_color in ('inherit', 'initial', 'transparent', 'none'):
+            return
+
+        try:
+            color_hex = utils.parse_color(background_color, return_hex=True)
+            if not color_hex:
+                return
+
+            # Apply to PARAGRAPH
+            from docx.oxml.shared import qn
+            from docx.oxml import OxmlElement
+
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:val'), 'clear')
+            shd.set(qn('w:color'), 'auto')
+            shd.set(qn('w:fill'), color_hex.lstrip('#'))
+
+            # Apply to paragraph properties
+            p_pr = paragraph._element.get_or_add_pPr()
+
+            existing_shd = p_pr.find(qn('w:shd'))
+            if existing_shd is not None:
+                p_pr.remove(existing_shd)
+
+            p_pr.append(shd)
+
+        except Exception as e:
+            logging.warning(f"Could not apply background-color to paragraph: {e}")
+
+    def _apply_background_color_to_run(self, run, background_color):
+        try:
+            color_hex = utils.parse_color(background_color, return_hex=True)
+            if not color_hex:
+                return
+
+            from docx.oxml.shared import qn
+            from docx.oxml import OxmlElement
+
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:val'), 'clear')
+            shd.set(qn('w:color'), 'auto')
+            shd.set(qn('w:fill'), color_hex.lstrip('#'))
+
+            r_pr = run._element.get_or_add_rPr()
+
+            # Remove existing shading
+            existing_shd = r_pr.find(qn('w:shd'))
+            if existing_shd is not None:
+                r_pr.remove(existing_shd)
+
+            r_pr.append(shd)
+
+        except Exception as e:
+            logging.warning(f"Could not apply background-color to run: {e}")
+
     def add_text_align_or_margin_to(self, obj, style):
         """Styles that can be applied on multiple objects"""
         if 'text-align' in style:
@@ -359,21 +771,22 @@ class HtmlToDocx(HTMLParser):
             self.run.font.color.rgb = RGBColor(*colors)
 
         if 'background-color' in style:
-            color = utils.parse_color(style['background-color'], return_hex=True)
+            # color = utils.parse_color(style['background-color'], return_hex=True)
+            self._apply_background_color_to_run(self.run, style['background-color'])
 
             # Little trick to apply background-color to paragraph
             # because `self.run.font.highlight_color`
             # has a very limited amount of colors
-            shd = OxmlElement('w:shd')
-            shd.set(qn('w:val'), 'clear')
-            shd.set(qn('w:color'), 'auto')
-            shd.set(qn('w:fill'), color.lstrip('#'))
-
-            # Make sure the paragraph styling element exists
-            self.paragraph.paragraph_format.element.get_or_add_pPr()
-
-            # Append the shading element
-            self.paragraph.paragraph_format.element.pPr.append(shd)
+            # shd = OxmlElement('w:shd')
+            # shd.set(qn('w:val'), 'clear')
+            # shd.set(qn('w:color'), 'auto')
+            # shd.set(qn('w:fill'), color.lstrip('#'))
+            #
+            # # Make sure the paragraph styling element exists
+            # self.paragraph.paragraph_format.element.get_or_add_pPr()
+            #
+            # # Append the shading element
+            # self.paragraph.paragraph_format.element.pPr.append(shd)
 
     def handle_li(self):
         '''
@@ -745,7 +1158,7 @@ class HtmlToDocx(HTMLParser):
 
         if 'style' in current_attrs and self.paragraph:
             style = utils.parse_dict_string(current_attrs['style'])
-            self.add_text_align_or_margin_to(self.paragraph.paragraph_format, style)
+            self.apply_styles_to_paragraph(self.paragraph, style, True)
 
     def handle_endtag(self, tag):
         if self.skip:
@@ -811,7 +1224,7 @@ class HtmlToDocx(HTMLParser):
         for span in self.tags['span']:
             if 'style' in span:
                 style = utils.parse_dict_string(span['style'])
-                self.add_styles_to_run(style)
+                self.apply_styles_to_run(self.run, style)
 
         # add font style and name
         for tag, attrs in self.tags.items():
@@ -823,7 +1236,11 @@ class HtmlToDocx(HTMLParser):
                 font_name = constants.FONT_NAMES[tag]
                 self.run.font.name = font_name
 
-            if 'style' in attrs and (tag in ['div', 'li', 'p', 'pre'] or re.match(r'h[1-9]', tag)):
+            if 'style' in attrs and (tag in ['p']):
+                style = utils.parse_dict_string(attrs['style'])
+                self.apply_styles_to_paragraph(self.paragraph, style)
+
+            if 'style' in attrs and (tag in ['div', 'li', 'pre'] or re.match(r'h[1-9]', tag)):
                 style = utils.parse_dict_string(attrs['style'])
                 self.add_styles_to_run(style)
 
