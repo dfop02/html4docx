@@ -1,9 +1,7 @@
 import argparse
-import inspect
 import logging
 import os
 import re
-from cgitb import handler
 from io import BytesIO
 from html.parser import HTMLParser
 
@@ -14,7 +12,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_UNDERLINE
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import RGBColor, Pt
+from docx.shared import RGBColor
 
 from functools import lru_cache
 
@@ -44,7 +42,7 @@ PARAGRAPH_RUN_STYLES = {
 }
 
 RUN_STYLES = {
-'font-weight': '_apply_font_weight_to_run',
+    'font-weight': '_apply_font_weight_to_run',
     'font-style': '_apply_font_style_to_run',
     'text-decoration': '_apply_text_decoration_to_run',
     'text-transform': '_apply_text_transform_to_run',
