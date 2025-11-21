@@ -143,6 +143,26 @@ def unit_converter(unit_value: str, target_unit: str = "pt"):
         raise ValueError(f"Unsupported target unit: {target_unit}")
 
 def is_color(color: str) -> bool:
+    """
+    Checks if a color string is a valid color.
+    Supports RGB, hex, and color name strings.
+
+    Args:
+        color(str): The color string to check.
+
+    Returns:
+        bool: True if the color is valid, False otherwise.
+
+    Examples:
+        >>> is_color("red")
+        True
+        >>> is_color("#000000")
+        True
+        >>> is_color("rgb(0, 0, 0)")
+        True
+        >>> is_color("000000")
+        False
+    """
     is_rgb = 'rgb' in color
     is_hex = color.startswith('#')
     is_keyword = color == 'currentcolor'
@@ -150,6 +170,11 @@ def is_color(color: str) -> bool:
     return is_rgb or is_hex or is_keyword or is_color_name
 
 def parse_color(color: str, return_hex: bool = False):
+    """
+    Parses a color string into a tuple of RGB values.
+    Supports RGB, hex, and color name strings.
+    Returns a tuple of RGB values by default, or a hex string if return_hex is True.
+    """
     color = remove_important_from_style(color.strip().lower())
 
     if 'rgb' in color:

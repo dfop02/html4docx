@@ -65,6 +65,10 @@ class HtmlToDocx(HTMLParser):
     def include_styles(self) -> bool:
         return self.options.get('styles', True)
 
+    @property
+    def include_html_comments(self) -> bool:
+        return self.options.get('html-comments', False)
+
     def save(self, destination) -> None:
         """Save the document to a file path or BytesIO object."""
         if isinstance(destination, str):
@@ -826,6 +830,25 @@ class HtmlToDocx(HTMLParser):
             if 'style' in attrs and (tag in ['div', 'li', 'p', 'pre'] or re.match(r'h[1-9]', tag)):
                 style = utils.parse_dict_string(attrs['style'])
                 self.add_styles_to_run(style)
+
+    def handle_comment(self, data):
+        """
+        Render HTML comments (<!-- text -->) as visible green text,
+        starting with "#", similar to how code editors show comments.
+        """
+        if not self.include_html_comments:
+            return
+
+        # Put comment on its own line
+        self.paragraph = self.doc.add_paragraph()
+
+        comment_text = f"# {data.strip()}"
+        run = self.paragraph.add_run(comment_text)
+
+        # Style: Green color to mimic HTML comment styling
+        dark_ish_green = "#008000"
+        run.font.color.rgb = utils.parse_color(dark_ish_green)
+        run.italic = True  # makes it feel more like a comment
 
     def ignore_nested_tables(self, tables_soup):
         """

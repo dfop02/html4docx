@@ -10,7 +10,8 @@ DEFAULT_OPTIONS = {
     'fix-html': True,
     'images': True,
     'tables': True,
-    'styles': True
+    'styles': True,
+    'html-comments': False
 }
 
 DEFAULT_TABLE_ROW_SELECTORS = [
