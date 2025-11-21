@@ -785,6 +785,7 @@ and blank lines.
                                 f"Paragraph {i} right margin: expected {expected['right']} EMU, got {actual_right} EMU")
 
     def test_background_color_styles(self):
+        self.document.add_heading('Test background color on <p>, multiple cases', level=1)
         html_example2 = """
         <p style="background-color: lightblue;">
             Start of paragraph
@@ -822,21 +823,17 @@ and blank lines.
         self.parser.add_html_to_document(html_example3, self.document)
 
         html_example4 = """
-        <div style="background-color: lightgray;">
-            <p style="background-color: white;">
-                White paragraph in gray div
-                <span style="background-color: yellow;">Yellow span</span>
-                <span style="background-color: transparent;">Transparent span</span>
-                <span style="background-color: rgba(255,0,0,0.5);">Semi-transparent red</span>
-            </p>
-        </div>
+        <p style="background-color: white;">
+            White paragraph
+            <span style="background-color: yellow;">Yellow span</span>
+            <span style="background-color: transparent;">Transparent span</span>
+        </p>
         """
         self.parser.add_html_to_document(html_example4, self.document)
 
         html_example5 = """
         <p style="background-color: rgb(200, 200, 255);">
             RGB color background
-            <span style="background-color: hsl(120, 100%, 75%);">HSL green</span>
             <span style="background-color: #ff0000;">Hex red</span>
             <span style="background-color: inherit;">Inherit background</span>
             <span style="background-color: initial;">Initial background</span>

@@ -649,7 +649,10 @@ class HtmlToDocx(HTMLParser):
 
         background_color = utils.remove_important_from_style(value).lower().strip()
 
-        if background_color in ('inherit', 'initial', 'transparent', 'none'):
+        if background_color in ('inherit', 'initial'):
+            return
+        elif background_color in ('transparent', 'none'):
+            logging.warning(f"Warning: Unsupported background color '{background_color}'")
             return
 
         try:
@@ -680,6 +683,12 @@ class HtmlToDocx(HTMLParser):
 
     def _apply_background_color_to_run(self, run, background_color):
         try:
+            if background_color in ('inherit', 'initial'):
+                return
+            elif background_color in ('transparent', 'none'):
+                logging.warning(f"Warning: Unsupported background color '{background_color}'")
+                return
+
             color_hex = utils.parse_color(background_color, return_hex=True)
             if not color_hex:
                 return
