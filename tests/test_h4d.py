@@ -31,6 +31,7 @@ class OutputTest(unittest.TestCase):
         cls.document = Document()
         cls.text1 = cls.get_html_from_file('text1.html')
         cls.paragraph_line_height = cls.get_html_from_file('paragraph_line_height.html')
+        cls.paragraph_first_line_indent = cls.get_html_from_file('paragraph_first_line_indent.html')
         cls.table_html = cls.get_html_from_file('tables1.html')
         cls.table2_html = cls.get_html_from_file('tables2.html')
         cls.table3_html = cls.get_html_from_file('tables3.html')
@@ -625,6 +626,29 @@ and blank lines.
 
         self.assertEqual(underline_states, expected_states)
 
+    def test_first_line_paragraph(self):
+        self.document.add_heading('Test text-indent on <p> tags', level=1)
+        self.parser.add_html_to_document(self.paragraph_first_line_indent, self.document)
+        document = self.parser.parse_html_string(self.paragraph_first_line_indent)
+
+        indent_values = []
+
+        for p in document.paragraphs:
+            indent_pt = p.paragraph_format.first_line_indent
+            if indent_pt is not None:
+                indent_values.append(indent_pt)
+
+        expected_values = [
+            1080000,    # 3cm
+            254000,     # 20pt
+            381000,     # 40px
+            1260000,    # 35mm
+            None,       # Word does not support negative values here
+        ]
+
+        for actual, expected in zip(indent_values, expected_values):
+            self.assertAlmostEqual(actual, expected, delta=634)
+
     def test_color_paragraph(self):
         self.document.add_heading('Test: color on p tags', level=1)
         color_html_example = (
@@ -700,7 +724,6 @@ and blank lines.
                          f"Line heights don't match expected values. Got {line_heights}, expected {expected_line_heights}")
 
     def test_margins_paragraph(self):
-        """Visual check only since there is a rounding error with twips inside python-docx"""
         margins_html_example = (
             "<p style=\"margin-left: auto; margin-right: auto\">centered paragraph</p>"
             "<p style=\"margin-left: 20px\">left margin 20px</p>"
@@ -713,12 +736,53 @@ and blank lines.
             "<p style=\"margin-left: 2in\">left margin 2in</p>"
         )
 
-        self.document.add_heading(
-            'Test: Margins',
-            level=1
-        )
-
+        self.document.add_heading('Test margins on <p>', level=1)
         self.parser.add_html_to_document(margins_html_example, self.document)
+        document = self.parser.parse_html_string(margins_html_example)
+
+        expected_margins = [
+            # Paragraph 1: "centered paragraph" - auto margins (None values)
+            {'left': None, 'right': None},
+            # Paragraph 2: "left margin 20px" - 20px = 20 * 9525 = 190500 EMU
+            {'left': 190500, 'right': None},
+            # Paragraph 3: "right margin 1.5cm" - 1.5cm = 1.5 * 360000 = 540000 EMU
+            {'left': None, 'right': 540000},
+            # Paragraph 4: "left margin 1cm" - 1cm = 360000 EMU
+            {'left': 360000, 'right': None},
+            # Paragraph 5: "both margins set" - 10px=95250 EMU, 15px=142875 EMU
+            {'left': 95250, 'right': 142875},
+            # Paragraph 6: "only left auto" - auto margin
+            {'left': None, 'right': None},
+            # Paragraph 7: "only right auto" - auto margin
+            {'left': None, 'right': None},
+            # Paragraph 8: "zero margins" - 0px = 0 EMU
+            {'left': 0, 'right': 0},
+            # Paragraph 9: "left margin 2in" - 2in = 2 * 914400 = 1828800 EMU
+            {'left': 1828800, 'right': None},
+        ]
+
+        self.assertEqual(len(document.paragraphs), len(expected_margins))
+
+        for i, paragraph in enumerate(document.paragraphs):
+            expected = expected_margins[i]
+            actual_left = paragraph.paragraph_format.left_indent
+            actual_right = paragraph.paragraph_format.right_indent
+
+            # Check left margin
+            if expected['left'] is None:
+                self.assertIsNone(actual_left, f"Paragraph {i} left margin should be None")
+            else:
+                self.assertIsNotNone(actual_left, f"Paragraph {i} left margin should not be None")
+                self.assertTrue(abs(actual_left - expected['left']) <= 634,
+                                f"Paragraph {i} left margin: expected {expected['left']} EMU, got {actual_left} EMU")
+
+            # Check right margin
+            if expected['right'] is None:
+                self.assertIsNone(actual_right, f"Paragraph {i} right margin should be None")
+            else:
+                self.assertIsNotNone(actual_right, f"Paragraph {i} right margin should not be None")
+                self.assertTrue(abs(actual_right - expected['right']) <= 634,
+                                f"Paragraph {i} right margin: expected {expected['right']} EMU, got {actual_right} EMU")
 
     def test_background_color_styles(self):
         html_example2 = """

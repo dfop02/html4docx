@@ -27,6 +27,7 @@ PARAGRAPH_FORMAT_STYLES = {
     'line-height': '_apply_line_height_paragraph',
     'margin-left': '_apply_margins_paragraph',
     'margin-right': '_apply_margins_paragraph',
+    'text-indent': '_apply_text_indent_paragraph',
 }
 
 # Run-level styles (affect text formatting within runs)
@@ -412,6 +413,14 @@ class HtmlToDocx(HTMLParser):
 
         if style_name == 'margin-right' and margin_right and 'auto' not in margin_right:
             paragraph.paragraph_format.right_indent = utils.unit_converter(margin_right)
+
+    def _apply_text_indent_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        indent_value = utils.remove_important_from_style(value)
+
+        paragraph.paragraph_format.first_line_indent = utils.unit_converter(indent_value, target_unit="pt")
 
     def _apply_font_weight_paragraph(self, **kwargs):
         paragraph = kwargs['paragraph']
