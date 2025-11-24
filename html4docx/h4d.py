@@ -50,6 +50,18 @@ class HtmlToDocx(HTMLParser):
         self.current_ol_num_id = None
         self._list_num_ids = {}
 
+        # NEW: Set style map & tag overrides according to options
+
+        self.use_styles = (
+            False if self.options["styles"] is False else self.options["style-map"]
+        )
+        self.use_tag_overrides = self.options["tag-override"]
+        # NEW: Style tracking variables
+        self.pending_div_style = None
+        self.pending_character_style = None
+        self.pending_inline_styles = None
+        self.pending_important_styles = None
+
     @property
     def metadata(self) -> dict[str, any]:
         if not hasattr(self, '_metadata'):
@@ -1276,7 +1288,20 @@ class HtmlToDocx(HTMLParser):
             return
 
         self.tags[tag] = current_attrs
-        if tag in ['p', 'pre']:
+
+        # Control custom_style based on the Options.  Default is True on both.
+        custom_style = (
+            self.get_word_style_for_element(tag, current_attrs)
+            if (self.use_styles or self.use_tag_overrides)
+            else None
+        )
+
+        if custom_style:
+            valid_style = utils.check_style_exists(self.doc, custom_style)
+            if not valid_style:
+                custom_style = None
+
+        if tag in ["p", "pre"]:
             if not self.in_li:
                 self.paragraph = self.doc.add_paragraph()
 
