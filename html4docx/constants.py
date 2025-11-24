@@ -12,8 +12,8 @@ DEFAULT_OPTIONS = {
     "images": True,
     "tables": True,
     "styles": True,
-    "style-map": False,
-    "tag-override": False,
+    "style-map": True,
+    "tag-override": True,
 }
 
 DEFAULT_TABLE_ROW_SELECTORS = [
