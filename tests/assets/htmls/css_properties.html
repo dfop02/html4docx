@@ -1,0 +1,196 @@
+<p style="font-weight: bold; font-style: italic; text-decoration: underline; text-transform: uppercase; font-size: 16px; font-family: Arial; color: blue; background-color: #f0f0f0">
+    Paragraph with all styles
+    <span style="font-weight: normal; text-decoration: line-through; text-transform: lowercase; font-size: 12px; font-family: Times New Roman; color: red; background-color: yellow">
+        Span overriding all styles
+    </span>
+    Text inheriting paragraph styles again
+</p>
+
+<p style="font-weight: bold; font-style: italic; text-decoration-line: underline; text-decoration-style: wavy; text-decoration-color: green; text-transform: capitalize; font-size: 18px; font-family: Verdana; color: purple; background-color: #e0e0e0">
+    Paragraph with individual text-decoration properties
+    <span style="text-decoration-line: none; text-decoration-color: orange">
+        Span removing underline but keeping other styles
+    </span>
+    Text continuing with paragraph styles
+</p>
+
+<p style="font-weight: 600; text-decoration: underline dotted #ff0000; font-size: 14pt; color: #008000">
+    Paragraph with numeric and complex values
+    <span style="font-style: oblique; text-decoration-style: double"> Span adding oblique and changing underline style only </span>
+    Normal text continuing
+    <span style="background-color: #ffcccc">
+        Span with only background color (should inherit other styles)
+    </span>
+</p>
+
+<p style="font-family: 'Courier New', monospace; text-transform: uppercase; color: darkred">
+    Paragraph with font fallback and text case
+    <span style="font-weight: bolder">
+        Span only bolding (should inherit font, color, transform)
+    </span>
+    <span style="color: teal; text-transform: none">
+        Span changing color and removing transform only
+    </span>
+    Final text with original styles
+</p>
+
+<p style="text-decoration-line: underline line-through; font-size: large; background-color: #ffffe0">
+    Paragraph with multiple decorations and named size
+    <span style="text-decoration-line: underline; font-size: 20px">
+        Span simplifying decorations and changing size
+    </span>
+    <span>
+        Plain span inheriting everything
+    </span>
+    <span style="font-weight: 900; font-style: normal">
+        Span with weight and normal style only
+    </span>
+</p>
+
+<p style="font-weight: normal; font-style: normal; text-decoration: underline double; text-transform: none; font-size: 12px; font-family: 'Comic Sans MS'; color: black; background-color: white">
+    Reset paragraph
+    <span style="font-weight: bold; font-style: italic; text-decoration: underline; text-transform: uppercase; font-size: 24px; font-family: 'Arial Black'; color: #ff6600; background-color: #ccffcc">
+        Span with completely different styles
+    </span>
+    Back to reset styles
+</p>
+
+<p style="text-decoration: underline; text-decoration-style: dashed; color: navy">
+    Testing text-decoration shorthand vs longhand
+    <span style="text-decoration-line: line-through">
+        Span using longhand to override shorthand
+    </span>
+    <span style="text-decoration: underline wavy #00ff00">
+        Span using different shorthand
+    </span>
+</p>
+
+<p style="font-size: 10px; color: gray">
+    Small gray text
+    <span style="color: rgb(255, 128, 0)">
+        Span with RGB color
+    </span>
+    <span style="background-color: rgba(0, 0, 255, 0.3)">
+        Span with RGBA background
+    </span>
+</p>
+
+<p style="font-weight: lighter; font-style: oblique;">
+    Paragraph with less common values
+    <span style="font-weight: 700; font-style: normal">
+        Span with numeric weight and normal style
+    </span>
+    Continuing with original styles
+</p>
+
+<p style="margin-left: 50px; margin-right: 30px; text-align: justify; line-height: 1.8; text-indent: 25px">
+    Paragraph with advanced formatting: margins, justification, line height, and text indent.
+    <span style="font-weight: bold">Bold span inheriting paragraph formatting</span>
+    Continuing text that should maintain all paragraph styles including justified alignment.
+</p>
+
+<p style="margin-left: auto; margin-right: auto; text-align: center">
+    Centered paragraph with auto margins
+    <span style="text-align: left">Span trying to override alignment (should not work)</span>
+    Still centered text
+</p>
+
+<p style="text-decoration: underline; text-decoration-style: double; text-decoration-color: #ff0000">
+    text decorations with double style
+    <span style="text-decoration-style: dotted">Span changing only the style</span>
+    <span style="text-decoration-color: blue">Span changing only the color</span>
+</p>
+
+<p style="font-size: 12pt; line-height: 2.5">
+    Testing unit conversions and line height
+    <span style="font-size: 1.5em">Span with relative font size</span>
+    <span style="font-size: 150%">Span with percentage font size</span>
+    <span style="font-size: 18px">Span with pixel font size</span>
+    Text with original 12pt size
+</p>
+
+<p style="font-family: Georgia, 'Times New Roman', serif; font-size: medium">
+    Testing font fallback chain
+    <span style="font-family: sans-serif">Span switching to generic sans-serif</span>
+    Back to original font stack
+</p>
+
+<p style="color: hsl(240, 100%, 50%); background-color: hsl(60, 100%, 50%)">
+    Testing HSL colors
+    <span style="color: hsla(120, 100%, 25%, 0.7)">Span with HSLA color</span>
+    <span style="background-color: hsl(0, 100%, 50%)">Span with red HSL background</span>
+</p>
+
+<p style="font-style: italic; text-decoration: blink overline">
+    Testing blink and overline (unsupported features)
+    <span style="text-decoration: underline">Span with supported underline only</span>
+    Text with original (partially supported) styles
+</p>
+
+<p style="color: currentColor; background-color: transparent">
+    Testing CSS keywords
+    <span style="color: inherit">Span with inherit color</span>
+    <span style="background-color: initial">Span with initial background</span>
+    <span style="font-size: unset">Span with unset font size</span>
+</p>
+
+<p style="font-weight: bolder; font-size: larger; text-decoration: underline !important">
+    Testing !important declarations
+    <span style="font-weight: normal !important">Span with important normal weight</span>
+    <span style="text-decoration: none !important">Span with important no decoration</span>
+    Text that should respect important styles
+</p>
+
+<p style="text-decoration: underline; text-decoration-style: wavy; text-decoration-color: rgb(255,0,255)">
+    Mixed valid and invalid properties
+    <span style="text-decoration-style: invalid-style">Span with invalid decoration style</span>
+    <span style="color: not-a-color">Span with invalid color</span>
+</p>
+
+<p style="line-height: normal; margin-left: 2cm; margin-right: 1in">
+    Testing various units and normal values
+    <span style="font-size: x-large">Span with named font size</span>
+    <span style="line-height: 200%">Span with percentage line height</span>
+</p>
+
+<p style="background-color: #f0f8ff; color: #2f4f4f; text-shadow: 2px 2px 4px #000000">
+    Testing unsupported CSS3 properties
+    <span style="box-shadow: 0 0 10px #000">Span with box-shadow (unsupported)</span>
+    <span style="opacity: 0.8">Span with opacity (unsupported)</span>
+</p>
+
+<p>
+    Plain paragraph with no styles
+    <span style="font-weight: bold; font-style: italic; text-decoration: underline; color: red; background-color: yellow">
+        Span with all run styles applied individually
+    </span>
+    Back to plain text
+</p>
+
+<p style="font-weight: 100; font-style: normal; text-decoration: none; color: black">
+    Testing minimum values
+    <span style="font-weight: 900; font-style: italic; text-decoration: line-through; color: white; background-color: black">
+        Span with maximum values
+    </span>
+    Back to minimum values
+</p>
+
+<p style="text-decoration: underline; text-decoration-style: solid; text-decoration-color: #000000">
+    Testing text-decoration inheritance
+    <span>
+        Plain span inheriting decoration
+    </span>
+    <span style="text-decoration-line: inherit">
+        Span explicitly inheriting decoration line
+    </span>
+    <span style="text-decoration-color: inherit">
+        Span explicitly inheriting decoration color
+    </span>
+</p>
+
+<p style="font-size: 0; color: transparent">
+    Testing edge case values
+    <span style="font-size: 100px; color: #000">Span with very large font and visible color</span>
+    <span style="font-size: inherit; color: inherit">Span inheriting edge values</span>
+</p>
+

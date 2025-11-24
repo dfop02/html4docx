@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 from docx import Document
 from docx.oxml.ns import qn
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_UNDERLINE
 
 from html4docx import HtmlToDocx
 from html4docx.utils import unit_converter
@@ -32,6 +32,9 @@ class OutputTest(unittest.TestCase):
         cls.text1 = cls.get_html_from_file('text1.html')
         cls.paragraph_line_height = cls.get_html_from_file('paragraph_line_height.html')
         cls.paragraph_first_line_indent = cls.get_html_from_file('paragraph_first_line_indent.html')
+        cls.text_decoration = cls.get_html_from_file('text_decoration.html')
+        cls.css_properties = cls.get_html_from_file('css_properties.html')
+        cls.css_properties_header = cls.get_html_from_file('header.html')
         cls.table_html = cls.get_html_from_file('tables1.html')
         cls.table2_html = cls.get_html_from_file('tables2.html')
         cls.table3_html = cls.get_html_from_file('tables3.html')
@@ -576,31 +579,111 @@ and blank lines.
 
         self.parser.add_html_to_document(text_transform_html_example, self.document)
 
-    def test_text_decoration_paragraph(self):
-        self.document.add_heading('Test: text-decoration on <p>', level=1)
+    def test_text_decoration_span(self):
+        self.document.add_heading('Test: text-decoration on <span>', level=1)
         text_decoration_html_example = (
-            "<p style=\"text-decoration: underline\">underlined text</p>"
-            "<p style=\"text-decoration: none\">no decoration text</p>"
-            "<p style=\"text-decoration: line-through\">strikethrough text</p>"
-            "<p style=\"text-decoration: underline line-through\">both decorations</p>"
-            "<p style=\"text-decoration: underline wavy\">wavy underline</p>"
-            "<p style=\"text-decoration: underline dotted\">dotted underline</p>"
-            "<p style=\"text-decoration: underline dashed\">dashed underline</p>"
-            "<p style=\"text-decoration: underline double\">double underline</p>"
-            "<p style=\"text-decoration: overline\">overline text</p>"
-            "<p style=\"text-decoration: blink\">blink text</p>"
-            "<p>default text</p>"
+            # Standalone spans
+            "<span style=\"text-decoration: underline red\">underlined span (red)</span>"
+            "<span style=\"text-decoration: none rgb(0,0,0)\">no decoration span (rgb(0, 0, 0))</span>"
+            "<span style=\"text-decoration: line-through gray\">strikethrough span (gray) (not supported)</span>"
+            "<span style=\"text-decoration: underline line-through orange\">underline+line-through span (orange)\
+                (should be strike)</span>"
+
+            # Spans inside paragraphs
+            "<p>Normal text <span style=\"text-decoration: underline wavy blue\">wavy underlined span (blue)</span> continues</p>"
+            "<p>Normal text <span style=\"text-decoration: underline dotted purple\">dotted underlined span (purple)</span> continues</p>"
+            "<p>Normal text <span style=\"text-decoration: line-through red\">strikethrough span (red)</span> continues</p>"
+
+            # Multiple spans with different decorations in same paragraph
+            "<p>Start <span style=\"text-decoration: underline green\">underlined</span> "
+            "<span style=\"text-decoration: line-through blue\">strikethrough</span> "
+            "<span style=\"text-decoration: underline dashed orange\">dashed underline</span> end</p>"
+
+            # Span with no decoration inside decorated paragraph
+            "<p style=\"text-decoration: underline\">Underlined paragraph with "
+            "<span style=\"text-decoration: none\">normal span</span> inside</p>"
+
+            # Span with decoration inside decorated paragraph (should override)
+            "<p style=\"text-decoration: line-through\">Strikethrough paragraph with "
+            "<span style=\"text-decoration: underline red\">underlined red span</span> inside</p>"
+
+            # Override behavior with individual properties
+            "<p style=\"text-decoration-line: underline; text-decoration-color: blue\">Blue underlined paragraph with "
+            "<span style=\"text-decoration-line: line-through;\">strikethrough span</span> inside</p>"
+
+            # Check if equal - shorthand vs individual properties
+            "<p style=\"text-decoration-line: underline; text-decoration-color: blue; text-decoration-style: wavy\">Blue underlined paragraph</p>"
+            "<p style=\"text-decoration: underline blue wavy\">Blue underlined paragraph</p>"
         )
 
         self.parser.add_html_to_document(text_decoration_html_example, self.document)
 
         document = self.parser.parse_html_string(text_decoration_html_example)
 
-        from docx.enum.text import WD_UNDERLINE
+        standalone_para = document.paragraphs[0]
+        assert len(standalone_para.runs) == 4
+
+        span1 = standalone_para.runs[0]
+        assert span1.text == "underlined span (red)"
+        assert span1.font.underline is True
+
+        span2 = standalone_para.runs[1]
+        assert span2.text == "no decoration span (rgb(0, 0, 0))"
+        assert span2.font.underline is False
+        assert span2.font.strike is False
+
+        span3 = standalone_para.runs[2]
+        assert span3.text == "strikethrough span (gray) (not supported)"
+        assert span3.font.strike is True
+
+        span4 = standalone_para.runs[3]
+        assert span4.text == "underline+line-through span (orange) (should be strike)"
+        assert span4.font.strike is True
+
+        # Test equivalence: shorthand vs individual properties
+        p8_individual = document.paragraphs[8]  # Individual properties
+        p9_shorthand = document.paragraphs[9]   # Shorthand
+
+        # Both should have the same text decoration applied
+        assert p8_individual.runs[0].font.underline is WD_UNDERLINE.WAVY
+        assert p9_shorthand.runs[0].font.underline is WD_UNDERLINE.WAVY
+
+        # Both paragraphs should have the same text
+        assert p8_individual.text == "Blue underlined paragraph"
+        assert p9_shorthand.text == "Blue underlined paragraph"
+
+        # Both should have the same styling result
+        assert p8_individual.runs[0].font.underline == p9_shorthand.runs[0].font.underline
+
+    def test_text_decoration_paragraph(self):
+        self.document.add_heading('Test: text-decoration on <p>', level=1)
+        text_decoration_html_example = (
+            "<p style=\"text-decoration: underline red\">underlined text (red)</p>"
+            "<p style=\"text-decoration: none rgb(0,0,0)\">no decoration text (rgb(0, 0, 0))</p>"
+            "<p style=\"text-decoration: line-through gray\">strikethrough text (gray) (color not supported)</p>"
+            "<p style=\"text-decoration: underline line-through orange\">underline+line-through (orange)\
+                (should be strike)</p>"
+            "<p style=\"text-decoration: underline wavy blue\">wavy underline (blue)</p>"
+            "<p style=\"text-decoration: underline dotted rgb(0, 128, 0)\">dotted underline (rgb(0, 128, 0))</p>"
+            "<p style=\"text-decoration: underline dotted rgb(0, 255, 0)\">dotted underline (rgb(0, 255, 0))</p>"
+            "<p style=\"text-decoration: underline dashed purple\">dashed underline (purple)</p>"
+            "<p style=\"text-decoration: underline double rgb(255, 69, 0)\">double underline (rgb(255, 69, 0))</p>"
+            "<p style=\"text-decoration: overline hotpink\">overline text (hotpink) (not supported)</p>"
+            "<p style=\"text-decoration: blink hotpink\">blink text (hotpink) (not supported)</p>"
+        )
+
+        self.parser.add_html_to_document(text_decoration_html_example, self.document)
+
+        document = self.parser.parse_html_string(text_decoration_html_example)
 
         underline_states = []
+        strike_states = []
+
         for p in document.paragraphs:
-            underline = p.runs[0].font.underline
+            run = p.runs[0]
+
+            # Check underline
+            underline = run.font.underline
             if underline is None:
                 underline_states.append(None)
             elif underline is True:
@@ -610,21 +693,47 @@ and blank lines.
             else:
                 underline_states.append(underline)
 
-        expected_states = [
-            True,                   # underline (default single)
-            False,                  # none
-            None,                   # line-through (not supported)
-            True,                   # underline + line-through
-            WD_UNDERLINE.WAVY,      # wavy underline
-            WD_UNDERLINE.DOTTED,    # dotted underline
-            WD_UNDERLINE.DASH,      # dashed underline
-            WD_UNDERLINE.DOUBLE,    # double underline
-            None,                   # overline (not supported)
-            None,                   # blink (not supported)
-            None,                   # default
+            # Check strike-through
+            strike = run.font.strike
+            if strike is None:
+                strike_states.append(None)
+            elif strike is True:
+                strike_states.append(True)
+            elif strike is False:
+                strike_states.append(False)
+            else:
+                strike_states.append(strike)
+
+        expected_underline_states = [
+            True,   # underline (default single) - explicitly True
+            False,  # none - explicitly False for both underline and strike
+            False,  # line-through - explicitly False for underline when strike is True
+            False,  # underline + line-through - line-through wins, underline explicitly False
+            WD_UNDERLINE.WAVY,      # wavy underline - explicitly set to wavy
+            WD_UNDERLINE.DOTTED,    # dotted underline - explicitly set to dotted
+            WD_UNDERLINE.DOTTED,    # dotted underline - explicitly set to dotted
+            WD_UNDERLINE.DASH,      # dashed underline - explicitly set to dash
+            WD_UNDERLINE.DOUBLE,    # double underline - explicitly set to double
+            None,  # overline (not supported) - remains None/unchanged
+            None,  # blink (not supported) - remains None/unchanged
         ]
 
-        self.assertEqual(underline_states, expected_states)
+        expected_strike_states = [
+            False,  # underline only - explicitly False for strike when underline is True
+            False,  # none - explicitly False for both underline and strike
+            True,   # line-through - explicitly True
+            True,   # underline + line-through - line-through wins, strike explicitly True
+            False,  # wavy underline only - explicitly False for strike when underline is set
+            False,  # dotted underline only - explicitly False for strike when underline is set
+            False,  # dotted underline only - explicitly False for strike when underline is set
+            False,  # dashed underline only - explicitly False for strike when underline is set
+            False,  # double underline only - explicitly False for strike when underline is set
+            None,   # overline (not supported) - remains None/unchanged
+            None,   # blink (not supported) - remains None/unchanged
+        ]
+
+        self.assertEqual(underline_states, expected_underline_states)
+        self.assertEqual(strike_states, expected_strike_states)
 
     def test_first_line_paragraph(self):
         self.document.add_heading('Test text-indent on <p> tags', level=1)
@@ -900,6 +1009,172 @@ and blank lines.
         </p>
         """
         self.parser.add_html_to_document(html_example9, self.document)
+
+    def test_headers_with_css(self):
+        self.document.add_heading('Test: headers with css', level=1)
+        self.parser.add_html_to_document(self.css_properties_header, self.document)
+
+        document = self.parser.parse_html_string(self.css_properties_header)
+
+        # Test H1 - Large and Centered
+        h1 = document.paragraphs[0]
+        assert h1.style.name.startswith('Heading 1')
+        assert str(h1.runs[0].font.color.rgb) == '2C3E50'
+        assert h1.runs[0].font.bold is True
+        assert h1.runs[0].font.size == 342900
+        assert h1.alignment == WD_ALIGN_PARAGRAPH.CENTER
+        assert h1.runs[0].text == 'MAIN HEADING H1 - LARGE AND CENTERED'  # uppercase due to text-transform
+
+        # Test H2 - Underlined with Background (no span in this one)
+        h2 = document.paragraphs[1]
+        assert h2.style.name.startswith('Heading 2')
+        assert str(h2.runs[0].font.color.rgb) == '34495E'
+        assert h2.runs[0].font.underline is True
+        assert h2.runs[0].font.name == 'Arial'
+        assert h2.runs[0].font.size == 266700
+
+        # Test H3 - Italic and Right Aligned
+        h3 = document.paragraphs[2]
+        assert h3.style.name.startswith('Heading 3')
+        assert str(h3.runs[0].font.color.rgb) == '7F8C8D'
+        assert h3.runs[0].font.italic is True
+        assert h3.runs[0].font.size == 209550
+        assert h3.alignment == WD_ALIGN_PARAGRAPH.RIGHT
+
+        # Test H4 - Normal Weight and Capitalized
+        h4 = document.paragraphs[3]
+        assert h4.style.name.startswith('Heading 4')
+        assert str(h4.runs[0].font.color.rgb) == '95A5A6'
+        assert h4.runs[0].font.bold is False  # font-weight: normal
+        assert h4.runs[0].font.name == 'Georgia'
+        assert h4.runs[0].font.size == 171450
+        assert h4.runs[0].text == 'Quaternary Heading H4 - Normal Weight And Capitalized'  # capitalized
+
+        # Test H1 with Complex Text Decoration and Span
+        h1_complex = document.paragraphs[4]
+        assert h1_complex.runs[0].font.strike is True  # line-through
+        assert str(h1_complex.runs[0].font.color.rgb) == '8E44AD'
+        assert h1_complex.runs[0].font.size == 381000
+
+        # Test span in complex H1
+        assert len(h1_complex.runs) >= 2
+        span_in_h1 = h1_complex.runs[1]
+        assert span_in_h1.font.underline is True  # underline in span
+        assert str(span_in_h1.font.color.rgb) == '2980B9'
+
+        # Test H3 with Light Weight and Span
+        h3_light = document.paragraphs[5]
+        assert h3_light.runs[0].font.bold is False  # font-weight: 100
+        assert str(h3_light.runs[0].font.color.rgb) == 'D35400'
+        assert h3_light.runs[0].font.size == 190500
+
+        # Test bold span in light H3
+        assert len(h3_light.runs) >= 2
+        bold_span = h3_light.runs[1]
+        assert bold_span.font.bold is True  # font-weight: 900
+
+        # Test H3 with Text Transform
+        h3_transform = document.paragraphs[6]
+        assert h3_transform.runs[0].text == 'h3 forced to lowercase with text-transform '
+        assert len(h3_transform.runs) >= 2
+        uppercase_span = h3_transform.runs[1]
+        assert uppercase_span.text == 'SPAN FORCED TO UPPERCASE'
+
+        # Test H4 with Serif Font
+        h4_serif = document.paragraphs[7]
+        assert h4_serif.runs[0].font.name == 'Times New Roman'
+        assert str(h4_serif.runs[0].font.color.rgb) == '7D3C98'
+        assert h4_serif.alignment == WD_ALIGN_PARAGRAPH.CENTER
+
+        # Test H1 with Auto Margins and Background
+        h1_centered = document.paragraphs[8]
+        assert h1_centered.alignment == WD_ALIGN_PARAGRAPH.CENTER
+        assert str(h1_centered.runs[0].font.color.rgb) == 'FFFFFF'
+
+        # Test H2 with Lighter Weight and Span
+        h2_lighter = document.paragraphs[9]
+        assert h2_lighter.runs[0].font.bold is False  # lighter weight
+        assert h2_lighter.runs[0].font.underline == WD_UNDERLINE.DOTTED
+        assert h2_lighter.runs[0].font.size == 228600
+
+        # Test bolder span
+        assert len(h2_lighter.runs) >= 2
+        bolder_span = h2_lighter.runs[1]
+        assert bolder_span.font.bold is True  # bolder
+
+        # Test H3 with RGB Colors and Span
+        h3_rgb = document.paragraphs[10]
+        assert str(h3_rgb.runs[0].font.color.rgb) == '3498DB'  # rgb(52, 152, 219)
+        assert h3_rgb.runs[0].font.size == 177800
+
+        # Test RGB span
+        assert len(h3_rgb.runs) >= 2
+        rgb_span = h3_rgb.runs[1]
+        assert str(rgb_span.font.color.rgb) == 'E74C3C'  # rgb(231, 76, 60)
+
+        # Test H4 with Strike-through and Span
+        h4_strike = document.paragraphs[11]
+        assert h4_strike.runs[0].font.strike is True
+        assert h4_strike.runs[0].font.bold is False  # font-weight: 300
+
+        # Test span without strike-through
+        assert len(h4_strike.runs) >= 2
+        no_strike_span = h4_strike.runs[1]
+        assert no_strike_span.font.strike is False
+        assert str(no_strike_span.font.color.rgb) == 'E74C3C'
+
+        # Test H3 with Unsupported Transform and Span
+        h3_unsupported = document.paragraphs[12]
+        assert str(h3_unsupported.runs[0].font.color.rgb) == 'F39C12'
+        assert h3_unsupported.runs[0].font.size == 196850
+
+        # Test supported transform in span
+        assert len(h3_unsupported.runs) >= 2
+        supported_span = h3_unsupported.runs[1]
+        assert supported_span.text == 'Supported Transform In Span'  # capitalize
+
+        # Test H4 with Reset Styles and Span
+        h4_reset = document.paragraphs[13]
+        assert h4_reset.runs[0].font.bold is True  # font-weight: 700
+        assert h4_reset.runs[0].font.italic is False  # font-style: normal
+        assert h4_reset.runs[0].font.underline is False  # text-decoration: none
+
+        # Test styled span
+        assert len(h4_reset.runs) >= 2
+        styled_span = h4_reset.runs[1]
+        assert styled_span.font.bold is False  # font-weight: 400
+        assert styled_span.font.italic is True
+        assert styled_span.font.underline is True
+
+        # Test H1 with Text Color and Span
+        h1_transparent = document.paragraphs[14]
+        assert h1_transparent.runs[0].font.size == 361950
+        visible_span = h1_transparent.runs[1]
+        assert str(visible_span.font.color.rgb) == 'ECF0F1'
+
+        # Test H3 with All Three Decorations and Span
+        h3_all_decorations = document.paragraphs[15]
+        assert h3_all_decorations.runs[0].font.strike is True
+        assert h3_all_decorations.runs[0].font.underline is False
+
+        # Test span with single decoration
+        assert len(h3_all_decorations.runs) >= 2
+        single_decoration_span = h3_all_decorations.runs[1]
+        assert single_decoration_span.font.underline is True
+
+        # Test H2 with Middle Weight and Span
+        h2_middle = document.paragraphs[16]
+        assert h2_middle.runs[0].font.bold is False
+
+        # Test darker span
+        assert len(h2_middle.runs) >= 2
+        darker_span = h2_middle.runs[1]
+        assert darker_span.font.bold is False
+
+        # Test H4 with Style and Span
+        h4_style = document.paragraphs[17]
+        assert h4_style.runs[0].font.underline is WD_UNDERLINE.WAVY
+        assert h4_style.runs[1].font.underline is WD_UNDERLINE.DOUBLE
 
     def test_color_by_name(self):
         color_html_example = (

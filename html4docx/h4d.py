@@ -8,7 +8,7 @@ from html.parser import HTMLParser
 import docx
 from bs4 import BeautifulSoup
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_UNDERLINE
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -18,40 +18,7 @@ from functools import lru_cache
 
 from html4docx import constants
 from html4docx import utils
-from html4docx.constants import FONT_SIZES_NAMED
 from html4docx.metadata import Metadata
-
-# Paragraph-level styles (ParagraphFormat)
-PARAGRAPH_FORMAT_STYLES = {
-    'text-align': '_apply_alignment_paragraph',
-    'line-height': '_apply_line_height_paragraph',
-    'margin-left': '_apply_margins_paragraph',
-    'margin-right': '_apply_margins_paragraph',
-    'text-indent': '_apply_text_indent_paragraph',
-}
-
-# Run-level styles (affect text formatting within runs)
-PARAGRAPH_RUN_STYLES = {
-    'font-weight': '_apply_font_weight_paragraph',
-    'font-style': '_apply_font_style_paragraph',
-    'text-decoration': '_apply_text_decoration_paragraph',
-    'text-transform': '_apply_text_transform_paragraph',
-    'font-size': '_apply_font_size_paragraph',
-    'font-family': '_apply_font_family_paragraph',
-    'color': '_apply_color_paragraph',
-    'background-color': '_apply_background_color_paragraph'
-}
-
-RUN_STYLES = {
-    'font-weight': '_apply_font_weight_to_run',
-    'font-style': '_apply_font_style_to_run',
-    'text-decoration': '_apply_text_decoration_to_run',
-    'text-transform': '_apply_text_transform_to_run',
-    'font-size': '_apply_font_size_to_run',
-    'font-family': '_apply_font_family_to_run',
-    'color': '_apply_color_to_run',
-    'background-color': '_apply_background_color_to_run'
-}
 
 class HtmlToDocx(HTMLParser):
     """
@@ -63,6 +30,7 @@ class HtmlToDocx(HTMLParser):
         self.options = dict(constants.DEFAULT_OPTIONS)
         self.table_row_selectors = constants.DEFAULT_TABLE_ROW_SELECTORS
         self.table_style = constants.DEFAULT_TABLE_STYLE
+        self.paragraph_span_styles = {}  # paragraph_id -> set(run_indices)
 
     def set_initial_attrs(self, document = None):
         self.tags = {
@@ -72,6 +40,7 @@ class HtmlToDocx(HTMLParser):
         self.doc = document if document else Document()
         self.bs = self.options['fix-html'] # whether or not to clean with BeautifulSoup
         self.paragraph = None
+        self.run = None
         self.skip = False
         self.skip_tag = None
         self.instances_to_skip = 0
@@ -323,32 +292,54 @@ class HtmlToDocx(HTMLParser):
         if not style or not hasattr(run, 'font'):
             return
 
+        # Find current paragraph and run position
+        if not hasattr(self, 'paragraph') or self.paragraph is None:
+            return
+
+        paragraph_id = id(self.paragraph)
+        if paragraph_id not in self.paragraph_span_styles:
+            self.paragraph_span_styles[paragraph_id] = {}
+
+        # The current run is the last one in the paragraph
+        run_index = len(self.paragraph.runs) - 1
+
+        if run_index not in self.paragraph_span_styles[paragraph_id]:
+            self.paragraph_span_styles[paragraph_id][run_index] = set()
+
         for style_name, style_value in style.items():
-            # Skip paragraph-level styles for runs
-            if style_name in PARAGRAPH_FORMAT_STYLES:
+            if style_name in constants.RUN_STYLES:
+                if style_name.startswith('background-color') and style_value in ('inherit', 'initial'):
+                    continue
+
+                self.paragraph_span_styles[paragraph_id][run_index].add(style_name)
+
+                if style_name == 'text-decoration':
+                    # If span sets text-decoration shorthand, it conflicts with all text-decoration-* properties
+                    self.paragraph_span_styles[paragraph_id][run_index].add('text-decoration-line')
+                    self.paragraph_span_styles[paragraph_id][run_index].add('text-decoration-style')
+                    self.paragraph_span_styles[paragraph_id][run_index].add('text-decoration-color')
+                elif style_name.startswith('text-decoration-'):
+                    pass
+
+        for style_name, style_value in style.items():
+            if style_name in constants.PARAGRAPH_FORMAT_STYLES:
                 continue
-
-            elif style_name in RUN_STYLES:
-                handler = getattr(self, RUN_STYLES[style_name])
-
+            elif style_name in constants.RUN_STYLES:
+                handler = getattr(self, constants.RUN_STYLES[style_name])
                 param_name = style_name.replace('-', '_')
-                handler(
-                    run=run,
-                    **{param_name: style_value}
-                )
-
+                handler(run=run, **{param_name: style_value})
             else:
                 logging.warning(f"Warning: Unrecognized style '{style_name}', will be skipped.")
 
-    def apply_styles_to_paragraph(self, paragraph, style, init=False):
+    def apply_styles_to_paragraph(self, paragraph, style):
         if not style or not hasattr(paragraph, 'paragraph_format'):
             return
 
         for style_name, style_value in style.items():
-            if init and style_name in PARAGRAPH_FORMAT_STYLES:
-                handler = getattr(self, PARAGRAPH_FORMAT_STYLES[style_name])
-            elif not init and style_name in PARAGRAPH_RUN_STYLES:
-                handler = getattr(self, PARAGRAPH_RUN_STYLES[style_name])
+            if style_name in constants.PARAGRAPH_FORMAT_STYLES:
+                handler = getattr(self, constants.PARAGRAPH_FORMAT_STYLES[style_name])
+            elif style_name in constants.PARAGRAPH_RUN_STYLES:
+                handler = getattr(self, constants.PARAGRAPH_RUN_STYLES[style_name])
             else:
                 logging.warning(f"Warning: Unrecognized paragraph style '{style_name}', will be skipped.")
                 continue
@@ -428,7 +419,13 @@ class HtmlToDocx(HTMLParser):
 
         font_weight = utils.remove_important_from_style(value).lower()
 
-        for run in paragraph.runs:
+        paragraph_id = id(paragraph)
+        paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+        for i, run in enumerate(paragraph.runs):
+            if i in paragraph_spans and 'font-weight' in paragraph_spans[i]:
+                continue
+
             self._apply_font_weight_to_run(
                 run=run,
                 font_weight=font_weight,
@@ -452,7 +449,13 @@ class HtmlToDocx(HTMLParser):
 
         font_style = utils.remove_important_from_style(value).lower()
 
-        for run in paragraph.runs:
+        paragraph_id = id(paragraph)
+        paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+        for i, run in enumerate(paragraph.runs):
+            if i in paragraph_spans and 'font-style' in paragraph_spans[i]:
+                continue
+
             self._apply_font_style_to_run(
                 run=run,
                 font_style=font_style,
@@ -473,10 +476,16 @@ class HtmlToDocx(HTMLParser):
 
         font_size = utils.remove_important_from_style(value).lower()
 
-        if font_size in FONT_SIZES_NAMED:
-            font_size = FONT_SIZES_NAMED[font_size]
+        if font_size in constants.FONT_SIZES_NAMED:
+            font_size = constants.FONT_SIZES_NAMED[font_size]
 
-        for run in paragraph.runs:
+        paragraph_id = id(paragraph)
+        paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+        for i, run in enumerate(paragraph.runs):
+            if i in paragraph_spans and 'font-size' in paragraph_spans[i]:
+                continue
+
             self._apply_font_size_to_run(
                 run=run,
                 font_size=font_size,
@@ -506,7 +515,13 @@ class HtmlToDocx(HTMLParser):
 
         font_family = utils.remove_important_from_style(value).strip()
 
-        for run in paragraph.runs:
+        paragraph_id = id(paragraph)
+        paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+        for i, run in enumerate(paragraph.runs):
+            if i in paragraph_spans and 'font-family' in paragraph_spans[i]:
+                continue
+
             self._apply_font_family_to_run(
                 run=run,
                 font_family=font_family,
@@ -528,12 +543,7 @@ class HtmlToDocx(HTMLParser):
                     run.font.name = font_name
                     break
                 elif font_name in ('serif', 'sans-serif', 'monospace'):
-                    generic_font_map = {
-                        'serif': 'Times New Roman',
-                        'sans-serif': 'Arial',
-                        'monospace': 'Courier New'
-                    }
-                    run.font.name = generic_font_map[font_name]
+                    run.font.name = constants.GENERIC_FONT_STYLES[font_name]
                     break
 
         except (AttributeError, Exception) as e:
@@ -542,12 +552,16 @@ class HtmlToDocx(HTMLParser):
     def _apply_color_paragraph(self, **kwargs):
         paragraph = kwargs['paragraph']
         all_styles = kwargs['all_styles']
-
         color_value = utils.remove_important_from_style(all_styles.get('color', '')).lower().strip()
         if color_value in ('inherit', 'initial', 'transparent', 'currentcolor'):
             return
 
-        for run in paragraph.runs:
+        paragraph_id = id(paragraph)
+        paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+        for i, run in enumerate(paragraph.runs):
+            if i in paragraph_spans and 'color' in paragraph_spans[i]:
+                continue
             self._apply_color_to_run(
                 run=run,
                 color=color_value,
@@ -556,7 +570,6 @@ class HtmlToDocx(HTMLParser):
     def _apply_color_to_run(self, **kwargs):
         run = kwargs['run']
         color_value = kwargs['color']
-
         try:
             colors = utils.parse_color(color_value)
             run.font.color.rgb = RGBColor(*colors)
@@ -569,7 +582,13 @@ class HtmlToDocx(HTMLParser):
 
         text_transform = utils.remove_important_from_style(value).lower()
 
-        for run in paragraph.runs:
+        paragraph_id = id(paragraph)
+        paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+        for i, run in enumerate(paragraph.runs):
+            if i in paragraph_spans and 'text-transform' in paragraph_spans[i]:
+                continue
+
             self._apply_text_transform_to_run(
                 run=run,
                 text_transform=text_transform,
@@ -598,50 +617,179 @@ class HtmlToDocx(HTMLParser):
         except (AttributeError, Exception) as e:
             logging.warning(f"Warning: Could not apply text-transform '{text_transform}': {e}")
 
+    def _parse_text_decoration(self, text_decoration):
+        """Parse text-decoration using regex to preserve color values."""
+        # Pattern to match color values (rgb, hex, named colors) or other tokens
+        pattern = r'rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)|#[\da-fA-F]+|[\w-]+'
+
+        tokens = re.findall(pattern, text_decoration)
+
+        result = {
+            'line_type': None,
+            'line_style': 'solid',
+            'color': None
+        }
+
+        for token in tokens:
+            if token in constants.FONT_UNDERLINE:
+                result['line_type'] = token
+            elif token == 'none':
+                result['line_type'] = 'none'
+            elif token in constants.FONT_UNDERLINE_STYLES:
+                result['line_style'] = token
+            elif utils.is_color(token):
+                result['color'] = token
+            elif token in ('blink', 'overline'):
+                result['line_style'] = None
+                result['line_style'] = None
+                logging.warning(
+                    f"Blink or overline not supported.")
+
+
+        if result['line_type'] == 'line-through' and result['color'] is not None:
+            logging.warning(
+                f"Word does not support colored strike-through. Color '{result['color']}' will be ignored for line-through.")
+        return result
+
     def _apply_text_decoration_paragraph(self, **kwargs):
         paragraph = kwargs['paragraph']
-        value = kwargs['value']
+        all_styles = kwargs['all_styles']
 
-        text_decoration = utils.remove_important_from_style(value).lower()
+        # Initialize decorations
+        decorations = {
+            'line_type': None,
+            'line_style': None,
+            'color': None
+        }
 
-        for run in paragraph.runs:
-            self._apply_text_decoration_to_run(
-                run=run,
-                text_decoration=text_decoration,
-            )
+        if 'text-decoration' in all_styles:
+            text_decoration_value = utils.remove_important_from_style(all_styles['text-decoration']).lower()
+            decorations = self._parse_text_decoration(text_decoration_value)
+
+        if 'text-decoration-line' in all_styles:
+            line_value = utils.remove_important_from_style(all_styles['text-decoration-line']).lower()
+            decorations['line_type'] = line_value
+
+        if 'text-decoration-style' in all_styles:
+            style_value = utils.remove_important_from_style(all_styles['text-decoration-style']).lower()
+            decorations['line_style'] = style_value
+
+        if 'text-decoration-color' in all_styles:
+            color_value = utils.remove_important_from_style(all_styles['text-decoration-color']).lower()
+            decorations['color'] = color_value
+
+        paragraph_id = id(paragraph)
+        paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+        for i, run in enumerate(paragraph.runs):
+            span_styles = paragraph_spans.get(i, set())
+
+            # If span has text-decoration shorthand, skip entirely
+            if 'text-decoration' in span_styles:
+                continue
+
+            if decorations['line_type'] and 'text-decoration-line' not in span_styles:
+                self._apply_text_decoration_line_to_run(
+                    run=run,
+                    text_decoration_line=decorations['line_type'],
+                )
+
+            if decorations['line_style'] and 'text-decoration-style' not in span_styles:
+                self._apply_text_decoration_style_to_run(
+                    run=run,
+                    text_decoration_style=decorations['line_style'],
+                )
+
+            if decorations['color'] and 'text-decoration-color' not in span_styles:
+                self._apply_text_decoration_color_to_run(
+                    run=run,
+                    text_decoration_color=decorations['color'],
+                )
 
     def _apply_text_decoration_to_run(self, **kwargs):
         run = kwargs['run']
         text_decoration = kwargs['text_decoration']
 
-        decorations = text_decoration.split()
+        if not text_decoration:
+            return
 
-        for decoration in decorations:
-            if decoration in ('underline', 'overline', 'line-through', 'blink'):
-                if decoration == 'underline':
-                    run.font.underline = True
-                elif decoration == 'line-through':
-                    run.font.strike = True
-                else:
-                    logging.warning(f"Warning: Unsupported text decoration '{decoration}'")
+        decorations = self._parse_text_decoration(text_decoration)
+        if decorations['line_type']:
+            self._apply_text_decoration_line_to_run(
+                run=run,
+                text_decoration_line=decorations['line_type'],
+            )
 
-            elif decoration == 'none':
+        if decorations['line_style']:
+            self._apply_text_decoration_style_to_run(
+                run=run,
+                text_decoration_style=decorations['line_style'],
+            )
+
+        if decorations['color']:
+            self._apply_text_decoration_color_to_run(
+                run=run,
+                text_decoration_color=decorations['color'],
+            )
+
+    def _apply_text_decoration_line_to_run(self, **kwargs):
+        run = kwargs['run']
+        text_decoration_line = kwargs['text_decoration_line']
+
+        if text_decoration_line in constants.FONT_UNDERLINE:
+            if text_decoration_line == 'underline':
+                run.font.underline = True
+                run.font.strike = False
+            elif text_decoration_line == 'line-through':
+                run.font.strike = True
                 run.font.underline = False
+        elif text_decoration_line == 'none':
+            run.font.underline = False
+            run.font.strike = False
+        else:
+            logging.warning(f"Warning: Unsupported text decoration '{text_decoration_line}'")
 
-            elif decoration in ('solid', 'double', 'dotted', 'dashed', 'wavy'):
-                if run.font.underline:
-                    if decoration == 'double':
-                        run.font.underline = WD_UNDERLINE.DOUBLE
-                    elif decoration == 'dotted':
-                        run.font.underline = WD_UNDERLINE.DOTTED
-                    elif decoration == 'dashed':
-                        run.font.underline = WD_UNDERLINE.DASH
-                    elif decoration == 'wavy':
-                        run.font.underline = WD_UNDERLINE.WAVY
+    def _apply_text_decoration_style_to_run(self, **kwargs):
+        run = kwargs['run']
+        text_decoration_style = kwargs['text_decoration_style']
+        if not text_decoration_style or run.font.underline is False:
+            return False
 
-                    # 'solid' is the default, no change needed
+        should_apply = False
+        if run.font.underline:
+            should_apply = True
+        elif hasattr(self.paragraph, '_pending_styles'):
+            for pending_style in self.paragraph._pending_styles:
+                if 'text-decoration' in pending_style or 'text-decoration-line' in pending_style:
+                    should_apply = True
+                    break
 
-        # Note: Check if adding color support is possible.
+        if not should_apply:
+            return False
+        try:
+            run.font.underline = constants.FONT_UNDERLINE_STYLES[text_decoration_style]
+        except KeyError:
+            logging.warning(f"Warning: Style not recognized'{text_decoration_style}', defaulting to single line.")
+
+        # Mark that we applied a text-decoration style by adding text-decoration-line to span_styles
+        paragraph_id = id(self.paragraph)
+        run_index = len(self.paragraph.runs) - 1
+        if paragraph_id in self.paragraph_span_styles and run_index in self.paragraph_span_styles[paragraph_id]:
+            self.paragraph_span_styles[paragraph_id][run_index].add('text-decoration-line')
+        return True
+
+    def _apply_text_decoration_color_to_run(self, **kwargs):
+        run = kwargs['run']
+        text_decoration_color = kwargs['text_decoration_color']
+
+        if not text_decoration_color or not utils.is_color(text_decoration_color):
+            return
+
+        color_hex = utils.parse_color(text_decoration_color, return_hex=True)
+        rPr = run._r.get_or_add_rPr()
+        u = rPr.find(qn('w:u'))
+        if u is not None:
+            u.set(qn('w:color'), color_hex.upper())
 
     def _apply_background_color_paragraph(self, **kwargs):
         paragraph = kwargs['paragraph']
@@ -660,28 +808,23 @@ class HtmlToDocx(HTMLParser):
             if not color_hex:
                 return
 
-            # Apply to PARAGRAPH
-            from docx.oxml.shared import qn
-            from docx.oxml import OxmlElement
+            paragraph_id = id(paragraph)
+            paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
 
-            shd = OxmlElement('w:shd')
-            shd.set(qn('w:val'), 'clear')
-            shd.set(qn('w:color'), 'auto')
-            shd.set(qn('w:fill'), color_hex.lstrip('#'))
-
-            # Apply to paragraph properties
-            p_pr = paragraph._element.get_or_add_pPr()
-
-            existing_shd = p_pr.find(qn('w:shd'))
-            if existing_shd is not None:
-                p_pr.remove(existing_shd)
-
-            p_pr.append(shd)
+            for i, run in enumerate(paragraph.runs):
+                if i in paragraph_spans and 'background-color' in paragraph_spans[i]:
+                    continue
+                self._apply_background_color_to_run(
+                    run=run,
+                    background_color=background_color,
+                )
 
         except Exception as e:
             logging.warning(f"Could not apply background-color to paragraph: {e}")
 
-    def _apply_background_color_to_run(self, run, background_color):
+    def _apply_background_color_to_run(self, **kwargs):
+        run = kwargs['run']
+        background_color = kwargs['background_color']
         try:
             if background_color in ('inherit', 'initial'):
                 return
@@ -692,9 +835,6 @@ class HtmlToDocx(HTMLParser):
             color_hex = utils.parse_color(background_color, return_hex=True)
             if not color_hex:
                 return
-
-            from docx.oxml.shared import qn
-            from docx.oxml import OxmlElement
 
             shd = OxmlElement('w:shd')
             shd.set(qn('w:val'), 'clear')
@@ -787,22 +927,22 @@ class HtmlToDocx(HTMLParser):
             self.run.font.color.rgb = RGBColor(*colors)
 
         if 'background-color' in style:
-            # color = utils.parse_color(style['background-color'], return_hex=True)
-            self._apply_background_color_to_run(self.run, style['background-color'])
-
+            # This should stay here for div.
             # Little trick to apply background-color to paragraph
             # because `self.run.font.highlight_color`
             # has a very limited amount of colors
-            # shd = OxmlElement('w:shd')
-            # shd.set(qn('w:val'), 'clear')
-            # shd.set(qn('w:color'), 'auto')
-            # shd.set(qn('w:fill'), color.lstrip('#'))
-            #
-            # # Make sure the paragraph styling element exists
-            # self.paragraph.paragraph_format.element.get_or_add_pPr()
-            #
-            # # Append the shading element
-            # self.paragraph.paragraph_format.element.pPr.append(shd)
+            color = utils.parse_color(style['background-color'], return_hex=True)
+
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:val'), 'clear')
+            shd.set(qn('w:color'), 'auto')
+            shd.set(qn('w:fill'), color.lstrip('#'))
+
+            # Make sure the paragraph styling element exists
+            self.paragraph.paragraph_format.element.get_or_add_pPr()
+
+            # Append the shading element
+            self.paragraph.paragraph_format.element.pPr.append(shd)
 
     def handle_li(self):
         '''
@@ -1172,9 +1312,14 @@ class HtmlToDocx(HTMLParser):
         if not self.include_styles:
             return
 
-        if 'style' in current_attrs and self.paragraph:
+        if 'style' in current_attrs and self.paragraph and (tag in ['p'] or re.match(r'h[1-9]', tag)):
+            if not hasattr(self.paragraph, '_pending_styles'):
+                self.paragraph._pending_styles = []
             style = utils.parse_dict_string(current_attrs['style'])
-            self.apply_styles_to_paragraph(self.paragraph, style, True)
+            self.paragraph._pending_styles.append(style)
+        elif 'style' in current_attrs and self.paragraph:
+            style = utils.parse_dict_string(current_attrs['style'])
+            self.add_text_align_or_margin_to(self.paragraph.paragraph_format, style)
 
     def handle_endtag(self, tag):
         if self.skip:
@@ -1206,6 +1351,13 @@ class HtmlToDocx(HTMLParser):
                 self.paragraph = None
         elif tag == 'li':
             self.in_li = False
+
+        if tag in ['p', 'pre'] or re.match(r'h[1-9]', tag):
+            if hasattr(self.paragraph, '_pending_styles'):
+                for style in self.paragraph._pending_styles:
+                    self.apply_styles_to_paragraph(self.paragraph, style)
+                # Clear the pending styles
+                del self.paragraph._pending_styles
 
         if tag in self.tags:
             self.tags.pop(tag)
@@ -1252,11 +1404,7 @@ class HtmlToDocx(HTMLParser):
                 font_name = constants.FONT_NAMES[tag]
                 self.run.font.name = font_name
 
-            if 'style' in attrs and (tag in ['p']):
-                style = utils.parse_dict_string(attrs['style'])
-                self.apply_styles_to_paragraph(self.paragraph, style)
-
-            if 'style' in attrs and (tag in ['div', 'li', 'pre'] or re.match(r'h[1-9]', tag)):
+            if 'style' in attrs and (tag in ['div', 'li', 'pre']):
                 style = utils.parse_dict_string(attrs['style'])
                 self.add_styles_to_run(style)
 
