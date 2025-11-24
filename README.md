@@ -56,6 +56,28 @@ parser.save('your_file_name.docx')
 
 When you pass a `Document` object, you can either use `document.save()` from python-docx or `parser.save()` from html4docx, both works well.
 
+Both supports saving it in-memory, using `BytesIO`.
+
+```python
+from io import BytesIO
+from docx import Document
+from html4docx import HtmlToDocx
+
+buffer = BytesIO()
+document = Document()
+parser = HtmlToDocx()
+
+html_string = '<h1>Hello world</h1>'
+parser.add_html_to_document(html_string, document)
+
+# Save the document to the in-memory buffer
+parser.save(buffer)
+
+# If you need to read from the buffer again after saving,
+# you might need to reset its position to the beginning
+buffer.seek(0)
+```
+
 #### Convert files directly
 
 ```python
@@ -98,22 +120,24 @@ All table styles we support can be found [here](https://python-docx.readthedocs.
 
 #### Options
 
-There is 4 options that you can use to personalize your execution:
+There is 5 options that you can use to personalize your execution:
 - Disable Images: Ignore all images.
 - Disable Tables: If you do it, it will render just the raw tables content
 - Disable Styles: Ignore all CSS styles.
 - Disable Fix-HTML: Use BeautifulSoap to Fix possible HTML missing tags.
+- Disable HTML-Comments: Ignore all "<!-- ... -->" comments from HTML.
 
-This is how you could disable them if you want **(By default, is all True)**:
+This is how you could disable them if you want:
 
 ```python
 from html4docx import HtmlToDocx
 
 parser = HtmlToDocx()
-parser.options['images'] = False
-parser.options['tables'] = False
-parser.options['styles'] = False
-parser.options['fix-html'] = False
+parser.options['images'] = False # Default True
+parser.options['tables'] = False # Default True
+parser.options['styles'] = False # Default True
+parser.options['fix-html'] = False # Default True
+parser.options['html-comments'] = False # Default False
 docx = parser.parse_html_string(input_html_file_string)
 ```
 
@@ -159,6 +183,8 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Fix `background-color` not working | [Dfop02](https://github.com/dfop02)
 - Fix crashes when img or bookmark is created without paragraph | [Dfop02](https://github.com/dfop02)
 - Fix Ordered and Unordered Lists | [TaylorN15](https://github.com/TaylorN15) from [PR](https://github.com/dfop02/html4docx/pull/16)
+- Fixed styles was only being applied to span tag. | [Dfop02](https://github.com/dfop02) from [PR](https://github.com/dfop02/html4docx/issues/40)
+- Fixed bug on styles parsing when style contains multiple colon. | [Dfop02](https://github.com/dfop02)
 
 **New Features**
 - Add Witdh/Height style to images | [maifeeulasad](https://github.com/maifeeulasad) from [PR](https://github.com/pqzx/html2docx/pull/29)

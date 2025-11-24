@@ -3,6 +3,22 @@
 Release History
 ---------------
 
+1.1.1 (2025-11-xx)
+++++++++++++++++++
+
+**Updates**
+
+- Fix Pypi Workflow.
+
+**Fixes**
+
+- None
+
+**New Features**
+
+- Add support for HTML Comments. | [Dfop02](https://github.com/dfop02)
+
+
 1.1.0 (2025-11-01)
 ++++++++++++++++++
 
