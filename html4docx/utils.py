@@ -20,6 +20,10 @@ class ImageAlignment(Enum):
 def get_filename_from_url(url: str):
     return os.path.basename(urlparse(url).path)
 
+def dict_to_style_string(style_dict):
+    """Convert style dictionary back to CSS string"""
+    return '; '.join([f'{k}: {v}' for k, v in style_dict.items()])
+
 def is_url(url: str):
     """
     Not to be used for actually validating a url, but in our use case we only

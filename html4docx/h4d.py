@@ -1395,10 +1395,19 @@ class HtmlToDocx(HTMLParser):
 
         for span in self.tags['span']:
             if 'style' in span:
-                style = utils.parse_dict_string(span['style'])
-                self.apply_styles_to_run(self.run, style)
+                span_style = utils.parse_dict_string(span['style'])
+                self.apply_styles_to_run(self.run, span_style)
 
-        # add font style and name
+                for tag, attrs in self.tags.items():
+                    if tag == 'div' and 'style' in attrs:
+                        div_style = utils.parse_dict_string(attrs['style'])
+
+                        for span_style_name in span_style.keys():
+                            if span_style_name in div_style:
+                                del div_style[span_style_name]
+
+                        self.tags[tag]['style'] = utils.dict_to_style_string(div_style)
+
         for tag, attrs in self.tags.items():
             if tag in constants.FONT_STYLES:
                 font_style = constants.FONT_STYLES[tag]
