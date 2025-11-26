@@ -646,8 +646,8 @@ and blank lines.
         p9_shorthand = document.paragraphs[9]   # Shorthand
 
         # Both should have the same text decoration applied
-        assert p8_individual.runs[0].font.underline is WD_UNDERLINE.WAVY
-        assert p9_shorthand.runs[0].font.underline is WD_UNDERLINE.WAVY
+        assert p8_individual.runs[0].font.underline == WD_UNDERLINE.WAVY
+        assert p9_shorthand.runs[0].font.underline == WD_UNDERLINE.WAVY
 
         # Both paragraphs should have the same text
         assert p8_individual.text == "Blue underlined paragraph"
