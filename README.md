@@ -185,6 +185,7 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Fix Ordered and Unordered Lists | [TaylorN15](https://github.com/TaylorN15) from [PR](https://github.com/dfop02/html4docx/pull/16)
 - Fixed styles was only being applied to span tag. | [Dfop02](https://github.com/dfop02) from [PR](https://github.com/dfop02/html4docx/issues/40)
 - Fixed bug on styles parsing when style contains multiple colon. | [Dfop02](https://github.com/dfop02)
+- Fixed highlighting a single word | [Lynuxen](https://github.com/Lynuxen)
 
 **New Features**
 - Add Witdh/Height style to images | [maifeeulasad](https://github.com/maifeeulasad) from [PR](https://github.com/pqzx/html2docx/pull/29)
@@ -202,6 +203,7 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Add support to table cells style (border, background-color, width, height, margin) | [Dfop02](https://github.com/dfop02)
 - Being able to use inline images on same paragraph. | [Dfop02](https://github.com/dfop02)
 - Refactory Tests to be more consistent and less 'human validation' | [Dfop02](https://github.com/dfop02)
+- Support for common CSS properties for text | [Lynuxen](https://github.com/Lynuxen)
 
 ## Known Issues
 

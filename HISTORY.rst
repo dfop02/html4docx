@@ -9,14 +9,26 @@ Release History
 **Updates**
 
 - Fix Pypi Workflow.
+- [`PR #48 <https://github.com/dfop02/html4docx/pull/48>`_] Add support for common CSS properties on text for: <h>, <p> and <span> | `Lynuxen <https://github.com/Lynuxen>`_
 
 **Fixes**
 
-- None
+- Fixes `#46 <https://github.com/dfop02/html4docx/issues/46>`_: background-color style property highlights the whole paragraph instead of a single word
+- Fixes `#47 <https://github.com/dfop02/html4docx/issues/47>`_: text-decoration style property for underline is not applied
 
 **New Features**
 
 - Add support for HTML Comments. | [Dfop02](https://github.com/dfop02)
+- Add support for text-align,line-height, margin-left, margin-right, text-indent for paragraphs
+- Add support for the following text properties (applies to \<span\>, \<p\> and \<h\> tags):
+    - font-weight: ('bold', 'bolder', '700', '800', '900', 'normal', 'lighter', '400', '300', '100')
+    - font-style: ('italic', 'oblique', 'normal'')
+    - text-decoration: ('underline', 'line-through') ('solid', 'double', 'dotted', 'dashed', 'wavy'), and the longhand properties (text-decoration-*)
+    - text-transform: ('uppercase', 'lowercase', 'capitalize')
+    - font-size
+    - font-family
+    - color
+    - background-color: Paragraph and run highlight colors can now differ. Partial support on what can be used as a color.
 
 
 1.1.0 (2025-11-01)
