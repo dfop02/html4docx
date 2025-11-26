@@ -1362,6 +1362,7 @@ class HtmlToDocx(HTMLParser):
                     self.apply_styles_to_paragraph(self.paragraph, style)
                 # Clear the pending styles
                 del self.paragraph._pending_styles
+            self.paragraph_span_styles.clear()
 
         if tag in self.tags:
             self.tags.pop(tag)
