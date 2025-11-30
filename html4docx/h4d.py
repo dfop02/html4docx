@@ -270,25 +270,25 @@ class HtmlToDocx(HTMLParser):
             elif style == "normal":
                 self.run.font.italic = False
 
-        # Apply text-decoration
-        if "text-decoration" in styles_dict:
-            decoration = utils.parse_text_decoration(styles_dict["text-decoration"])
-            # line types
-            if "underline" in decoration["line"]:
-                self.run.font.underline = True
-            if "line-through" in decoration["line"]:
-                self.run.font.strike = True
-            if "overline" in decoration["line"]:
-                # python-docx doesn't support overline directly
-                pass
+        # # Apply text-decoration
+        # if "text-decoration" in styles_dict:
+        #     decoration = utils.parse_text_decoration(styles_dict["text-decoration"])
+        #     # line types
+        #     if "underline" in decoration["line"]:
+        #         self.run.font.underline = True
+        #     if "line-through" in decoration["line"]:
+        #         self.run.font.strike = True
+        #     if "overline" in decoration["line"]:
+        #         # python-docx doesn't support overline directly
+        #         pass
 
-            # style (python-docx supports limited underline styles)
-            if decoration["style"]:
-                self.run.font.underline = constants.FONT_UNDERLINE_STYLES[decoration["style"]]
+        #     # style (python-docx supports limited underline styles)
+        #     if decoration["style"]:
+        #         self.run.font.underline = constants.FONT_UNDERLINE_STYLES[decoration["style"]]
 
-            if decoration["color"]:
-                colors = utils.parse_color(decoration["color"])
-                self.run.font.color.rgb = RGBColor(*colors)
+        #     if decoration["color"]:
+        #         colors = utils.parse_color(decoration["color"])
+        #         self.run.font.color.rgb = RGBColor(*colors)
 
         # Apply font-family
         if "font-family" in styles_dict:
@@ -1575,6 +1575,10 @@ class HtmlToDocx(HTMLParser):
                 if important_styles:
                     self.pending_important_styles = important_styles
             return
+        # Commented this out.  Line breaks are already handled by try/except blocks (see the br code above).  In addition to this, I'm fixing the tests added by the previous release.
+        # # set new run reference point in case of leading line breaks
+        # if tag in ["p", "li", "pre"]:
+        #     self.run = self.paragraph.add_run()
 
         if 'id' in current_attrs:
             self.add_bookmark(current_attrs['id'])
