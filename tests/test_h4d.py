@@ -1,3 +1,4 @@
+import sys
 import os
 from io import BytesIO
 from pathlib import Path
@@ -6,6 +7,9 @@ from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.oxml.ns import qn
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_UNDERLINE
+
+sys.path.insert(0, 'D:\\Dropbox\\Projects\\Pyton\\hml4docx')
+
 from html4docx import HtmlToDocx
 from html4docx.utils import unit_converter, parse_color
 from html4docx.colors import Color

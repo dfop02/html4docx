@@ -302,3 +302,41 @@ def check_style_exists(document, style_name):
         return style_name in document.styles
     except Exception:
         return False
+
+
+def parse_text_decoration(value: str):
+    """
+    Parses a CSS text-decoration shorthand value.
+
+    Returns:
+        {
+            "line": ["underline", "line-through", "overline"],
+            "style": "wavy" | "dotted" | "double" | "dashed" | "solid",
+            "color": "blue" | "#hex" | "rgb(...)" | None,
+            "thickness": "2px" | None
+        }
+    """
+    value = value.strip().lower()
+
+    result = {"line": [], "style": None, "color": None, "thickness": None}
+
+    tokens = value.split()
+
+    line_types = {"underline", "overline", "line-through"}
+    style_types = {"solid", "double", "dotted", "dashed", "wavy"}
+
+    color_regex = re.compile(r"^(#[0-9a-f]{3,8}|rgb\(.*?\)|rgba\(.*?\)|[a-z]+)$")
+
+    thickness_regex = re.compile(r"^\d+(px|pt)$")
+
+    for token in tokens:
+        if token in line_types:
+            result["line"].append(token)
+        elif token in style_types:
+            result["style"] = token
+        elif color_regex.match(token):
+            result["color"] = token
+        elif thickness_regex.match(token):
+            result["thickness"] = token
+
+    return result
