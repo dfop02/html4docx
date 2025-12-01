@@ -25,14 +25,17 @@ class HtmlToDocx(HTMLParser):
         Class to convert HTML to Docx
         source: https://docs.python.org/3/library/html.parser.html
     """
-    def __init__(self):
+    def __init__(self, style_map=None, tag_style_overrides=None, default_paragraph_style="Normal"):
         super().__init__()
         self.options = dict(constants.DEFAULT_OPTIONS)
         self.table_row_selectors = constants.DEFAULT_TABLE_ROW_SELECTORS
         self.table_style = constants.DEFAULT_TABLE_STYLE
         self.paragraph_span_styles = {}  # paragraph_id -> set(run_indices)
+        self.style_map = style_map or constants.DEFAULT_STYLE_MAP
+        self.tag_style_overrides = tag_style_overrides or constants.DEFAULT_TAG_OVERRIDES
+        self.default_paragraph_style = default_paragraph_style or constants.DEFAULT_PARAGRAPH_STYLE
 
-    def set_initial_attrs(self, document = None):
+    def set_initial_attrs(self, document=None):
         self.tags = {
             'span': [],
             'list': [],
@@ -49,6 +52,16 @@ class HtmlToDocx(HTMLParser):
         self.list_restart_counter = 0
         self.current_ol_num_id = None
         self._list_num_ids = {}
+
+        # NEW: Set style map & tag overrides according to options
+
+        self.use_styles = False if self.options["styles"] is False else self.options["style-map"]
+        self.use_tag_overrides = self.options["tag-override"]
+        # NEW: Style tracking variables
+        self.pending_div_style = None
+        self.pending_character_style = None
+        self.pending_inline_styles = None
+        self.pending_important_styles = None
 
     @property
     def metadata(self) -> dict[str, any]:
@@ -72,6 +85,14 @@ class HtmlToDocx(HTMLParser):
     def include_html_comments(self) -> bool:
         return self.options.get('html-comments', False)
 
+    @property
+    def include_stylemap(self) -> bool:
+        return self.options.get("style-map", True)
+
+    @property
+    def include_tagoverrides(self) -> bool:
+        return self.options.get("tag-override", True)
+
     def save(self, destination) -> None:
         """Save the document to a file path or BytesIO object."""
         if isinstance(destination, str):
@@ -85,6 +106,196 @@ class HtmlToDocx(HTMLParser):
     def copy_settings_from(self, other):
         """Copy settings from another instance of HtmlToDocx"""
         self.table_style = other.table_style
+
+        # NEW: Copy extended settings if present
+        if hasattr(other, "style_map"):
+            self.style_map = other.style_map
+            self.tag_style_overrides = other.tag_style_overrides
+            self.default_paragraph_style = other.default_paragraph_style
+
+    def get_word_style_for_element(self, tag, attrs):
+        """
+            Determine the Word style to use for an HTML element.
+
+            Priority order:
+            1. CSS class from style_map (if present)
+            2. Tag override from tag_style_overrides
+            3. Default behavior
+
+            Args:
+            tag: HTML tag name (e.g., 'h1', 'p', 'div')
+            attrs: Dictionary of HTML attributes
+
+        Returns:
+            str or None: Word style name to apply, or None for default behavior
+        """
+        # Priority 1: Check if element has a class attribute mapped in style_map
+        if "class" in attrs:
+            # html class can be multiple classes separated by space
+            classes = attrs["class"].split()
+            for cls in classes:
+                if cls in self.style_map:
+                    return self.style_map[cls]
+        # Priority 2, tag override
+        if tag in self.tag_style_overrides:
+            return self.tag_style_overrides[tag]
+
+        # Priority 3, default behavior.
+        return None
+
+    def apply_style_to_paragraph(self, paragraph, style_name):
+        """
+        Apply a Word style to a paragraph by style name.
+
+        Args:
+            paragraph: python-docx Paragraph object
+            style_name (str): Name of the Word style to apply
+
+        Returns:
+            bool: True if style was applied successfully, False otherwise
+        """
+        try:
+            paragraph.style = style_name
+            return True
+        except KeyError:
+            # Style doesn't exist in document
+            print(
+                f"Warning: Style '{style_name}' not found in document. Using default."
+            )
+            return False
+
+    def apply_style_to_run(self, style_name):
+        """
+        Apply a Word character style to a run by style name.
+
+        Args:
+            run: python-docx Run object
+            style_name (str): Name of the Word character style to apply
+
+        Returns:
+            bool: True if style was applied successfully, False otherwise
+        """
+        try:
+            self.run.style = style_name
+            return True
+        except KeyError:
+            print(f"Warning: Character style '{style_name}' not found in document.")
+            return False
+        except ValueError as e:
+            if "need type CHARACTER" in str(e):
+                print(
+                    f"Warning: '{style_name}' is a paragraph style, not a character style."
+                )
+                print(
+                    "For inline elements like <code>, please create a character style in Word."
+                )
+            return False
+
+    def parse_inline_styles(self, style_string):
+        """
+        Parse inline CSS styles and separate normal styles from !important ones.
+
+        Args:
+            style_string (str): CSS style string (e.g., "color: red; font-size: 12px !important")
+
+        Returns:
+            tuple: (normal_styles dict, important_styles dict)
+        """
+        normal_styles = {}
+        important_styles = {}
+
+        if not style_string:
+            return normal_styles, important_styles
+
+        # Parse style string into individual declarations
+        style_dict = utils.parse_dict_string(style_string)
+
+        for prop, value in style_dict.items():
+            # Check if value has !important flag
+            if "!important" in value.lower():
+                # Remove !important flag and store in important_styles
+                clean_value = re.sub(
+                    r"\s*!important\s*", "", value, flags=re.IGNORECASE
+                ).strip()
+                important_styles[prop] = clean_value
+            else:
+                normal_styles[prop] = value
+
+        return normal_styles, important_styles
+
+    def apply_inline_styles_to_run(self, styles_dict):
+        """
+        Apply inline CSS styles to a run.
+
+        Supports: color, background-color, font-size, font-weight, font-style,
+                text-decoration, font-family
+
+        Args:
+            run: python-docx Run object
+            styles_dict: Dictionary of CSS properties and values
+        """
+        if not styles_dict:
+            return
+
+        # Apply color
+        if "color" in styles_dict:
+            try:
+                colors = utils.parse_color(styles_dict["color"])
+                self.run.font.color.rgb = RGBColor(*colors)
+            except:
+                pass
+
+        # Apply font-size
+        if "font-size" in styles_dict:
+            try:
+                font_size = utils.adapt_font_size(styles_dict["font-size"])
+                if font_size:
+                    self.run.font.size = utils.unit_converter(font_size)
+            except:
+                pass
+
+        # Apply font-weight (bold)
+        if "font-weight" in styles_dict:
+            weight = styles_dict["font-weight"].lower()
+            if weight in ["bold", "bolder", "700", "800", "900"]:
+                self.run.font.bold = True
+            elif weight in ["normal", "400"]:
+                self.run.font.bold = False
+
+        # Apply font-style (italic)
+        if "font-style" in styles_dict:
+            style = styles_dict["font-style"].lower()
+            if style == "italic" or style == "oblique":
+                self.run.font.italic = True
+            elif style == "normal":
+                self.run.font.italic = False
+
+        # # Apply text-decoration
+        # if "text-decoration" in styles_dict:
+        #     decoration = utils.parse_text_decoration(styles_dict["text-decoration"])
+        #     # line types
+        #     if "underline" in decoration["line"]:
+        #         self.run.font.underline = True
+        #     if "line-through" in decoration["line"]:
+        #         self.run.font.strike = True
+        #     if "overline" in decoration["line"]:
+        #         # python-docx doesn't support overline directly
+        #         pass
+
+        #     # style (python-docx supports limited underline styles)
+        #     if decoration["style"]:
+        #         self.run.font.underline = constants.FONT_UNDERLINE_STYLES[decoration["style"]]
+
+        #     if decoration["color"]:
+        #         colors = utils.parse_color(decoration["color"])
+        #         self.run.font.color.rgb = RGBColor(*colors)
+
+        # Apply font-family
+        if "font-family" in styles_dict:
+            font_family = (
+                styles_dict["font-family"].split(",")[0].strip().strip('"').strip("'")
+            )
+            self.run.font.name = font_family
 
     def get_cell_html(self, soup):
         """
@@ -648,7 +859,6 @@ class HtmlToDocx(HTMLParser):
                 result['line_style'] = None
                 logging.warning(
                     f"Blink or overline not supported.")
-
 
         if result['line_type'] == 'line-through' and result['color'] is not None:
             logging.warning(
@@ -1254,6 +1464,17 @@ class HtmlToDocx(HTMLParser):
         current_attrs = dict(attrs)
 
         if tag == 'span':
+            # Parse inline styles if present to check for !important
+            if "style" in current_attrs:
+                normal_styles, important_styles = self.parse_inline_styles(
+                    current_attrs["style"]
+                )
+                # Store normal styles to apply to runs
+                if normal_styles:
+                    self.pending_inline_styles = normal_styles
+                # Store important styles to apply after parent's processing
+                if important_styles:
+                    self.pending_important_styles = important_styles
             self.tags['span'].append(current_attrs)
             return
         elif tag in ['ol', 'ul']:
@@ -1276,22 +1497,62 @@ class HtmlToDocx(HTMLParser):
             return
 
         self.tags[tag] = current_attrs
-        if tag in ['p', 'pre']:
+
+        # Control custom_style based on the Options.  Default is True on both.
+        custom_style = (
+            self.get_word_style_for_element(tag, current_attrs)
+            if (self.use_styles or self.use_tag_overrides)
+            else None
+        )
+
+        if custom_style:
+            valid_style = utils.check_style_exists(self.doc, custom_style)
+            if not valid_style:
+                custom_style = None
+
+        if tag in ["p", "pre"]:
             if not self.in_li:
                 self.paragraph = self.doc.add_paragraph()
+                style_to_apply = self.pending_div_style or custom_style or self.default_paragraph_style
+                if style_to_apply:
+                    self.apply_style_to_paragraph(self.paragraph, style_to_apply)
+                # DON'T clear pending_div_style here - it should persist for all child paragraphs
+                # It will be cleared when the div closes in handle_endtag
 
+            # Parse inline styles on the paragraph itself to apply to runs within
+            if "style" in current_attrs:
+                normal_styles, important_styles = self.parse_inline_styles(
+                    current_attrs["style"]
+                )
+                if normal_styles:
+                    self.pending_inline_styles = normal_styles
+                if important_styles:
+                    self.pending_important_styles = important_styles
+        elif tag == "div":
+            if custom_style and not self.in_li:
+                self.pending_div_style = custom_style
+            else:
+                self.handle_div(current_attrs)
         elif tag == 'li':
             self.handle_li()
+            if custom_style and self.paragraph:
+                self.apply_style_to_paragraph(self.paragraph, custom_style)
 
         elif tag == 'hr':
             self.handle_hr()
 
         elif re.match('h[1-9]', tag):
             if isinstance(self.doc, docx.document.Document):
-                h_size = int(tag[1])
-                self.paragraph = self.doc.add_heading(level=min(h_size, 9))
+                if custom_style:
+                    self.paragraph = self.doc.add_paragraph()
+                    self.apply_style_to_paragraph(self.paragraph, custom_style)
+                else:
+                    h_size = int(tag[1])
+                    self.paragraph = self.doc.add_heading(level=min(h_size, 9))
             else:
                 self.paragraph = self.doc.add_paragraph()
+                if custom_style:
+                    self.apply_style_to_paragraph(self.paragraph, custom_style)
 
         elif tag == 'img':
             self.handle_img(current_attrs)
@@ -1302,12 +1563,22 @@ class HtmlToDocx(HTMLParser):
                 self.handle_table(current_attrs)
                 return
 
-        elif tag == 'div':
-            self.handle_div(current_attrs)
-
-        # set new run reference point in case of leading line breaks
-        if tag in ['p', 'li', 'pre']:
-            self.run = self.paragraph.add_run()
+        elif tag == "code":
+            if custom_style:
+                self.pending_character_style = custom_style
+            if "style" in current_attrs:
+                normal_styles, important_styles = self.parse_inline_styles(
+                    current_attrs["style"]
+                )
+                if normal_styles:
+                    self.pending_inline_styles = normal_styles
+                if important_styles:
+                    self.pending_important_styles = important_styles
+            return
+        # Commented this out.  Line breaks are already handled by try/except blocks (see the br code above).  In addition to this, I'm fixing the tests added by the previous release.
+        # # set new run reference point in case of leading line breaks
+        # if tag in ["p", "li", "pre"]:
+        #     self.run = self.paragraph.add_run()
 
         if 'id' in current_attrs:
             self.add_bookmark(current_attrs['id'])
@@ -1326,6 +1597,25 @@ class HtmlToDocx(HTMLParser):
             self.add_text_align_or_margin_to(self.paragraph.paragraph_format, style)
 
     def handle_endtag(self, tag):
+        # Clear pending character style and inline styles when closing inline elements
+        if tag == "code":
+            self.pending_character_style = None
+            self.pending_inline_styles = None
+            self.pending_important_styles = None
+
+        # Clear important styles when closing span
+        if tag == "span":
+            self.pending_important_styles = None
+
+        # Clear pending div style when closing a div
+        if tag == "div":
+            self.pending_div_style = None
+
+        # Clear pending inline styles when closing paragraph elements
+        if tag in ["p", "pre"]:
+            self.pending_inline_styles = None
+            self.pending_important_styles = None
+
         if self.skip:
             if not tag == self.skip_tag:
                 return
