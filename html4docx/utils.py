@@ -303,40 +303,63 @@ def check_style_exists(document, style_name):
     except Exception:
         return False
 
+# Moved from h4d.py to here.... was _parse_text_decoration
+def parse_text_decoration(text_decoration):
+    """Parse text-decoration using regex to preserve color values."""
+    # Pattern to match color values (rgb, hex, named colors) or other tokens
+    pattern = r"rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)|#[\da-fA-F]+|[\w-]+"
 
-def parse_text_decoration(value: str):
-    """
-    Parses a CSS text-decoration shorthand value.
+    tokens = re.findall(pattern, text_decoration)
 
-    Returns:
-        {
-            "line": ["underline", "line-through", "overline"],
-            "style": "wavy" | "dotted" | "double" | "dashed" | "solid",
-            "color": "blue" | "#hex" | "rgb(...)" | None,
-            "thickness": "2px" | None
-        }
-    """
-    value = value.strip().lower()
-
-    result = {"line": [], "style": None, "color": None, "thickness": None}
-
-    tokens = value.split()
-
-    line_types = {"underline", "overline", "line-through"}
-    style_types = {"solid", "double", "dotted", "dashed", "wavy"}
-
-    color_regex = re.compile(r"^(#[0-9a-f]{3,8}|rgb\(.*?\)|rgba\(.*?\)|[a-z]+)$")
-
-    thickness_regex = re.compile(r"^\d+(px|pt)$")
+    result = {"line_type": None, "line_style": "solid", "color": None}
 
     for token in tokens:
-        if token in line_types:
-            result["line"].append(token)
-        elif token in style_types:
-            result["style"] = token
-        elif color_regex.match(token):
+        if token in constants.FONT_UNDERLINE:
+            result["line_type"] = token
+        elif token == "none":
+            result["line_type"] = "none"
+        elif token in constants.FONT_UNDERLINE_STYLES:
+            result["line_style"] = token
+        elif utils.is_color(token):
             result["color"] = token
-        elif thickness_regex.match(token):
-            result["thickness"] = token
+        elif token in ("blink", "overline"):
+            result["line_style"] = None
+            result["line_style"] = None
+            logging.warning(f"Blink or overline not supported.")
 
+    if result["line_type"] == "line-through" and result["color"] is not None:
+        logging.warning(
+            f"Word does not support colored strike-through. Color '{result['color']}' will be ignored for line-through."
+        )
     return result
+
+
+def parse_inline_styles(style_string):
+    """
+    Parse inline CSS styles and separate normal styles from !important ones.
+
+    Args:
+        style_string (str): CSS style string (e.g., "color: red; font-size: 12px !important")
+
+    Returns:
+        tuple: (normal_styles dict, important_styles dict)
+    """
+    normal_styles = {}
+    important_styles = {}
+
+    if not style_string:
+        return normal_styles, important_styles
+
+    # Parse style string into individual declarations
+    style_dict = parse_dict_string(style_string)
+
+    for prop, value in style_dict.items():
+        # Check if value has !important flag
+        if "!important" in value.lower():
+            # Remove !important flag and store in important_styles
+            clean_value = remove_important_from_style(value)
+            important_styles[prop] = clean_value
+        else:
+            normal_styles[prop] = value
+
+    return normal_styles, important_styles

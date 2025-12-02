@@ -20,7 +20,7 @@ Release History
 - Added support for setting default word style for new documents.
 - Added support for "!important" style precedence.   
 
-1.1.1 (2025-11-xx)
+1.1.1 (2025-11-26)
 ++++++++++++++++++
 
 **Updates**
