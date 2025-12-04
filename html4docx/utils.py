@@ -1,4 +1,5 @@
 import base64
+import logging
 import os
 import re
 import urllib
@@ -320,7 +321,7 @@ def parse_text_decoration(text_decoration):
             result["line_type"] = "none"
         elif token in constants.FONT_UNDERLINE_STYLES:
             result["line_style"] = token
-        elif utils.is_color(token):
+        elif is_color(token):
             result["color"] = token
         elif token in ("blink", "overline"):
             result["line_style"] = None
