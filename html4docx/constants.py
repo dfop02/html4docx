@@ -13,7 +13,9 @@ DEFAULT_OPTIONS = {
     'images': True,
     'tables': True,
     'styles': True,
-    'html-comments': False
+    'html-comments': False,
+    "style-map": True,
+    "tag-override": True,
 }
 
 DEFAULT_TABLE_ROW_SELECTORS = [
@@ -62,6 +64,11 @@ FONT_UNDERLINE_STYLES = {
     'wavy': WD_UNDERLINE.WAVY,
     'double': WD_UNDERLINE.DOUBLE,
 }
+
+# NEW DEFAULTS
+DEFAULT_STYLE_MAP = dict()
+DEFAULT_TAG_OVERRIDES = dict()
+DEFAULT_PARAGRAPH_STYLE = "Normal"
 
 STYLES = {
     'ul': 'List Bullet',

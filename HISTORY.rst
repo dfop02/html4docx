@@ -4,20 +4,21 @@ Release History
 ---------------
 
 1.1.2 (2025-12-xx)
-++++++++++++++++++
 
 **Updates**
 
-- None
+- 
 
 **Fixes**
 
-- None
+- 
 
 **New Features**
 
-- None
-
+- Added support for custom css class to word style mappings
+- Added support for html tag to style overrides
+- Added support for setting default word style for new documents.
+- Added support for "!important" style precedence.   
 
 1.1.1 (2025-11-26)
 ++++++++++++++++++
