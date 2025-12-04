@@ -143,6 +143,39 @@ class HtmlToDocx(HTMLParser):
         # Priority 3, default behavior.
         return None
 
+<<<<<<< HEAD
+=======
+    def parse_inline_styles(self, style_string):
+        """
+        Parse inline CSS styles and separate normal styles from !important ones.
+
+        Args:
+            style_string (str): CSS style string (e.g., "color: red; font-size: 12px !important")
+
+        Returns:
+            tuple: (normal_styles dict, important_styles dict)
+        """
+        normal_styles = {}
+        important_styles = {}
+
+        if not style_string:
+            return normal_styles, important_styles
+
+        # Parse style string into individual declarations
+        style_dict = utils.parse_dict_string(style_string)
+
+        for prop, value in style_dict.items():
+            # Check if value has !important flag
+            if "!important" in value.lower():
+                # Remove !important flag and store in important_styles
+                clean_value = utils.remove_important_from_style(value)
+                important_styles[prop] = clean_value
+            else:
+                normal_styles[prop] = value
+
+        return normal_styles, important_styles
+
+>>>>>>> efa1e96d428767fa709df689557a0cb2f2feeea0
     def get_cell_html(self, soup):
         """
         Returns string of td element with opening and closing <td> tags removed
