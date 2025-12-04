@@ -143,8 +143,54 @@ class HtmlToDocx(HTMLParser):
         # Priority 3, default behavior.
         return None
 
-<<<<<<< HEAD
-=======
+    def apply_style_to_paragraph(self, paragraph, style_name):
+        """
+        Apply a Word style to a paragraph by style name.
+
+        Args:
+            paragraph: python-docx Paragraph object
+            style_name (str): Name of the Word style to apply
+
+        Returns:
+            bool: True if style was applied successfully, False otherwise
+        """
+        try:
+            paragraph.style = style_name
+            return True
+        except KeyError:
+            # Style doesn't exist in document
+            print(
+                f"Warning: Style '{style_name}' not found in document. Using default."
+            )
+            return False
+
+    def apply_style_to_run(self, style_name):
+        """
+        Apply a Word character style to a run by style name.
+
+        Args:
+            run: python-docx Run object
+            style_name (str): Name of the Word character style to apply
+
+        Returns:
+            bool: True if style was applied successfully, False otherwise
+        """
+        try:
+            self.run.style = style_name
+            return True
+        except KeyError:
+            print(f"Warning: Character style '{style_name}' not found in document.")
+            return False
+        except ValueError as e:
+            if "need type CHARACTER" in str(e):
+                print(
+                    f"Warning: '{style_name}' is a paragraph style, not a character style."
+                )
+                print(
+                    "For inline elements like <code>, please create a character style in Word."
+                )
+            return False
+
     def parse_inline_styles(self, style_string):
         """
         Parse inline CSS styles and separate normal styles from !important ones.
@@ -175,7 +221,80 @@ class HtmlToDocx(HTMLParser):
 
         return normal_styles, important_styles
 
->>>>>>> efa1e96d428767fa709df689557a0cb2f2feeea0
+    def apply_inline_styles_to_run(self, styles_dict):
+        """
+        Apply inline CSS styles to a run.
+
+        Supports: color, background-color, font-size, font-weight, font-style,
+                text-decoration, font-family
+
+        Args:
+            run: python-docx Run object
+            styles_dict: Dictionary of CSS properties and values
+        """
+        if not styles_dict:
+            return
+
+        # Apply color
+        if "color" in styles_dict:
+            try:
+                colors = utils.parse_color(styles_dict["color"])
+                self.run.font.color.rgb = RGBColor(*colors)
+            except:
+                pass
+
+        # Apply font-size
+        if "font-size" in styles_dict:
+            try:
+                font_size = utils.adapt_font_size(styles_dict["font-size"])
+                if font_size:
+                    self.run.font.size = utils.unit_converter(font_size)
+            except:
+                pass
+
+        # Apply font-weight (bold)
+        if "font-weight" in styles_dict:
+            weight = styles_dict["font-weight"].lower()
+            if weight in ["bold", "bolder", "700", "800", "900"]:
+                self.run.font.bold = True
+            elif weight in ["normal", "400"]:
+                self.run.font.bold = False
+
+        # Apply font-style (italic)
+        if "font-style" in styles_dict:
+            style = styles_dict["font-style"].lower()
+            if style == "italic" or style == "oblique":
+                self.run.font.italic = True
+            elif style == "normal":
+                self.run.font.italic = False
+
+        # # Apply text-decoration
+        # if "text-decoration" in styles_dict:
+        #     decoration = utils.parse_text_decoration(styles_dict["text-decoration"])
+        #     # line types
+        #     if "underline" in decoration["line"]:
+        #         self.run.font.underline = True
+        #     if "line-through" in decoration["line"]:
+        #         self.run.font.strike = True
+        #     if "overline" in decoration["line"]:
+        #         # python-docx doesn't support overline directly
+        #         pass
+
+        #     # style (python-docx supports limited underline styles)
+        #     if decoration["style"]:
+        #         self.run.font.underline = constants.FONT_UNDERLINE_STYLES[decoration["style"]]
+
+        #     if decoration["color"]:
+        #         colors = utils.parse_color(decoration["color"])
+        #         self.run.font.color.rgb = RGBColor(*colors)
+
+        # Apply font-family
+        if "font-family" in styles_dict:
+            font_family = (
+                styles_dict["font-family"].split(",")[0].strip().strip('"').strip("'")
+            )
+            self.run.font.name = font_family
+
     def get_cell_html(self, soup):
         """
         Returns string of td element with opening and closing <td> tags removed
