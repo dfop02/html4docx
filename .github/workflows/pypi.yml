@@ -7,13 +7,95 @@ on:
       - '[0-9]+.[0-9]+.[0-9]*'
 
 jobs:
+  validate-tag:
+    name: Validate tag from main branch
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Verify author permissions
+      run: |
+        AUTHOR_USERNAME="dfop02"
+        ACTOR="${{ github.actor }}"
+
+        echo "Workflow triggered by: $ACTOR"
+        echo "Author username: $AUTHOR_USERNAME"
+
+        if [ "$ACTOR" != "$AUTHOR_USERNAME" ]; then
+          echo "❌ Unauthorized: Only $AUTHOR_USERNAME can trigger this workflow"
+          echo "Current actor: $ACTOR"
+          exit 1
+        fi
+
+        echo "✅ Authorized: $ACTOR is allowed to trigger this workflow"
+
+    - name: Check if tag is from main branch
+      run: |
+        TAG_NAME=${GITHUB_REF#refs/tags/}
+        echo "Tag name: $TAG_NAME"
+
+        # Fetch all branches and tags
+        git fetch origin main
+        git fetch origin --tags
+
+        # Get the commit SHA of the tag
+        TAG_COMMIT=$(git rev-parse $TAG_NAME^{commit})
+        echo "Tag commit: $TAG_COMMIT"
+
+        # Check if the tag commit exists in the main branch
+        if git branch -r --contains $TAG_COMMIT | grep -q "origin/main"; then
+          echo "✅ Tag $TAG_NAME is from main branch"
+        else
+          echo "❌ Tag $TAG_NAME is NOT from main branch"
+          echo "Tag commit $TAG_COMMIT is not in origin/main"
+          exit 1
+        fi
+
+  test:
+    name: Run tests
+    needs: validate-tag
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.ref }}
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements_test.txt ]; then pip install -r requirements_test.txt; fi
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Lint with ruff
+      run: |
+        ruff check . --output-format=concise
+
+    - name: Run tests
+      run: |
+        python -m pytest
+
   build:
     name: Build distribution 📦
+    needs: test
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
       with:
+        ref: ${{ github.ref }}
         persist-credentials: false
 
     - name: Set up Python
@@ -39,8 +121,7 @@ jobs:
 
   publish-to-pypi:
     name: Publish Python 🐍 distribution 📦 to PyPI
-    needs:
-    - build
+    needs: build
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -56,3 +137,29 @@ jobs:
         path: dist/
     - name: Publish distribution 📦 to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
+
+  create-release:
+    name: Create GitHub Release
+    needs: publish-to-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      discussions: write
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Generate release notes and create release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
+        generate_release_notes: true
+        make_latest: true
+        draft: false
+        prerelease: false
+        discussion_category_name: 'Announcements'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

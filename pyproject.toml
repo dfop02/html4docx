@@ -1,0 +1,17 @@
+[tool.ruff]
+line-length = 127
+exclude = [
+    "build",
+    ".git",
+    "html4docx/__init__.py",
+    "setup.py"
+]
+
+[tool.ruff.lint]
+ignore = [
+    "W292",  # no newline at end of file
+    "E261",  # at least two spaces before inline comment
+    "E302",  # expected 2 blank lines
+    "E305",  # expected 2 blank lines after class or function definition
+]
+

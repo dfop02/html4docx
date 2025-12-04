@@ -240,7 +240,7 @@ class HtmlToDocx(HTMLParser):
             try:
                 colors = utils.parse_color(styles_dict["color"])
                 self.run.font.color.rgb = RGBColor(*colors)
-            except:
+            except Exception:
                 pass
 
         # Apply font-size
@@ -249,7 +249,7 @@ class HtmlToDocx(HTMLParser):
                 font_size = utils.adapt_font_size(styles_dict["font-size"])
                 if font_size:
                     self.run.font.size = utils.unit_converter(font_size)
-            except:
+            except Exception:
                 pass
 
         # Apply font-weight (bold)
