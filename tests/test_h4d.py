@@ -1,7 +1,7 @@
 import os
+import unittest
 from io import BytesIO
 from pathlib import Path
-import unittest
 from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.oxml.ns import qn
@@ -13,6 +13,7 @@ from html4docx.colors import Color
 test_dir = os.path.abspath(os.path.dirname(__file__))
 
 class OutputTest(unittest.TestCase):
+    # ============================== Helper methods ============================== #
     @staticmethod
     def clean_up_docx():
         for filename in Path(test_dir).glob("*.docx"):
@@ -25,6 +26,28 @@ class OutputTest(unittest.TestCase):
             html = f.read()
         return html
 
+    @staticmethod
+    def hexcolor(color: str) -> str:
+        """
+        Convert a color string to a hex string.
+        Returns a hex string like 'FF0000'.
+        """
+        return parse_color(color, return_hex=True).lstrip("#")
+
+    @staticmethod
+    def get_underline_color(run):
+        """
+        Extract underline color from the run XML.
+        Returns hex string like 'FF0000' or None.
+        """
+        u_elems = run._r.xpath('.//w:u')
+        if not u_elems:
+            return None
+
+        u_elem = u_elems[0]
+        return u_elem.get(qn('w:color'))
+
+    # ============================== Setup and teardown ============================== #
     @classmethod
     def setUpClass(cls):
         cls.clean_up_docx()
@@ -47,6 +70,7 @@ class OutputTest(unittest.TestCase):
     def setUp(self):
         self.parser = HtmlToDocx()
 
+    # ============================== Tests ============================== #
     def test_save_docx_by_filename(self):
         filename = os.path.join(test_dir, 'new_test.docx')
         self.parser.set_initial_attrs(self.document)
@@ -617,43 +641,126 @@ and blank lines.
         )
 
         self.parser.add_html_to_document(text_decoration_html_example, self.document)
-
         document = self.parser.parse_html_string(text_decoration_html_example)
 
-        standalone_para = document.paragraphs[0]
-        assert len(standalone_para.runs) == 4
+        # --------------------------------------------------------------------
+        # 1) Standalone spans
+        # --------------------------------------------------------------------
+        standalone = document.paragraphs[0].runs
+        assert len(standalone) == 4
 
-        span1 = standalone_para.runs[0]
+        span1 = standalone[0]
         assert span1.text == "underlined span (red)"
-        assert span1.font.underline is True
+        assert span1.font.underline == WD_UNDERLINE.SINGLE
+        assert self.get_underline_color(span1) == self.hexcolor("red")
 
-        span2 = standalone_para.runs[1]
+        span2 = standalone[1]
         assert span2.text == "no decoration span (rgb(0, 0, 0))"
         assert span2.font.underline is False
         assert span2.font.strike is False
+        assert self.get_underline_color(span2) == self.hexcolor("rgb(0,0,0)")
 
-        span3 = standalone_para.runs[2]
+        span3 = standalone[2]
         assert span3.text == "strikethrough span (gray) (not supported)"
         assert span3.font.strike is True
+        assert self.get_underline_color(span3) == self.hexcolor("gray")
 
-        span4 = standalone_para.runs[3]
+        span4 = standalone[3]
         assert span4.text == "underline+line-through span (orange) (should be strike)"
         assert span4.font.strike is True
+        assert span4.font.underline is False
+        assert self.get_underline_color(span4) == self.hexcolor("orange")
 
-        # Test equivalence: shorthand vs individual properties
-        p8_individual = document.paragraphs[8]  # Individual properties
-        p9_shorthand = document.paragraphs[9]   # Shorthand
+        # --------------------------------------------------------------------
+        # 2) Spans inside paragraphs (wavy, dotted, strikethrough)
+        # --------------------------------------------------------------------
+        p1 = document.paragraphs[1]
+        r = p1.runs[1]
+        assert r.text == "wavy underlined span (blue)"
+        assert r.font.underline == WD_UNDERLINE.WAVY
+        assert self.get_underline_color(r) == self.hexcolor("blue")
 
-        # Both should have the same text decoration applied
-        assert p8_individual.runs[0].font.underline == WD_UNDERLINE.WAVY
-        assert p9_shorthand.runs[0].font.underline == WD_UNDERLINE.WAVY
+        p2 = document.paragraphs[2]
+        r = p2.runs[1]
+        assert r.text == "dotted underlined span (purple)"
+        assert r.font.underline == WD_UNDERLINE.DOTTED
+        assert self.get_underline_color(r) == self.hexcolor("purple")
 
-        # Both paragraphs should have the same text
-        assert p8_individual.text == "Blue underlined paragraph"
-        assert p9_shorthand.text == "Blue underlined paragraph"
+        p3 = document.paragraphs[3]
+        r = p3.runs[1]
+        assert r.text == "strikethrough span (red)"
+        assert r.font.strike is True
+        assert self.get_underline_color(r) == self.hexcolor("red")
 
-        # Both should have the same styling result
-        assert p8_individual.runs[0].font.underline == p9_shorthand.runs[0].font.underline
+        # --------------------------------------------------------------------
+        # 3) Paragraph with multiple spans
+        # --------------------------------------------------------------------
+        p4 = document.paragraphs[4]
+        runs = p4.runs
+
+        multiple_span1 = runs[1]
+        assert multiple_span1.text == "underlined"
+        assert multiple_span1.font.underline == WD_UNDERLINE.SINGLE
+        assert multiple_span1.font.strike is False
+        assert self.get_underline_color(multiple_span1) == self.hexcolor("green")
+
+        multiple_span2 = runs[3]
+        assert multiple_span2.text == "strikethrough"
+        assert multiple_span2.font.underline is False
+        assert multiple_span2.font.strike is True
+        assert self.get_underline_color(multiple_span2) == self.hexcolor("blue")
+
+        multiple_span3 = runs[5]
+        assert multiple_span3.text == "dashed underline"
+        assert multiple_span3.font.underline == WD_UNDERLINE.DASH
+        assert multiple_span3.font.strike is False
+        assert self.get_underline_color(multiple_span3) == self.hexcolor("orange")
+
+        # --------------------------------------------------------------------
+        # 4) Underlined paragraph + span with none
+        # --------------------------------------------------------------------
+        p5 = document.paragraphs[5]
+        assert p5.runs[0].font.underline == WD_UNDERLINE.SINGLE
+
+        span_none = p5.runs[1]
+        assert span_none.font.underline is False
+        assert span_none.font.strike is False
+
+        # --------------------------------------------------------------------
+        # 5) Line-through paragraph + underlined red span
+        # --------------------------------------------------------------------
+        p6 = document.paragraphs[6]
+        assert p6.runs[0].font.strike is True
+
+        span = p6.runs[1]
+        assert span.font.underline is True
+        assert self.get_underline_color(span) == self.hexcolor("red")
+
+        # --------------------------------------------------------------------
+        # 6) Individual properties
+        # --------------------------------------------------------------------
+        p7 = document.paragraphs[7]
+        r = p7.runs[0]
+        assert r.font.underline is True
+        assert self.get_underline_color(r) == self.hexcolor("blue")
+
+        span = p7.runs[1]
+        assert span.font.strike is True
+
+        # --------------------------------------------------------------------
+        # 7) Shorthand vs individual comparison
+        # --------------------------------------------------------------------
+        p8 = document.paragraphs[8]
+        p9 = document.paragraphs[9]
+
+        assert p8.runs[0].font.underline == WD_UNDERLINE.WAVY
+        assert p9.runs[0].font.underline == WD_UNDERLINE.WAVY
+
+        assert p8.text == "Blue underlined paragraph"
+        assert p9.text == "Blue underlined paragraph"
+
+        assert self.get_underline_color(p8.runs[0]) == self.hexcolor("blue")
+        assert self.get_underline_color(p9.runs[0]) == self.hexcolor("blue")
 
     def test_text_decoration_paragraph(self):
         self.document.add_heading('Test: text-decoration on <p>', level=1)
@@ -673,10 +780,11 @@ and blank lines.
         )
 
         self.parser.add_html_to_document(text_decoration_html_example, self.document)
-
-        document = self.parser.parse_html_string(text_decoration_html_example)
+        with self.assertLogs(level='WARNING') as log:
+            document = self.parser.parse_html_string(text_decoration_html_example)
 
         underline_states = []
+        underline_colors = []
         strike_states = []
 
         for p in document.paragraphs:
@@ -686,12 +794,16 @@ and blank lines.
             underline = run.font.underline
             if underline is None:
                 underline_states.append(None)
+                underline_colors.append(None)
             elif underline is True:
                 underline_states.append(True)
+                underline_colors.append(self.get_underline_color(run))
             elif underline is False:
                 underline_states.append(False)
+                underline_colors.append(None)
             else:
                 underline_states.append(underline)
+                underline_colors.append(self.get_underline_color(run))
 
             # Check strike-through
             strike = run.font.strike
@@ -718,6 +830,20 @@ and blank lines.
             None,  # blink (not supported) - remains None/unchanged
         ]
 
+        expected_underline_colors = [
+            self.hexcolor("red"),             # underline red
+            None,                             # none rgb(0,0,0)
+            None,                             # line-through gray (strike only, but color captured)
+            None,                             # underline + line-through (color should be orange)
+            self.hexcolor("blue"),            # wavy underline blue
+            self.hexcolor("rgb(0,128,0)"),    # dotted underline rgb(0,128,0)
+            self.hexcolor("rgb(0,255,0)"),    # dotted underline rgb(0,255,0)
+            self.hexcolor("purple"),          # dashed underline purple
+            self.hexcolor("rgb(255,69,0)"),   # double underline rgb(255,69,0)
+            None,                             # overline hotpink (unsupported → underline None, but color still parsed)
+            None,                             # blink hotpink (unsupported)
+        ]
+
         expected_strike_states = [
             False,  # underline only - explicitly False for strike when underline is True
             False,  # none - explicitly False for both underline and strike
@@ -732,8 +858,17 @@ and blank lines.
             None,   # blink (not supported) - remains None/unchanged
         ]
 
+        # Test that the underline states, colors, and strike states are correct
         self.assertEqual(underline_states, expected_underline_states)
+        self.assertEqual(underline_colors, expected_underline_colors)
         self.assertEqual(strike_states, expected_strike_states)
+
+        # Test that the correct warnings are logged
+        self.assertEqual(len(log.records), 4)
+        self.assertIn('Word does not support colored strike-through. Color \'gray\' will be ignored for line-through.', log.output[0])
+        self.assertIn('Word does not support colored strike-through. Color \'orange\' will be ignored for line-through.', log.output[1])
+        self.assertIn('Blink or overline not supported.', log.output[2])
+        self.assertIn('Blink or overline not supported.', log.output[3])
 
     def test_first_line_paragraph(self):
         self.document.add_heading('Test text-indent on <p> tags', level=1)
@@ -2224,11 +2359,11 @@ and blank lines.
 
         # The "red important" run should have red color
         # (exact run index may vary based on whitespace handling)
-        
-        # You can see the index by uncommented the following block.  The multi-line html currently in use creates 2 
+
+        # You can see the index by uncommented the following block.  The multi-line html currently in use creates 2
         # paragraphs.  The first has 1 empty run.  The 2nd has 6 runs (3 of which are empty due to whitespace).
-        # The single line version (commented out above), creates a single paragraph with 3 runs.  
-        
+        # The single line version (commented out above), creates a single paragraph with 3 runs.
+
         # print("Paragraph count:", len(doc.paragraphs))
         # for i, para in enumerate(doc.paragraphs):
         #     print(f"\nParagraph {i}:")

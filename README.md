@@ -126,7 +126,7 @@ There is 5 options that you can use to personalize your execution:
 - Disable Styles: Ignore all CSS styles. Also disables Style-Map.
 - Disable Fix-HTML: Use BeautifulSoap to Fix possible HTML missing tags.
 - Disable Style-Map: Ignore CSS classes to word styles mapping
-- Disable Tag-Override: Ignore html tag overrides. 
+- Disable Tag-Override: Ignore html tag overrides.
 - Disable HTML-Comments: Ignore all "<!-- ... -->" comments from HTML.
 
 This is how you could disable them if you want:
@@ -298,6 +298,13 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Support for common CSS properties for text | [Lynuxen](https://github.com/Lynuxen)
 - Support for CSS classes to Word Styles | [raithedavion](https://github.com/raithedavion)
 - Support for HTML tag style overrides | [raithedavion](https://github.com/raithedavion)
+
+## To-Do
+
+These are the ideas I'm planning to work on in the future to make this project even better:
+
+- Add support for the `<style>` tag, including all classes, and ensure they are correctly applied throughout the file.
+- Add support for the `<link>` tag to load external CSS and apply it properly across the file.
 
 ## Known Issues
 

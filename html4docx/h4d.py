@@ -268,26 +268,6 @@ class HtmlToDocx(HTMLParser):
             elif style == "normal":
                 self.run.font.italic = False
 
-        # # Apply text-decoration
-        # if "text-decoration" in styles_dict:
-        #     decoration = utils.parse_text_decoration(styles_dict["text-decoration"])
-        #     # line types
-        #     if "underline" in decoration["line"]:
-        #         self.run.font.underline = True
-        #     if "line-through" in decoration["line"]:
-        #         self.run.font.strike = True
-        #     if "overline" in decoration["line"]:
-        #         # python-docx doesn't support overline directly
-        #         pass
-
-        #     # style (python-docx supports limited underline styles)
-        #     if decoration["style"]:
-        #         self.run.font.underline = constants.FONT_UNDERLINE_STYLES[decoration["style"]]
-
-        #     if decoration["color"]:
-        #         colors = utils.parse_color(decoration["color"])
-        #         self.run.font.color.rgb = RGBColor(*colors)
-
         # Apply font-family
         if "font-family" in styles_dict:
             font_family = (
@@ -992,7 +972,7 @@ class HtmlToDocx(HTMLParser):
         rPr = run._r.get_or_add_rPr()
         u = rPr.find(qn('w:u'))
         if u is not None:
-            u.set(qn('w:color'), color_hex.upper())
+            u.set(qn('w:color'), color_hex.upper().lstrip('#'))
 
     def _apply_background_color_paragraph(self, **kwargs):
         paragraph = kwargs['paragraph']

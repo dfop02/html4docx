@@ -325,7 +325,6 @@ def parse_text_decoration(text_decoration):
             result["color"] = token
         elif token in ("blink", "overline"):
             result["line_style"] = None
-            result["line_style"] = None
             logging.warning("Blink or overline not supported.")
 
     if result["line_type"] == "line-through" and result["color"] is not None:

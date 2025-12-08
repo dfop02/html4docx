@@ -3,7 +3,7 @@
 Release History
 ---------------
 
-1.1.2 (2025-12-xx)
+1.1.2 (2025-12-07)
 ++++++++++++++++++
 
 **Updates**
@@ -12,7 +12,8 @@ Release History
 
 **Fixes**
 
-- None
+- Fix text decoration color not being applied correctly. | `dfop02 <https://github.com/dfop02>`_
+- Fix HISTORY.rst formatting. | `dfop02 <https://github.com/dfop02>`_
 
 **New Features**
 
