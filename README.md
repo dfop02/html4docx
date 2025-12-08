@@ -123,8 +123,10 @@ All table styles we support can be found [here](https://python-docx.readthedocs.
 There is 5 options that you can use to personalize your execution:
 - Disable Images: Ignore all images.
 - Disable Tables: If you do it, it will render just the raw tables content
-- Disable Styles: Ignore all CSS styles.
+- Disable Styles: Ignore all CSS styles. Also disables Style-Map.
 - Disable Fix-HTML: Use BeautifulSoap to Fix possible HTML missing tags.
+- Disable Style-Map: Ignore CSS classes to word styles mapping
+- Disable Tag-Override: Ignore html tag overrides.
 - Disable HTML-Comments: Ignore all "<!-- ... -->" comments from HTML.
 
 This is how you could disable them if you want:
@@ -138,8 +140,98 @@ parser.options['tables'] = False # Default True
 parser.options['styles'] = False # Default True
 parser.options['fix-html'] = False # Default True
 parser.options['html-comments'] = False # Default False
+parser.options['style-map'] = False # Default True
+parser.options['tag-override'] = False # Default True
 docx = parser.parse_html_string(input_html_file_string)
 ```
+
+## Extended Styling Features
+
+### CSS Class to Word Style Mapping
+
+Map HTML CSS classes to Word document styles:
+
+```python
+from html4docx import HtmlToDocx
+
+style_map = {
+    'code-block': 'Code Block',
+    'numbered-heading-1': 'Heading 1 Numbered',
+    'finding-critical': 'Finding Critical'
+}
+
+parser = HtmlToDocx(style_map=style_map)
+parser.add_html_to_document(html, document)
+```
+
+### Tag Style Overrides
+
+Override default tag-to-style mappings:
+
+```python
+tag_overrides = {
+    'h1': 'Custom Heading 1',  # All <h1> use this style
+    'pre': 'Code Block'        # All <pre> use this style
+}
+
+parser = HtmlToDocx(tag_style_overrides=tag_overrides)
+```
+
+### Default Paragraph Style
+
+Set custom default paragraph style:
+
+```python
+# Use 'Body' as default (default behavior)
+parser = HtmlToDocx(default_paragraph_style='Body')
+
+# Use Word's default 'Normal' style
+parser = HtmlToDocx(default_paragraph_style=None)
+```
+
+### Inline CSS Styles
+
+Full support for inline CSS styles on any element:
+
+```html
+<p style="color: red; font-size: 14pt">Red 14pt paragraph</p>
+<span style="font-weight: bold; color: blue">Bold blue text</span>
+```
+
+Supported CSS properties:
+
+- color
+- font-size
+- font-weight (bold)
+- font-style (italic)
+- text-decoration (underline, line-through)
+- font-family
+- text-align
+- background-color
+- Border (for tables)
+- Verticial Align (for tables)
+
+### !important Flag Support
+
+Proper CSS precedence with !important:
+
+```html
+<span style="color: gray">
+  Gray text with <span style="color: red !important">red important</span>.
+</span>
+```
+
+The !important flag ensures highest priority.
+
+### Style Precedence Order
+
+Styles are applied in this order (lowest to highest priority):
+
+1. Base HTML tag styles (`<b>`, `<em>`, `<code>`)
+2. Parent span styles
+3. CSS class-based styles (from `style_map`)
+4. Inline CSS styles (from `style` attribute)
+5. !important inline CSS styles (highest priority)
 
 #### Metadata
 
@@ -204,6 +296,15 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Being able to use inline images on same paragraph. | [Dfop02](https://github.com/dfop02)
 - Refactory Tests to be more consistent and less 'human validation' | [Dfop02](https://github.com/dfop02)
 - Support for common CSS properties for text | [Lynuxen](https://github.com/Lynuxen)
+- Support for CSS classes to Word Styles | [raithedavion](https://github.com/raithedavion)
+- Support for HTML tag style overrides | [raithedavion](https://github.com/raithedavion)
+
+## To-Do
+
+These are the ideas I'm planning to work on in the future to make this project even better:
+
+- Add support for the `<style>` tag, including all classes, and ensure they are correctly applied throughout the file.
+- Add support for the `<link>` tag to load external CSS and apply it properly across the file.
 
 ## Known Issues
 
