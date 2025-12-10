@@ -188,27 +188,37 @@ def is_color(color: str) -> bool:
     return is_rgb or is_hex or is_keyword or is_color_name
 
 
-def parse_color(color: str, return_hex: bool = False):
+def parse_color(original_color: str, return_hex: bool = False):
     """
     Parses a color string into a tuple of RGB values.
     Supports RGB, hex, and color name strings.
     Returns a tuple of RGB values by default, or a hex string if return_hex is True.
     """
-    color = remove_important_from_style(color.strip().lower())
+    color = remove_important_from_style(original_color.strip().lower())
 
-    if "rgb" in color:
-        color = re.sub(r"[^0-9,]", "", color)
-        colors = [int(x) for x in color.split(",")]
-    elif color.startswith("#"):
-        color = color.lstrip("#")
-        color = (
-            "".join([x + x for x in color]) if len(color) == 3 else color
-        )  # convert short hex to full hex
-        colors = RGBColor.from_string(color)
-    elif color in Color.__members__:
-        colors = Color[color].value
-    else:
-        colors = [0, 0, 0]  # Default to black for unexpected colors
+    try:
+        if "rgba" in color:
+            color = re.sub(r"[^0-9,]", "", color)
+            colors = [int(x) for x in color.split(",")]
+            colors = colors[:3] # remove opacity because it's not supported by python-docx
+            logging.warning("RGBA color is not supported by python-docx. Opacity will be ignored.")
+        elif "rgb" in color:
+            color = re.sub(r"[^0-9,]", "", color)
+            colors = [int(x) for x in color.split(",")]
+            if len(colors) > 3:
+                raise ValueError(f"Invalid RGB color: {original_color}")
+        elif color.startswith("#"):
+            color = color.lstrip("#")
+            color = ("".join([x + x for x in color]) if len(color) == 3 else color)  # convert short hex to full hex
+            colors = RGBColor.from_string(color)
+        elif color in Color.__members__:
+            colors = Color[color].value
+        else:
+            colors = [0, 0, 0]  # Default to black for unexpected colors
+            logging.warning(f"Could not parse color '{original_color}': Invalid color value. Fallback to black.")
+    except Exception:
+        colors = [0, 0, 0] # Default to black for errors
+        logging.warning(f"Could not parse color '{original_color}': Invalid color value. Fallback to black.")
 
     return rgb_to_hex(colors) if return_hex else colors
 

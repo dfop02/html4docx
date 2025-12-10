@@ -2545,6 +2545,33 @@ and blank lines.
 
         self.assertEqual(len(doc.paragraphs), 1)
 
+    def test_invalid_color_fallback_to_black(self):
+        """Test with invalid color fallback to black"""
+        self.document.add_heading("Test: Test invalid color fallback to black", level=1)
+        html = '''
+        <p style="color: rgba(255, 0, 0, 0.5)">Test Unsupported RGBA Color with opacity Fallback to Black</p>
+        <p style="color: rgba(A, B, C, D, E)">Test Invalid RGBA Color with letters Fallback to Black</p>
+        <p style="color: rgb(255, 0, 0, 0)">Test Invalid RGB Color with extra value Fallback to Black</p>
+        <p style="color: invalidcolorname">Test Invalid Color Name Fallback to Black</p>
+        <p style="color: #F7272626161">Test Invalid Hex Color with extra value Fallback to Black</p>
+        '''
+
+        doc = Document()
+        parser = HtmlToDocx()
+        parser.add_html_to_document(html, self.document)
+        with self.assertLogs(level='WARNING') as log:
+            parser.add_html_to_document(html, doc)
+
+        self.assertEqual(doc.paragraphs[1].runs[0].font.color.rgb, RGBColor(*Color["red"].value))
+        for paragraph in doc.paragraphs[2:]:
+            self.assertEqual(paragraph.runs[0].font.color.rgb, RGBColor(*Color["black"].value))
+
+        self.assertEqual(len(log.records), 5)
+        self.assertIn('RGBA color is not supported by python-docx. Opacity will be ignored.', log.output[0])
+        self.assertIn('Could not parse color \'rgba(a, b, c, d, e)\': Invalid color value. Fallback to black.', log.output[1])
+        self.assertIn('Could not parse color \'rgb(255, 0, 0, 0)\': Invalid color value. Fallback to black.', log.output[2])
+        self.assertIn('Could not parse color \'invalidcolorname\': Invalid color value. Fallback to black.', log.output[3])
+        self.assertIn('Could not parse color \'#f7272626161\': Invalid color value. Fallback to black.', log.output[4])
 
 if __name__ == "__main__":
     unittest.main()
