@@ -12,7 +12,7 @@ Release History
 
 **Fixes**
 
-- None
+- Fix color parsing failing due to invalid colors, falling back to black. | `dfop02 <https://github.com/dfop02>`_
 
 **New Features**
 
