@@ -3,6 +3,22 @@
 Release History
 ---------------
 
+1.1.3 (2025-12-xx)
+++++++++++++++++++
+
+**Updates**
+
+- None
+
+**Fixes**
+
+- Fix color parsing failing due to invalid colors, falling back to black. | `dfop02 <https://github.com/dfop02>`_
+
+**New Features**
+
+- None
+
+
 1.1.2 (2025-12-07)
 ++++++++++++++++++
 
