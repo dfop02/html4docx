@@ -3,7 +3,7 @@
 Release History
 ---------------
 
-1.1.3 (2025-12-xx)
+1.1.3 (2025-12-16)
 ++++++++++++++++++
 
 **Updates**
@@ -12,7 +12,7 @@ Release History
 
 **Fixes**
 
-- Fix color parsing failing due to invalid colors, falling back to black. | `dfop02 <https://github.com/dfop02>`_
+- Fixes `#53 <https://github.com/dfop02/html4docx/issues/53>`_: color parsing failing due to invalid colors, falling back to black. | `dfop02 <https://github.com/dfop02>`_
 
 **New Features**
 

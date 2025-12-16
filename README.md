@@ -275,9 +275,10 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Fix `background-color` not working | [Dfop02](https://github.com/dfop02)
 - Fix crashes when img or bookmark is created without paragraph | [Dfop02](https://github.com/dfop02)
 - Fix Ordered and Unordered Lists | [TaylorN15](https://github.com/TaylorN15) from [PR](https://github.com/dfop02/html4docx/pull/16)
-- Fixed styles was only being applied to span tag. | [Dfop02](https://github.com/dfop02) from [PR](https://github.com/dfop02/html4docx/issues/40)
+- Fixed styles was only being applied to span tag. | [Dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/40)
 - Fixed bug on styles parsing when style contains multiple colon. | [Dfop02](https://github.com/dfop02)
 - Fixed highlighting a single word | [Lynuxen](https://github.com/Lynuxen)
+- Fix color parsing failing due to invalid colors, falling back to black. | [dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/53)
 
 **New Features**
 - Add Witdh/Height style to images | [maifeeulasad](https://github.com/maifeeulasad) from [PR](https://github.com/pqzx/html2docx/pull/29)
