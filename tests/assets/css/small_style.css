@@ -1,0 +1,13 @@
+#specialParagraph {
+    text-decoration: underline solid red;
+    color: gray
+}
+
+.blueSpan {
+    color: blue;
+}
+
+p {
+    color: red;
+    font-weight: bold;
+}

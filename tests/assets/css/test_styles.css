@@ -1,0 +1,51 @@
+/* Test CSS file for external CSS loading */
+
+/* Tag selectors */
+p {
+    color: blue;
+    font-size: 14pt;
+}
+
+h1 {
+    color: navy;
+    font-weight: bold;
+}
+
+/* Class selectors */
+.highlight {
+    background-color: yellow;
+    font-weight: bold;
+}
+
+.large-text {
+    font-size: 18pt;
+    color: green;
+}
+
+/* ID selectors */
+#header {
+    text-align: center;
+    font-size: 24pt;
+}
+
+#footer {
+    color: gray;
+    font-style: italic;
+}
+
+/* Unused selectors (should be skipped in selective parsing) */
+.unused-class {
+    color: red;
+    font-size: 100pt;
+}
+
+#unused-id {
+    background-color: purple;
+    border: 10px solid black;
+}
+
+div.unused-combination {
+    margin: 50px;
+    padding: 50px;
+}
+

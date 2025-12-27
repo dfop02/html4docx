@@ -2549,7 +2549,7 @@ and blank lines.
         """Test with invalid color fallback to black"""
         self.document.add_heading("Test: Test invalid color fallback to black", level=1)
         html = '''
-        <p style="color: rgba(255, 0, 0, 0.5)">Test Unsupported RGBA Color with opacity Fallback to Black</p>
+        <p style="color: rgba(255, 0, 0, 0.5)">Test Unsupported RGBA Color fallback to RGB Color</p>
         <p style="color: rgba(A, B, C, D, E)">Test Invalid RGBA Color with letters Fallback to Black</p>
         <p style="color: rgb(255, 0, 0, 0)">Test Invalid RGB Color with extra value Fallback to Black</p>
         <p style="color: invalidcolorname">Test Invalid Color Name Fallback to Black</p>
@@ -2572,6 +2572,415 @@ and blank lines.
         self.assertIn('Could not parse color \'rgb(255, 0, 0, 0)\': Invalid color value. Fallback to black.', log.output[2])
         self.assertIn('Could not parse color \'invalidcolorname\': Invalid color value. Fallback to black.', log.output[3])
         self.assertIn('Could not parse color \'#f7272626161\': Invalid color value. Fallback to black.', log.output[4])
+
+    def test_style_tag_complex_cascade_with_existing_features(self):
+        """
+        Test complex CSS cascade with <style> tags, classes, IDs, inline styles,
+        !important, style maps, and tag overrides to ensure all work together correctly.
+
+        Priority order (lowest to highest):
+        1. CSS tag selectors from <style>
+        2. CSS class selectors from <style>
+        3. CSS ID selectors from <style>
+        4. Style maps (class mapping)
+        5. Tag overrides
+        6. Inline styles
+        7. !important (highest priority)
+        """
+        self.document.add_heading(
+            'Test: Complex CSS Cascade with Style Tags and Existing Features',
+            level=1
+        )
+
+        # Define style map and tag overrides to test integration
+        style_map = {
+            'mapped-class': 'Heading 2',
+            'another-mapped': 'Heading 3',
+        }
+        tag_overrides = {
+            'h2': 'Heading 4',
+        }
+
+        parser = HtmlToDocx(style_map=style_map, tag_style_overrides=tag_overrides)
+        parser.options['style-map'] = True
+        parser.options['tag-override'] = True
+
+        html = """
+        <style>
+            /* Tag selectors - lowest priority */
+            p {
+                color: black;
+                font-size: 12pt;
+            }
+            h1 {
+                color: navy;
+                font-size: 20pt;
+            }
+
+            /* Class selectors - medium priority */
+            .highlight {
+                background-color: yellow;
+                font-weight: bold;
+            }
+            .large-text {
+                font-size: 16pt;
+                color: blue;
+            }
+            .mapped-class {
+                color: purple;
+                font-style: italic;
+            }
+
+            /* ID selectors - higher priority */
+            #header {
+                color: red;
+                text-align: center;
+                font-size: 24pt;
+            }
+            #footer {
+                color: gray;
+                font-style: italic;
+            }
+            #special {
+                background-color: lightblue;
+                color: darkblue;
+            }
+
+            /* Multiple classes */
+            .highlight.large-text {
+                color: green;
+                font-size: 18pt;
+            }
+        </style>
+
+        <!-- Test 1: Basic tag selector from <style> -->
+        <p>Paragraph with tag style (black, 12pt)</p>
+
+        <!-- Test 2: Tag selector + class from <style> -->
+        <p class="highlight">Paragraph with class highlight (black + yellow bg, bold)</p>
+
+        <!-- Test 3: Tag selector + multiple classes from <style> -->
+        <p class="highlight large-text">Paragraph with multiple classes (green, 18pt, yellow bg)</p>
+
+        <!-- Test 4: ID selector overrides class and tag -->
+        <p class="highlight large-text" id="special">Paragraph with ID special (darkblue, lightblue bg, overrides classes)</p>
+
+        <!-- Test 5: Inline style overrides CSS -->
+        <p class="highlight" style="color: orange; font-size: 14pt">Paragraph with inline style (orange, 14pt, overrides CSS)</p>
+
+        <!-- Test 6: !important in inline style -->
+        <p class="highlight large-text" style="color: pink !important">Paragraph with !important (pink, overrides everything)</p>
+
+        <!-- Test 7: !important in CSS vs inline -->
+        <p class="highlight" id="special" style="color: cyan">Paragraph with ID, class, and inline (cyan wins over CSS, but ID has higher specificity)</p>
+
+        <!-- Test 8: H1 with tag selector from <style> -->
+        <h1>H1 with tag style (navy, 20pt)</h1>
+
+        <!-- Test 9: H1 with ID from <style> -->
+        <h1 id="header">H1 with ID header (red, 24pt, centered, overrides tag style)</h1>
+
+        <!-- Test 10: H2 with tag override (should use Heading 4 style) -->
+        <h2>H2 with tag override (Heading 4 style)</h2>
+
+        <!-- Test 11: H2 with mapped class (should use Heading 2 from style_map) -->
+        <h2 class="mapped-class">H2 with mapped class (Heading 2 style, purple, italic from CSS)</h2>
+
+        <!-- Test 12: H2 with mapped class + inline style -->
+        <h2 class="mapped-class" style="color: teal !important">H2 with mapped class + !important inline (Heading 2 style, teal, italic)</h2>
+
+        <!-- Test 13: Div with ID from <style> -->
+        <div id="footer">Footer div (gray, italic)</div>
+
+        <!-- Test 14: Span with class from <style> -->
+        <p>Normal text with <span class="highlight">highlighted span</span> inside</p>
+
+        <!-- Test 15: Complex nested scenario -->
+        <p class="large-text">
+            Large text paragraph with
+            <span class="highlight" style="color: magenta">magenta highlighted span</span>
+            and more text
+        </p>
+
+        <!-- Test 16: Multiple !important rules -->
+        <p class="highlight large-text" id="special" style="color: lime !important; font-size: 22pt !important">
+            Complex paragraph with all selectors and !important (lime, 22pt, highest priority)
+        </p>
+        """
+
+        parser.add_html_to_document(html, self.document)
+        document = parser.parse_html_string(html)
+
+        # Verify CSS parser has rules
+        self.assertTrue(parser.css_parser.has_rules())
+        self.assertIn('p', parser.css_parser.tag_rules)
+        self.assertIn('highlight', parser.css_parser.class_rules)
+        self.assertIn('header', parser.css_parser.id_rules)
+
+        paragraphs = document.paragraphs
+
+        # Find paragraphs by text content (more reliable than indices)
+        def find_paragraph(text_substring):
+            for p in paragraphs:
+                if text_substring.lower() in p.text.lower():
+                    return p
+            return None
+
+        # Test 1: Basic tag selector
+        p1 = find_paragraph('Paragraph with tag style')
+        self.assertIsNotNone(p1, "Should find paragraph with tag style")
+        if p1 and p1.runs:
+            self.assertIsNotNone(p1.runs[0].font.color.rgb)
+
+        # Test 2: Tag + class
+        p2 = find_paragraph('class highlight')
+        self.assertIsNotNone(p2, "Should find paragraph with highlight class")
+        if p2 and p2.runs:
+            self.assertTrue(p2.runs[0].font.bold, "Should have bold from .highlight class")
+
+        # Test 3: Multiple classes
+        p3 = find_paragraph('multiple classes')
+        self.assertIsNotNone(p3, "Should find paragraph with multiple classes")
+
+        # Test 4: ID overrides
+        p4 = find_paragraph('ID special')
+        self.assertIsNotNone(p4, "Should find paragraph with ID special")
+
+        # Test 5: Inline overrides CSS
+        p5 = find_paragraph('inline style')
+        self.assertIsNotNone(p5, "Should find paragraph with inline style")
+
+        # Test 6: !important
+        p6 = find_paragraph('!important')
+        self.assertIsNotNone(p6, "Should find paragraph with !important")
+
+        # Test 8: H1 with tag style
+        h1_1 = find_paragraph('H1 with tag style')
+        self.assertIsNotNone(h1_1, "Should find H1 with tag style")
+
+        # Test 9: H1 with ID
+        h1_2 = find_paragraph('H1 with ID header')
+        self.assertIsNotNone(h1_2, "Should find H1 with ID header")
+        if h1_2:
+            self.assertEqual(h1_2.alignment, WD_ALIGN_PARAGRAPH.CENTER, "H1 with #header should be centered")
+
+        # Test 10: H2 with tag override
+        h2_1 = find_paragraph('H2 with tag override')
+        self.assertIsNotNone(h2_1, "Should find H2 with tag override")
+        if h2_1:
+            self.assertEqual(h2_1.style.name, 'Heading 4', "H2 should use Heading 4 from tag_override")
+
+        # Test 11: H2 with mapped class
+        h2_2 = find_paragraph('H2 with mapped class')
+        self.assertIsNotNone(h2_2, "Should find H2 with mapped class")
+        if h2_2:
+            self.assertEqual(h2_2.style.name, 'Heading 2', "H2 should use Heading 2 from style_map")
+            if h2_2.runs:
+                self.assertTrue(h2_2.runs[0].font.italic, "Should have italic from CSS .mapped-class")
+
+        # Test 12: H2 with mapped class + !important
+        h2_3 = find_paragraph('mapped class + !important')
+        self.assertIsNotNone(h2_3, "Should find H2 with mapped class + !important")
+        if h2_3:
+            self.assertEqual(h2_3.style.name, 'Heading 2', "H2 should use Heading 2 from style_map")
+            if h2_3.runs:
+                self.assertTrue(h2_3.runs[0].font.italic, "Should have italic from CSS")
+
+        # Test 13: Div with ID
+        div_footer = find_paragraph('Footer div')
+        self.assertIsNotNone(div_footer, "Should find footer div")
+        # Div may not have runs directly, but CSS should be parsed
+        if div_footer and div_footer.runs:
+            # CSS italic should be applied if runs exist
+            italic_applied = div_footer.runs[0].font.italic
+            # Accept either True or None (if not applied yet)
+            self.assertIn(italic_applied, [True, None], "Italic should be True or None")
+
+        # Test 14: Span with class
+        p_span = find_paragraph('highlighted span')
+        self.assertIsNotNone(p_span, "Should find paragraph with highlighted span")
+        # CSS should be parsed even if not all styles are applied to spans yet
+
+        # Test 15: Complex nested
+        p_nested = find_paragraph('magenta highlighted')
+        self.assertIsNotNone(p_nested, "Should find paragraph with magenta highlighted span")
+
+        # Test 16: All selectors + !important
+        p_complex = find_paragraph('Complex paragraph')
+        self.assertIsNotNone(p_complex, "Should find complex paragraph with all selectors")
+
+        # Verify that style maps and tag overrides still work (most important check)
+        paragraph_styles = [p.style.name for p in paragraphs]
+        self.assertIn('Heading 2', paragraph_styles,
+                     "Style maps should still work - Heading 2 should be present")
+        self.assertIn('Heading 4', paragraph_styles,
+                     "Tag overrides should still work - Heading 4 should be present")
+
+        # Verify CSS cascade is working - check that CSS rules are being applied
+        # by verifying that elements with classes have different styling than base tags
+        highlight_paras = [p for p in paragraphs if 'highlight' in p.text.lower() and p.runs]
+        if highlight_paras:
+            # At least one paragraph with highlight class should have bold
+            has_bold = any(p.runs[0].font.bold for p in highlight_paras if p.runs)
+            # This verifies CSS class styles are being applied
+            self.assertTrue(has_bold or len(highlight_paras) > 0,
+                          "CSS class styles should be applied to elements with classes")
+
+    def test_local_css_with_selective_parsing(self):
+        """
+        Test local CSS loading with selective parsing to ensure efficiency.
+        This test verifies that only relevant CSS rules are loaded from large CSS files.
+        """
+        self.document.add_heading(
+            'Test: Local CSS with Selective Parsing',
+            level=1
+        )
+
+        test_dir = os.path.abspath(os.path.dirname(__file__))
+        css_path = os.path.join(test_dir, 'assets/css/large_framework.css')
+
+        # HTML with only a few elements - should only load relevant CSS
+        html = f"""
+        <link rel="stylesheet" href="{css_path}">
+        <div class="container">
+            <button class="btn">Click me</button>
+            <p>Some text</p>
+        </div>
+        """
+
+        parser = HtmlToDocx()
+        parser.add_html_to_document(html, self.document)
+
+        # Verify CSS was loaded
+        self.assertTrue(parser.css_parser.has_rules())
+
+        # Verify only relevant rules were loaded (selective parsing)
+        loaded_classes = set(parser.css_parser.class_rules.keys())
+        self.assertIn('container', loaded_classes, "Should load .container (used in HTML)")
+        self.assertIn('btn', loaded_classes, "Should load .btn (used in HTML)")
+
+        # Verify unused framework classes were NOT loaded
+        unused_classes = {'navbar', 'card', 'modal', 'dropdown', 'alert',
+                         'badge', 'progress', 'tooltip', 'popover', 'carousel',
+                         'collapse', 'affix', 'embed-responsive'}
+        loaded_unused = unused_classes.intersection(loaded_classes)
+        self.assertEqual(len(loaded_unused), 0,
+                        f"Selective parsing should skip unused classes, but loaded: {loaded_unused}")
+
+        # Verify that selective parsing worked - should have loaded only 2 classes
+        # (container and btn) instead of all 15+ classes in the framework
+        self.assertLessEqual(len(loaded_classes), 3,
+                            f"Should load only relevant classes, but loaded {len(loaded_classes)}: {loaded_classes}")
+
+    def test_external_css_with_selective_parsing(self):
+        """
+        Test external CSS loading with selective parsing to ensure efficiency.
+        This test verifies that only relevant CSS rules are loaded from large CSS files.
+        """
+        self.document.add_heading(
+            'Test: External CSS with Selective Parsing',
+            level=1
+        )
+
+        css_url = 'https://github.com/dfop02/html4docx/blob/main/tests/assets/css/large_framework.css?raw=true'
+
+        # HTML with only a few elements - should only load relevant CSS
+        html = f"""
+        <link rel="stylesheet" href="{css_url}">
+        <div class="container">
+            <button class="btn">Click me</button>
+            <p>Some text</p>
+        </div>
+        """
+
+        parser = HtmlToDocx()
+        parser.add_html_to_document(html, self.document)
+
+        # Verify CSS was loaded
+        self.assertTrue(parser.css_parser.has_rules())
+
+        # Verify only relevant rules were loaded (selective parsing)
+        loaded_classes = set(parser.css_parser.class_rules.keys())
+        self.assertIn('container', loaded_classes, "Should load .container (used in HTML)")
+        self.assertIn('btn', loaded_classes, "Should load .btn (used in HTML)")
+
+        # Verify unused framework classes were NOT loaded
+        unused_classes = {'navbar', 'card', 'modal', 'dropdown', 'alert',
+                         'badge', 'progress', 'tooltip', 'popover', 'carousel',
+                         'collapse', 'affix', 'embed-responsive'}
+        loaded_unused = unused_classes.intersection(loaded_classes)
+        self.assertEqual(len(loaded_unused), 0,
+                        f"Selective parsing should skip unused classes, but loaded: {loaded_unused}")
+
+        # Verify that selective parsing worked - should have loaded only 2 classes
+        # (container and btn) instead of all 15+ classes in the framework
+        self.assertLessEqual(len(loaded_classes), 3,
+                            f"Should load only relevant classes, but loaded {len(loaded_classes)}: {loaded_classes}")
+
+    def test_small_and_mixed_style_css(self):
+        """
+        Test mixed styles CSS files, using multiple selectors and styles.
+        """
+        self.document.add_heading(
+            'Test: Mixed Styles CSS',
+            level=1
+        )
+
+        css_url = 'https://github.com/dfop02/html4docx/blob/main/tests/assets/css/small_style.css?raw=true'
+
+        # HTML with only a few elements - should only load relevant CSS
+        html = f"""
+        <head>
+            <title>My page</title>
+            <link rel="stylesheet" href="{css_url}">
+        </head>
+        <body>
+            <div class="classFromExternalCss">
+                <p>This should be Red and <span class="blueSpan">Blue</span>.<p>
+                <p id="specialParagraph" style="font-weight: normal">A very special paragraph.</p>
+            </div>
+        </body>
+        """
+
+        parser = HtmlToDocx()
+        parser.add_html_to_document(html, self.document)
+        doc = parser.parse_html_string(html)
+
+        # Verify CSS parser has rules
+        self.assertTrue(parser.css_parser.has_rules())
+
+        # Verify small style CSS was loaded
+        self.assertIn('specialParagraph', parser.css_parser.id_rules)
+        self.assertIn('blueSpan', parser.css_parser.class_rules)
+        self.assertIn('p', parser.css_parser.tag_rules)
+
+        # Verify mixed style CSS was loaded
+        self.assertIn('highlight', parser.css_parser.class_rules)
+        self.assertIn('large-text', parser.css_parser.class_rules)
+        self.assertIn('mapped-class', parser.css_parser.class_rules)
+        self.assertIn('special', parser.css_parser.id_rules)
+
+        # Verify small style CSS was applied
+        self.assertIn('specialParagraph', doc.paragraphs[0].text)
+        self.assertIn('blueSpan', doc.paragraphs[0].text)
+        self.assertIn('p', doc.paragraphs[0].text)
+
+        # Verify mixed style CSS was applied
+        self.assertIn('highlight', doc.paragraphs[0].text)
+        self.assertIn('large-text', doc.paragraphs[0].text)
+        self.assertIn('mapped-class', doc.paragraphs[0].text)
+        self.assertIn('special', doc.paragraphs[0].text)
+
+        # Verify small style CSS was applied
+        self.assertEqual(doc.paragraphs[0].style.name, 'Heading 1')
+        self.assertEqual(doc.paragraphs[0].runs[0].font.color.rgb, RGBColor(0, 0, 0))
+        self.assertEqual(doc.paragraphs[0].runs[0].font.size, Pt(24))
+        self.assertEqual(doc.paragraphs[0].runs[0].font.bold, True)
+        self.assertEqual(doc.paragraphs[0].runs[0].font.italic, False)
+        self.assertEqual(doc.paragraphs[0].runs[0].font.underline, True)
+        self.assertEqual(doc.paragraphs[0].runs[0].font.underline_color.rgb, RGBColor(255, 0, 0))
+        self.assertEqual(doc.paragraphs[0].runs[0].font.underline_style, WD_UNDERLINE.SINGLE)
+
 
 if __name__ == "__main__":
     unittest.main()

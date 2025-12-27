@@ -6,6 +6,7 @@ import urllib
 import urllib.request
 from enum import Enum
 from io import BytesIO
+from typing import Optional
 from urllib.parse import urlparse
 
 from docx.shared import Cm, Inches, Mm, Pt, RGBColor
@@ -79,6 +80,45 @@ def fetch_image_data(src: str):
             return open(src, "rb")
         except FileNotFoundError:
             return None
+
+
+def fetch_external_css(url: str) -> Optional[str]:
+    """
+    Fetch external CSS from URL or local file.
+
+    Args:
+        url (str): URL or local file path to CSS file
+
+    Returns:
+        Optional[str]: CSS content as string, or None if fetch fails
+
+    Example:
+        css = fetch_external_css('https://example.com/style.css')
+        css = fetch_external_css('./styles/custom.css')
+    """
+    if not url:
+        return None
+
+    try:
+        if is_url(url):
+            # Fetch from URL
+            with urllib.request.urlopen(url, timeout=5) as response:
+                # Try to decode as UTF-8, fallback to latin-1
+                try:
+                    return response.read().decode('utf-8')
+                except UnicodeDecodeError:
+                    return response.read().decode('latin-1')
+        else:
+            # Fetch from local file
+            try:
+                with open(url, 'r', encoding='utf-8') as f:
+                    return f.read()
+            except UnicodeDecodeError:
+                with open(url, 'r', encoding='latin-1') as f:
+                    return f.read()
+    except (urllib.error.URLError, FileNotFoundError, IOError, OSError):
+        logging.warning(f"Could not fetch external CSS from: {url}")
+        return None
 
 
 def parse_dict_string(string: str, separator: str = ";"):
