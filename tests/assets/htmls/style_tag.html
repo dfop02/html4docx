@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        /* Tag selectors */
+        p {
+            color: blue;
+            font-size: 12pt;
+        }
+
+        h1 {
+            color: red;
+            text-align: center;
+        }
+
+        /* Class selectors */
+        .highlight {
+            background-color: yellow;
+            font-weight: bold;
+        }
+
+        .large {
+            font-size: 18pt;
+        }
+
+        /* ID selectors */
+        #header {
+            text-align: center;
+            font-size: 24pt;
+        }
+
+        #footer {
+            color: gray;
+            font-style: italic;
+        }
+
+        /* Multiple selectors */
+        h2, h3 {
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="header">Centered Red Header</h1>
+    <h2>Green Heading 2</h2>
+    <h3>Green Heading 3</h3>
+    <p>This is a blue paragraph with 12pt font.</p>
+    <p class="highlight">This paragraph has yellow background and bold text.</p>
+    <p class="highlight large">This paragraph has both highlight and large classes.</p>
+    <p style="color: purple;">This paragraph has inline style that overrides CSS.</p>
+    <div id="footer">This is a gray italic footer.</div>
+</body>
+</html>
+
