@@ -118,7 +118,7 @@ parser.table_style = 'Table Grid'
 
 All table styles we support can be found [here](https://python-docx.readthedocs.io/en/latest/user/styles-understanding.html#table-styles-in-default-template).
 
-#### Options
+## Options
 
 There is 5 options that you can use to personalize your execution:
 - Disable Images: Ignore all images.
@@ -189,7 +189,9 @@ parser = HtmlToDocx(default_paragraph_style='Body')
 parser = HtmlToDocx(default_paragraph_style=None)
 ```
 
-### Inline CSS Styles
+## CSS
+
+#### Inline CSS Styles
 
 Full support for inline CSS styles on any element:
 
@@ -198,7 +200,47 @@ Full support for inline CSS styles on any element:
 <span style="font-weight: bold; color: blue">Bold blue text</span>
 ```
 
-Supported CSS properties:
+#### External CSS Styles
+
+Limited support for external CSS styles (local or url):
+
+**HTML**
+
+```html
+<head>
+    <title>My page</title>
+    <!-- Must contain rel="stylesheet" otherwise will be ignored -->
+    <link rel="stylesheet" href="https://my-external-css.domain.com/style.css">
+    <!-- OR -->
+    <link rel="stylesheet" href="../my_local/css/style.css">
+</head>
+<body>
+    <div class="classFromExternalCss">
+        <p>This should be Red and <span class="blueSpan">Blue</span>.<p>
+        <p id="specialParagraph" style="font-weight: normal">A very special paragraph.</p>
+    </div>
+</body>
+```
+
+**CSS**
+
+```css
+#specialParagraph {
+  text-decoration: underline solid red;
+  color: gray
+}
+
+.blueSpan {
+  color: blue;
+}
+
+p {
+  color: red;
+  font-weight: bold;
+}
+```
+
+### Supported CSS properties:
 
 - color
 - font-size
@@ -221,7 +263,7 @@ Proper CSS precedence with !important:
 </span>
 ```
 
-The !important flag ensures highest priority.
+The `!important` flag ensures highest priority.
 
 ### Style Precedence Order
 
@@ -230,10 +272,11 @@ Styles are applied in this order (lowest to highest priority):
 1. Base HTML tag styles (`<b>`, `<em>`, `<code>`)
 2. Parent span styles
 3. CSS class-based styles (from `style_map`)
-4. Inline CSS styles (from `style` attribute)
-5. !important inline CSS styles (highest priority)
+4. External CSS Styles (from `style` tag or external files)
+5. Inline CSS styles (from `style` attribute)
+6. `!important` inline CSS styles (highest priority)
 
-#### Metadata
+## Metadata
 
 You're able to read or set docx metadata:
 
@@ -299,20 +342,38 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Support for common CSS properties for text | [Lynuxen](https://github.com/Lynuxen)
 - Support for CSS classes to Word Styles | [raithedavion](https://github.com/raithedavion)
 - Support for HTML tag style overrides | [raithedavion](https://github.com/raithedavion)
+- Support style tag and external CSS styles | [Dfop02](https://github.com/dfop02)
 
 ## To-Do
 
 These are the ideas I'm planning to work on in the future to make this project even better:
 
-- Add support for the `<style>` tag, including all classes, and ensure they are correctly applied throughout the file.
-- Add support for the `<link>` tag to load external CSS and apply it properly across the file.
+- No ideas for now.
 
-## Known Issues
+## Known Limitations
 
+### Lists
 - **Maximum Nesting Depth:** Ordered lists support up to 3 nested levels. Any additional depth beyond level 3 will be treated as level 3.
 - **Counter Reset Behavior:**
   - At level 1, starting a new ordered list will reset the counter.
   - At levels 2 and 3, the counter will continue from the previous item unless explicitly reset.
+
+### CSS
+1. **Complex Selectors:**
+   - Do not support complex selector like `div > p`, `h1 + h2`.
+   - Complex selectors are simplified to root tag.
+
+2. **Pseudo-classes:**
+   - Do not support `:hover`, `:first-child`, etc.
+   - They're all removed during CSS Parsing
+
+3. **Media Queries:**
+   - Do not support `@media` queries.
+   - Would be necessary a responsive CSS, that's not applied to Docx.
+
+4. **@import:**
+   - Do not support `@import` em CSS.
+   - We can try implement it in future if necessary.
 
 ## Project Guidelines
 
