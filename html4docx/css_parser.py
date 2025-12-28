@@ -10,7 +10,7 @@ loaded via <link> tags (future feature).
 """
 
 import re
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 
 
 class CSSParser:
@@ -352,29 +352,49 @@ class CSSParser:
         """Check if parser has any CSS rules stored."""
         return bool(self.tag_rules or self.class_rules or self.id_rules)
 
-    def mark_element_used(self, tag: str, attrs: Optional[Dict[str, str]] = None) -> None:
+    def has_rules_for_element(self, tag: str, attrs: Optional[Dict[str, str]] = None) -> bool:
+        """Check if parser has any CSS rules stored for an element."""
+        if not self.has_rules() or not attrs:
+            return False
+
+        if tag in self.tag_rules:
+            return True
+
+        if 'class' in attrs:
+            classes = attrs['class'].split()
+            for class_name in classes:
+                if class_name in self.class_rules:
+                    return True
+
+        if 'id' in attrs:
+            element_id = attrs['id']
+            if element_id in self.id_rules:
+                return True
+
+        return False
+
+    def mark_element_used(self, tag: str, attrs: Optional[Dict[str, Any]] = None) -> None:
         """
         Mark an element as used in the HTML document.
         Used for selective CSS parsing to only load relevant rules.
-
-        Args:
-            tag (str): HTML tag name
-            attrs (Dict[str, str], optional): HTML attributes (class, id, etc.)
         """
         if tag:
             self._used_tags.add(tag.lower())
 
-        if attrs:
-            if 'class' in attrs:
-                classes = attrs['class'].split()
-                for class_name in classes:
-                    if class_name:
-                        self._used_classes.add(class_name)
+        if not attrs:
+            return
 
-            if 'id' in attrs:
-                element_id = attrs['id']
-                if element_id:
-                    self._used_ids.add(element_id)
+        # Handle class attribute (BeautifulSoup returns a list)
+        classes = attrs.get('class', None)
+        if classes:
+            for class_name in classes:
+                if class_name:
+                    self._used_classes.add(class_name)
+
+        # Handle id attribute (string)
+        element_id = attrs.get('id', None)
+        if element_id:
+            self._used_ids.add(element_id)
 
     def _is_selector_relevant(self, selector: str) -> bool:
         """
@@ -388,17 +408,20 @@ class CSSParser:
         Returns:
             bool: True if selector matches any used element, False otherwise
         """
-        selector_lower = selector.strip().lower()
+        if not selector:
+            return False
+
+        selector = selector.strip()
 
         # Check for ID selector (#id) - exact match
-        id_matches = re.findall(r'#([\w-]+)', selector_lower)
+        id_matches = re.findall(r'#([\w-]+)', selector)
         if id_matches:
             for id_match in id_matches:
                 if id_match in self._used_ids:
                     return True
 
         # Check for class selector (.class) - exact match or as part of class list
-        class_matches = re.findall(r'\.([\w-]+)', selector_lower)
+        class_matches = re.findall(r'\.([\w-]+)', selector)
         if class_matches:
             for class_match in class_matches:
                 if class_match in self._used_classes:
@@ -406,7 +429,7 @@ class CSSParser:
 
         # Check for tag selector (extract tag name)
         # Remove pseudo-classes, combinators, etc.
-        tag_name = re.sub(r'[:#>+~\[].*', '', selector_lower).strip()
+        tag_name = re.sub(r'[:#>+~\[].*', '', selector).strip()
         tag_name = re.sub(r'[#\.].*', '', tag_name).strip()
         tag_name = re.sub(r':.*', '', tag_name).strip()
 
@@ -415,7 +438,7 @@ class CSSParser:
 
         # Check for complex selectors like "div.container" or "p#header"
         # Split selector into parts and check each
-        selector_parts = re.split(r'[#>+~\[\s,\.]', selector_lower)
+        selector_parts = re.split(r'[#>+~\[\s,\.]', selector)
         for part in selector_parts:
             part = part.strip()
             if not part:

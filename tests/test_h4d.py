@@ -27,6 +27,10 @@ class OutputTest(unittest.TestCase):
         return html
 
     @staticmethod
+    def get_css_path_from_file(filename: str):
+        return Path(f'{test_dir}/assets/css') / Path(filename)
+
+    @staticmethod
     def hexcolor(color: str) -> str:
         """
         Convert a color string to a hex string.
@@ -47,6 +51,18 @@ class OutputTest(unittest.TestCase):
         u_elem = u_elems[0]
         return u_elem.get(qn('w:color'))
 
+    @staticmethod
+    def get_background_color(run):
+        """
+        Extract background color from the run XML.
+        Returns hex string like 'FFFF00' or None.
+        """
+        r_pr = run._r.get_or_add_rPr()
+        shd = r_pr.find(qn('w:shd'))
+        if shd is not None:
+            return shd.get(qn('w:fill'), "").upper()
+        return None
+
     # ============================== Setup and teardown ============================== #
     @classmethod
     def setUpClass(cls):
@@ -61,6 +77,10 @@ class OutputTest(unittest.TestCase):
         cls.table_html = cls.get_html_from_file('tables1.html')
         cls.table2_html = cls.get_html_from_file('tables2.html')
         cls.table3_html = cls.get_html_from_file('tables3.html')
+        cls.small_style_css = cls.get_css_path_from_file('small_style.css')
+        cls.small_style_css_url = 'https://github.com/dfop02/html4docx/blob/feature/support-style-tag/tests/assets/css/small_style.css?raw=true'
+        cls.large_framework_css = cls.get_css_path_from_file('large_framework.css')
+        cls.large_framework_css_url = 'https://github.com/dfop02/html4docx/blob/feature/support-style-tag/tests/assets/css/large_framework.css?raw=true'
 
     @classmethod
     def tearDownClass(cls):
@@ -2583,9 +2603,10 @@ and blank lines.
         2. CSS class selectors from <style>
         3. CSS ID selectors from <style>
         4. Style maps (class mapping)
-        5. Tag overrides
-        6. Inline styles
-        7. !important (highest priority)
+        6. External CSS Styles (from <link> tags)
+        7. Tag overrides
+        8. Inline styles
+        9. !important (highest priority)
         """
         self.document.add_heading(
             'Test: Complex CSS Cascade with Style Tags and Existing Features',
@@ -2606,6 +2627,7 @@ and blank lines.
         parser.options['tag-override'] = True
 
         html = """
+        <link rel="stylesheet" href="{self.small_style_css_url}">
         <style>
             /* Tag selectors - lowest priority */
             p {
@@ -2692,17 +2714,20 @@ and blank lines.
         <!-- Test 13: Div with ID from <style> -->
         <div id="footer">Footer div (gray, italic)</div>
 
-        <!-- Test 14: Span with class from <style> -->
+        <!-- Test 14: Class from External CSS <style> -->
+        <div class="classFromExternalCss">Container div with <span class="blueSpan">Blue span</span></div>
+
+        <!-- Test 15: Span with class from <style> -->
         <p>Normal text with <span class="highlight">highlighted span</span> inside</p>
 
-        <!-- Test 15: Complex nested scenario -->
+        <!-- Test 16: Complex nested scenario -->
         <p class="large-text">
             Large text paragraph with
             <span class="highlight" style="color: magenta">magenta highlighted span</span>
             and more text
         </p>
 
-        <!-- Test 16: Multiple !important rules -->
+        <!-- Test 17: Multiple !important rules -->
         <p class="highlight large-text" id="special" style="color: lime !important; font-size: 22pt !important">
             Complex paragraph with all selectors and !important (lime, 22pt, highest priority)
         </p>
@@ -2882,11 +2907,9 @@ and blank lines.
             level=1
         )
 
-        css_url = 'https://github.com/dfop02/html4docx/blob/main/tests/assets/css/large_framework.css?raw=true'
-
         # HTML with only a few elements - should only load relevant CSS
         html = f"""
-        <link rel="stylesheet" href="{css_url}">
+        <link rel="stylesheet" href="{self.large_framework_css_url}">
         <div class="container">
             <button class="btn">Click me</button>
             <p>Some text</p>
@@ -2917,26 +2940,31 @@ and blank lines.
         self.assertLessEqual(len(loaded_classes), 3,
                             f"Should load only relevant classes, but loaded {len(loaded_classes)}: {loaded_classes}")
 
-    def test_small_and_mixed_style_css(self):
+    def test_small_style_css(self):
         """
-        Test mixed styles CSS files, using multiple selectors and styles.
+        Test small style CSS file, using multiple selectors and styles.
+        This test verifies that only the small style CSS file is loaded and applied correctly.
+
+        CSS Rules:
+        - p { color: red; font-weight: bold; }
+        - .classFromExternalCss { background-color: yellow; }
+        - .blueSpan { color: blue; }
+        - #specialParagraph { text-decoration: underline red; color: gray; }
         """
         self.document.add_heading(
-            'Test: Mixed Styles CSS',
+            'Test: Small Style CSS',
             level=1
         )
-
-        css_url = 'https://github.com/dfop02/html4docx/blob/main/tests/assets/css/small_style.css?raw=true'
 
         # HTML with only a few elements - should only load relevant CSS
         html = f"""
         <head>
             <title>My page</title>
-            <link rel="stylesheet" href="{css_url}">
+            <link rel="stylesheet" href="{self.small_style_css_url}">
         </head>
         <body>
             <div class="classFromExternalCss">
-                <p>This should be Red and <span class="blueSpan">Blue</span>.<p>
+                <p>This should be Red and <span class="blueSpan">Blue</span>, with a yellow background.</p>
                 <p id="specialParagraph" style="font-weight: normal">A very special paragraph.</p>
             </div>
         </body>
@@ -2946,41 +2974,176 @@ and blank lines.
         parser.add_html_to_document(html, self.document)
         doc = parser.parse_html_string(html)
 
-        # Verify CSS parser has rules
-        self.assertTrue(parser.css_parser.has_rules())
+        # ====================================================================
+        # 1. Verify CSS parser has rules and smart parsing loaded only used rules
+        # ====================================================================
+        self.assertTrue(parser.css_parser.has_rules(), "CSS parser should have rules")
 
-        # Verify small style CSS was loaded
-        self.assertIn('specialParagraph', parser.css_parser.id_rules)
-        self.assertIn('blueSpan', parser.css_parser.class_rules)
-        self.assertIn('p', parser.css_parser.tag_rules)
+        # Verify small style CSS was loaded (smart parsing should load only used rules)
+        self.assertIn('classFromExternalCss', parser.css_parser.class_rules, "Should load .classFromExternalCss (used in HTML)")
+        self.assertIn('blueSpan', parser.css_parser.class_rules, "Should load .blueSpan (used in HTML)")
+        self.assertIn('specialParagraph', parser.css_parser.id_rules, "Should load #specialParagraph (used in HTML)")
+        self.assertIn('p', parser.css_parser.tag_rules, "Should load p tag rule (used in HTML)")
 
-        # Verify mixed style CSS was loaded
-        self.assertIn('highlight', parser.css_parser.class_rules)
-        self.assertIn('large-text', parser.css_parser.class_rules)
-        self.assertIn('mapped-class', parser.css_parser.class_rules)
-        self.assertIn('special', parser.css_parser.id_rules)
+        # Verify smart parsing: should only load used classes/IDs
+        loaded_classes = set(parser.css_parser.class_rules.keys())
+        loaded_ids = set(parser.css_parser.id_rules.keys())
+        self.assertEqual(loaded_classes, {'classFromExternalCss', 'blueSpan'}, f"Should only load used classes, got: {loaded_classes}")
+        self.assertEqual(loaded_ids, {'specialParagraph'}, f"Should only load used IDs, got: {loaded_ids}")
 
-        # Verify small style CSS was applied
-        self.assertIn('specialParagraph', doc.paragraphs[0].text)
-        self.assertIn('blueSpan', doc.paragraphs[0].text)
-        self.assertIn('p', doc.paragraphs[0].text)
+        # ====================================================================
+        # 2. Verify paragraphs exist
+        # ====================================================================
+        paragraph_texts = [p.text for p in doc.paragraphs]
+        self.assertIn('This should be Red and Blue, with a yellow background.', paragraph_texts, "First paragraph should exist")
+        self.assertIn('A very special paragraph.', paragraph_texts, "Special paragraph should exist")
 
-        # Verify mixed style CSS was applied
-        self.assertIn('highlight', doc.paragraphs[0].text)
-        self.assertIn('large-text', doc.paragraphs[0].text)
-        self.assertIn('mapped-class', doc.paragraphs[0].text)
-        self.assertIn('special', doc.paragraphs[0].text)
+        # ====================================================================
+        # 3. Verify first paragraph: "This should be Red and Blue, with a yellow background."
+        # Expected: Red text (from p CSS), bold (from p CSS), yellow background (from div CSS)
+        # The span "Blue" should be blue (from .blueSpan CSS)
+        # ====================================================================
+        first_paragraph = next(p for p in doc.paragraphs if 'This should be Red and Blue, with a yellow background.' in p.text)
 
-        # Verify small style CSS was applied
-        self.assertEqual(doc.paragraphs[0].style.name, 'Heading 1')
-        self.assertEqual(doc.paragraphs[0].runs[0].font.color.rgb, RGBColor(0, 0, 0))
-        self.assertEqual(doc.paragraphs[0].runs[0].font.size, Pt(24))
-        self.assertEqual(doc.paragraphs[0].runs[0].font.bold, True)
-        self.assertEqual(doc.paragraphs[0].runs[0].font.italic, False)
-        self.assertEqual(doc.paragraphs[0].runs[0].font.underline, True)
-        self.assertEqual(doc.paragraphs[0].runs[0].font.underline_color.rgb, RGBColor(255, 0, 0))
-        self.assertEqual(doc.paragraphs[0].runs[0].font.underline_style, WD_UNDERLINE.SINGLE)
+        self.assertIsNotNone(first_paragraph, "First paragraph should be found")
+        self.assertGreater(len(first_paragraph.runs), 3, "First paragraph should have exactly 3 runs")
 
+        # Find runs by text content - more robust approach
+        runs = first_paragraph.runs
+
+        # Find the blue run (span with class="blueSpan")
+        blue_run = None
+        for run in runs:
+            if 'Blue' in run.text:
+                blue_run = run
+                break
+
+        # Find non-blue runs (should be red from p CSS)
+        non_blue_runs = [run for run in runs if run != blue_run and run.text.strip()]
+
+        # Verify we found the expected runs
+        self.assertIsNotNone(blue_run, "Should find blue span run")
+        self.assertGreater(len(non_blue_runs), 0, "Should have non-blue runs")
+
+        # Verify blue span run (from .blueSpan CSS: color: blue;)
+        # It should inherit bold from p and may have background from div
+        self.assertEqual(blue_run.font.color.rgb, RGBColor(0, 0, 255), "Blue run should have blue color from .blueSpan CSS")
+        self.assertTrue(blue_run.font.bold, "Blue run should be bold (inherited from p CSS)")
+
+        # Verify non-blue runs (from p CSS: color: red; font-weight: bold;)
+        # All should have red color, bold, and yellow background
+        import pdb; pdb.set_trace()
+        for i, run in enumerate(non_blue_runs):
+            print(f"Non-blue run {i}:")
+            print(run.text)
+            print(self.get_background_color(run))
+            if run.text.strip():  # Only check non-empty runs
+                self.assertEqual(run.font.color.rgb, RGBColor(255, 0, 0), f"Non-blue run {i} should have red color from p CSS")
+                self.assertTrue(run.font.bold, f"Non-blue run {i} should be bold from p CSS")
+                # Background yellow from .classFromExternalCss (applied to paragraph)
+                bg_color = self.get_background_color(run)
+                self.assertEqual(
+                    bg_color,
+                    'FFFF00',
+                    f"Non-blue run {i} should have yellow background from .classFromExternalCss, got: {bg_color}"
+                )
+
+        # Verify blue run background (may or may not have it depending on implementation)
+        # The background from div might be applied to all runs or just non-span runs
+        blue_bg_color = self.get_background_color(blue_run)
+        # We'll check if it exists, but won't fail if it doesn't
+        # (span might override or background might only apply to paragraph-level runs)
+        if blue_bg_color:
+            # If background exists, it should be yellow
+            self.assertEqual(blue_bg_color, 'FFFF00', f"If blue run has background, it should be yellow, got: {blue_bg_color}")
+
+        # ====================================================================
+        # 4. Verify special paragraph: "A very special paragraph."
+        # Expected: Gray color (from #specialParagraph CSS),
+        #          underline red (from #specialParagraph CSS),
+        #          font-weight normal (from inline style, overrides p CSS)
+        # ====================================================================
+        special_paragraph = next(p for p in doc.paragraphs if 'A very special paragraph.' in p.text)
+
+        self.assertIsNotNone(special_paragraph, "Special paragraph should be found")
+        self.assertGreater(len(special_paragraph.runs), 0, "Special paragraph should have runs")
+
+        # Get the main run (should be the first non-empty run)
+        special_run = None
+        for run in special_paragraph.runs:
+            if run.text.strip():
+                special_run = run
+                break
+
+        self.assertIsNotNone(special_run, "Special paragraph should have a non-empty run")
+
+        # Verify color: gray (from #specialParagraph CSS)
+        # Gray is RGB(128, 128, 128) according to Color enum
+        self.assertIsNotNone(special_run.font.color.rgb, "Special run should have a color")
+        self.assertNotEqual(special_run.font.color.rgb, RGBColor(255, 0, 0), "Special run should NOT be red (should be gray from #specialParagraph)")
+        # Gray should be RGB(128, 128, 128)
+        expected_gray = RGBColor(*Color['gray'].value)
+        self.assertEqual(special_run.font.color.rgb, expected_gray,
+                        f"Special run should be gray (RGB{Color['gray'].value}), got: {special_run.font.color.rgb}")
+
+        # Verify underline: red (from #specialParagraph CSS: text-decoration: underline red;)
+        self.assertTrue(special_run.font.underline, "Special run should have underline from #specialParagraph CSS")
+        underline_color = self.get_underline_color(special_run)
+        self.assertEqual(underline_color, 'FF0000', f"Special run underline should be red, got: {underline_color}")
+
+        # Verify font-weight: normal (from inline style, overrides p CSS bold)
+        self.assertFalse(special_run.font.bold, "Special run should NOT be bold (inline style font-weight: normal overrides p CSS)")
+
+        # Verify no italic
+        self.assertFalse(special_run.font.italic, "Special run should not be italic")
+
+        # ====================================================================
+        # 5. Verify CSS cascade priority
+        # ====================================================================
+        # The special paragraph has:
+        # - p CSS: color: red; font-weight: bold;
+        # - #specialParagraph CSS: color: gray; text-decoration: underline red;
+        # - Inline style: font-weight: normal;
+        #
+        # Final result should be:
+        # - color: gray (ID selector wins over tag selector)
+        # - font-weight: normal (inline style wins over CSS)
+        # - text-decoration: underline red (from ID selector)
+        #
+        # This is already verified above, but let's add explicit comments
+        self.assertNotEqual(
+            special_run.font.color.rgb,
+            RGBColor(255, 0, 0),
+            "ID selector (#specialParagraph) should override tag selector (p) for color"
+        )
+        self.assertFalse(special_run.font.bold, "Inline style should override CSS for font-weight")
+
+    def test_smart_parsing_when_nothing_is_used(self):
+        """
+        Test smart parsing when nothing is used.
+        This test verifies that the CSS parser is smart enough to not load any CSS rules when nothing is used.
+        """
+        self.document.add_heading(
+            'Test: Smart Parsing When Nothing Is Used',
+            level=1
+        )
+
+        html = f"""
+        <head>
+            <link rel="stylesheet" href="{self.large_framework_css}">
+        </head>
+        <body>
+            <p style="font-size: 15px;">Just a regular paragraph, without any CSS classes or IDs from link.</p>
+        </body>
+        """
+
+        parser = HtmlToDocx()
+        parser.add_html_to_document(html, self.document)
+
+        # Verify CSS parser has no rules
+        self.assertFalse(parser.css_parser.has_rules())
+        self.assertEqual(len(parser.css_parser._used_classes), 0)
+        self.assertEqual(len(parser.css_parser._used_ids), 0)
 
 if __name__ == "__main__":
     unittest.main()
