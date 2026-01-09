@@ -1,4 +1,5 @@
 import base64
+import logging
 import os
 import re
 import urllib
@@ -9,55 +10,22 @@ from urllib.parse import urlparse
 
 from docx.shared import Cm, Inches, Mm, Pt, RGBColor
 
+from html4docx import constants
 from html4docx.colors import Color
 
-font_styles = {
-    'b': 'bold',
-    'strong': 'bold',
-    'em': 'italic',
-    'i': 'italic',
-    'u': 'underline',
-    's': 'strike',
-    'sup': 'superscript',
-    'sub': 'subscript',
-    'th': 'bold',
-}
-
-font_names = {
-    'code': 'Courier',
-    'pre': 'Courier',
-}
-
-font_sizes_named = {
-    'xx-small': '9px',
-    'x-small': '10px',
-    'small': '13px',
-    'medium': '16px',
-    'large': '18px',
-    'x-large': '24px',
-    'xx-large': '32px'
-}
-
-styles = {
-    'ul': 'List Bullet',
-    'ul2': 'List Bullet 2',
-    'ul3': 'List Bullet 3',
-    'ol': 'List Number',
-    'ol2': 'List Number 2',
-    'ol3': 'List Number 3',
-}
-
-# values in inches
-INDENT = 0.25
-MAX_INDENT = 5.5 # To stop indents going off the page
 
 class ImageAlignment(Enum):
     LEFT = 1
     CENTER = 2
     RIGHT = 3
 
+
 def get_filename_from_url(url: str):
     return os.path.basename(urlparse(url).path)
+
+def dict_to_style_string(style_dict):
+    """Convert style dictionary back to CSS string"""
+    return '; '.join([f'{k}: {v}' for k, v in style_dict.items()])
 
 def is_url(url: str):
     """
@@ -67,17 +35,21 @@ def is_url(url: str):
     parts = urlparse(url)
     return all([parts.scheme, parts.netloc, parts.path])
 
+
 def rgb_to_hex(rgb: str):
-    return '#' + ''.join(f'{i:02X}' for i in rgb)
+    return "#" + "".join(f"{i:02X}" for i in rgb)
+
 
 def adapt_font_size(size: str):
-    if size in font_sizes_named.keys():
-        return font_sizes_named[size]
+    if size in constants.FONT_SIZES_NAMED.keys():
+        return constants.FONT_SIZES_NAMED[size]
 
     return size
 
+
 def remove_important_from_style(text: str):
-    return re.sub('!important', '', text, flags=re.IGNORECASE).strip()
+    return re.sub("!important", "", text, flags=re.IGNORECASE).strip()
+
 
 def fetch_image(url: str):
     """
@@ -91,6 +63,7 @@ def fetch_image(url: str):
             return BytesIO(response.read())
     except urllib.error.URLError:
         return None
+
 
 def fetch_image_data(src: str):
     """Fetches image data from a URL or local file."""
@@ -107,14 +80,21 @@ def fetch_image_data(src: str):
         except FileNotFoundError:
             return None
 
-def parse_dict_string(string: str, separator: str = ';'):
+
+def parse_dict_string(string: str, separator: str = ";"):
     """Parse style string into dict, return empty dict if no style"""
     if not string:
         return dict()
 
-    new_string = re.sub(r'\s+', ' ', string.replace("\n", '')).split(separator)
-    string_dict = dict((k.strip(), v.strip()) for x in new_string if ':' in x for k, v in [x.split(':')])
+    new_string = re.sub(r"\s+", " ", string.replace("\n", "")).split(separator)
+    string_dict = dict(
+        (k.strip(), v.strip())
+        for x in new_string
+        if ":" in x
+        for k, v in [x.split(":", 1)]
+    )
     return string_dict
+
 
 def unit_converter(unit_value: str, target_unit: str = "pt"):
     """
@@ -137,39 +117,41 @@ def unit_converter(unit_value: str, target_unit: str = "pt"):
     unit_value = unit_value.strip().lower()
 
     # Extract numeric value and unit
-    value = float(re.sub(r'[^0-9.]', '', unit_value))  # Extract numeric part
-    unit = re.sub(r'[0-9.]', '', unit_value)           # Extract unit part
+    value = float(re.sub(r"[^0-9.]", "", unit_value))  # Extract numeric part
+    unit = re.sub(r"[0-9.]", "", unit_value)  # Extract unit part
 
     # Conversion factors to points (pt)
     conversion_to_pt = {
-        "px": value * 0.75,    # 1px = 0.75pt (assuming 96dpi)
-        "pt": value * 1.0,     # 1pt = 1pt
-        "in": value * 72.0,    # 1in = 72pt
-        "pc": value * 12.0,    # 1pc = 12pt
-        "cm": value * 28.3465, # 1cm = 28.3465pt
-        "mm": value * 2.83465, # 1mm = 2.83465pt
-        "em": value * 12.0,    # 1em = 12pt (assuming 1em = 16px)
-        "rem": value * 12.0,   # 1rem = 12pt (assuming 1rem = 16px)
-        "%": value,            # Percentage is context-dependent; return as-is
+        "px": value * 0.75,  # 1px = 0.75pt (assuming 96dpi)
+        "pt": value * 1.0,  # 1pt = 1pt
+        "in": value * 72.0,  # 1in = 72pt
+        "pc": value * 12.0,  # 1pc = 12pt
+        "cm": value * 28.3465,  # 1cm = 28.3465pt
+        "mm": value * 2.83465,  # 1mm = 2.83465pt
+        "em": value * 12.0,  # 1em = 12pt (assuming 1em = 16px)
+        "rem": value * 12.0,  # 1rem = 12pt (assuming 1rem = 16px)
+        "%": value,  # Percentage is context-dependent; return as-is
     }
 
     # Convert input value to points (pt)
     if unit in conversion_to_pt:
         value_in_pt = conversion_to_pt[unit]
     else:
-        print(f'Warning: unsupported unit {unit}, return None instead.')
+        print(f"Warning: unsupported unit {unit}, return None instead.")
         return None
 
     # Clamp the value to MAX_INDENT (in points)
-    value_in_pt = min(value_in_pt, MAX_INDENT * 72.0)  # MAX_INDENT is in inches
+    value_in_pt = min(
+        value_in_pt, constants.MAX_INDENT * 72.0
+    )  # MAX_INDENT is in inches
 
     # Convert from points (pt) to the target unit
     conversion_from_pt = {
-        "pt": Pt(value_in_pt),              # 1pt = 1pt
-        "px": round(value_in_pt / 0.75, 2), # 1pt = 1.33px
-        "in": Inches(value_in_pt / 72.0),   # 1pt = 1/72in
-        "cm": Cm(value_in_pt / 28.3465),    # 1pt = 0.0353cm
-        "mm": Mm(value_in_pt / 2.83465),    # 1pt = 0.3527mm
+        "pt": Pt(value_in_pt),  # 1pt = 1pt
+        "px": round(value_in_pt / 0.75, 2),  # 1pt = 1.33px
+        "in": Inches(value_in_pt / 72.0),  # 1pt = 1/72in
+        "cm": Cm(value_in_pt / 28.3465),  # 1pt = 0.0353cm
+        "mm": Mm(value_in_pt / 2.83465),  # 1pt = 0.3527mm
     }
 
     if target_unit in conversion_from_pt:
@@ -177,32 +159,73 @@ def unit_converter(unit_value: str, target_unit: str = "pt"):
     else:
         raise ValueError(f"Unsupported target unit: {target_unit}")
 
+
 def is_color(color: str) -> bool:
+    """
+    Checks if a color string is a valid color.
+    Supports RGB, hex, and color name strings.
+
+    Args:
+        color(str): The color string to check.
+
+    Returns:
+        bool: True if the color is valid, False otherwise.
+
+    Examples:
+        >>> is_color("red")
+        True
+        >>> is_color("#000000")
+        True
+        >>> is_color("rgb(0, 0, 0)")
+        True
+        >>> is_color("000000")
+        False
+    """
     is_rgb = 'rgb' in color
     is_hex = color.startswith('#')
     is_keyword = color == 'currentcolor'
     is_color_name = color in Color.__members__
     return is_rgb or is_hex or is_keyword or is_color_name
 
-def parse_color(color: str, return_hex: bool = False):
-    color = remove_important_from_style(color.strip().lower())
 
-    if 'rgb' in color:
-        color = re.sub(r'[^0-9,]', '', color)
-        colors = [int(x) for x in color.split(',')]
-    elif color.startswith('#'):
-        color = color.lstrip('#')
-        color = ''.join([x+x for x in color]) if len(color) == 3 else color # convert short hex to full hex
-        colors = RGBColor.from_string(color)
-    elif color in Color.__members__:
-        colors = Color[color].value
-    else:
-        colors = [0, 0, 0]  # Default to black for unexpected colors
+def parse_color(original_color: str, return_hex: bool = False):
+    """
+    Parses a color string into a tuple of RGB values.
+    Supports RGB, hex, and color name strings.
+    Returns a tuple of RGB values by default, or a hex string if return_hex is True.
+    """
+    color = remove_important_from_style(original_color.strip().lower())
+
+    try:
+        if "rgba" in color:
+            color = re.sub(r"[^0-9,]", "", color)
+            colors = [int(x) for x in color.split(",")]
+            colors = colors[:3] # remove opacity because it's not supported by python-docx
+            logging.warning("RGBA color is not supported by python-docx. Opacity will be ignored.")
+        elif "rgb" in color:
+            color = re.sub(r"[^0-9,]", "", color)
+            colors = [int(x) for x in color.split(",")]
+            if len(colors) > 3:
+                raise ValueError(f"Invalid RGB color: {original_color}")
+        elif color.startswith("#"):
+            color = color.lstrip("#")
+            color = ("".join([x + x for x in color]) if len(color) == 3 else color)  # convert short hex to full hex
+            colors = RGBColor.from_string(color)
+        elif color in Color.__members__:
+            colors = Color[color].value
+        else:
+            colors = [0, 0, 0]  # Default to black for unexpected colors
+            logging.warning(f"Could not parse color '{original_color}': Invalid color value. Fallback to black.")
+    except Exception:
+        colors = [0, 0, 0] # Default to black for errors
+        logging.warning(f"Could not parse color '{original_color}': Invalid color value. Fallback to black.")
 
     return rgb_to_hex(colors) if return_hex else colors
 
+
 def remove_last_occurence(ls, x):
     ls.pop(len(ls) - ls[::-1].index(x) - 1)
+
 
 def remove_whitespace(string, leading=False, trailing=False):
     """Remove white space from a string.
@@ -258,16 +281,17 @@ def remove_whitespace(string, leading=False, trailing=False):
     """
     # Remove any leading new line characters along with any surrounding white space
     if leading:
-        string = re.sub(r'^\s*\n+\s*', '', string)
+        string = re.sub(r"^\s*\n+\s*", "", string)
 
     # Remove any trailing new line characters along with any surrounding white space
     if trailing:
-        string = re.sub(r'\s*\n+\s*$', '', string)
+        string = re.sub(r"\s*\n+\s*$", "", string)
 
     # Replace new line characters and absorb any surrounding space.
-    string = re.sub(r'\s*\n\s*', ' ', string)
+    string = re.sub(r"\s*\n\s*", " ", string)
     # TODO need some way to get rid of extra spaces in e.g. text <span>   </span>  text
-    return re.sub(r'\s+', ' ', string)
+    return re.sub(r"\s+", " ", string)
+
 
 def delete_paragraph(paragraph):
     # https://github.com/python-openxml/python-docx/issues/33#issuecomment-77661907
@@ -275,9 +299,77 @@ def delete_paragraph(paragraph):
     p.getparent().remove(p)
     p._p = p._element = None
 
+
 def get_image_alignment(image_style):
-    if image_style == 'float: right;':
+    if image_style == "float: right;":
         return ImageAlignment.RIGHT
-    if image_style == 'display: block; margin-left: auto; margin-right: auto;':
+    if image_style == "display: block; margin-left: auto; margin-right: auto;":
         return ImageAlignment.CENTER
     return ImageAlignment.LEFT
+
+
+def check_style_exists(document, style_name):
+    try:
+        return style_name in document.styles
+    except Exception:
+        return False
+
+# Moved from h4d.py to here.... was _parse_text_decoration
+def parse_text_decoration(text_decoration):
+    """Parse text-decoration using regex to preserve color values."""
+    # Pattern to match color values (rgb, hex, named colors) or other tokens
+    pattern = r"rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)|#[\da-fA-F]+|[\w-]+"
+
+    tokens = re.findall(pattern, text_decoration)
+
+    result = {"line_type": None, "line_style": "solid", "color": None}
+
+    for token in tokens:
+        if token in constants.FONT_UNDERLINE:
+            result["line_type"] = token
+        elif token == "none":
+            result["line_type"] = "none"
+        elif token in constants.FONT_UNDERLINE_STYLES:
+            result["line_style"] = token
+        elif is_color(token):
+            result["color"] = token
+        elif token in ("blink", "overline"):
+            result["line_style"] = None
+            logging.warning("Blink or overline not supported.")
+
+    if result["line_type"] == "line-through" and result["color"] is not None:
+        logging.warning(
+            f"Word does not support colored strike-through. Color '{result['color']}' will be ignored for line-through."
+        )
+    return result
+
+
+def parse_inline_styles(style_string):
+    """
+    Parse inline CSS styles and separate normal styles from !important ones.
+
+    Args:
+        style_string (str): CSS style string (e.g., "color: red; font-size: 12px !important")
+
+    Returns:
+        tuple: (normal_styles dict, important_styles dict)
+    """
+    normal_styles = {}
+    important_styles = {}
+
+    if not style_string:
+        return normal_styles, important_styles
+
+    # Parse style string into individual declarations
+    style_dict = parse_dict_string(style_string)
+
+    for prop, value in style_dict.items():
+        # Check if value has !important flag
+        if "!important" in value.lower():
+            # Remove !important flag and store in important_styles
+            clean_value = remove_important_from_style(value)
+            important_styles[prop] = clean_value
+        else:
+            normal_styles[prop] = value
+
+    return normal_styles, important_styles

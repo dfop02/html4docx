@@ -51,6 +51,8 @@ coverage.xml
 .pytest_cache/
 cover/
 tests/**/*.docx
+calc_cov/
+.ruff_cache/
 
 # Translations
 *.mo
@@ -156,6 +158,9 @@ cython_debug/
 
 # Mac OS
 .DS_Store
+
+# Cursor
+*.code-workspace
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

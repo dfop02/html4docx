@@ -1,20 +1,8 @@
-"""
-Make 'span' in tags dict a stack
-maybe do the same for all tags in case of unclosed tags?
-optionally use bs4 to clean up invalid html?
-
-the idea is that there is a method that converts html files into docx
-but also have api methods that let user have more control e.g. so they
-can nest calls to something like 'convert_chunk' in loops
-
-user can pass existing document object as arg
-(if they want to manage rest of document themselves)
-
-How to deal with block level style applied over table elements? e.g. text align
-"""
 import argparse
+import logging
 import os
 import re
+from io import BytesIO
 from html.parser import HTMLParser
 
 import docx
@@ -28,33 +16,24 @@ from docx.shared import RGBColor
 
 from functools import lru_cache
 
-from html4docx.metadata import Metadata
+from html4docx import constants
 from html4docx import utils
-
-# values in inches
-INDENT = 0.25
-LIST_INDENT = 0.5
-MAX_INDENT = 5.5 # To stop indents going off the page
-
-# Style to use with tables. By default no style is used.
-DEFAULT_TABLE_STYLE = None
+from html4docx.metadata import Metadata
 
 class HtmlToDocx(HTMLParser):
-    def __init__(self):
+    """
+        Class to convert HTML to Docx
+        source: https://docs.python.org/3/library/html.parser.html
+    """
+    def __init__(self, style_map=None, tag_style_overrides=None, default_paragraph_style="Normal"):
         super().__init__()
-        self.options = {
-            'fix-html': True,
-            'images': True,
-            'tables': True,
-            'styles': True,
-        }
-        self.table_row_selectors = [
-            'table > tr',
-            'table > thead > tr',
-            'table > tbody > tr',
-            'table > tfoot > tr'
-        ]
-        self.table_style = DEFAULT_TABLE_STYLE
+        self.options = dict(constants.DEFAULT_OPTIONS)
+        self.table_row_selectors = constants.DEFAULT_TABLE_ROW_SELECTORS
+        self.table_style = constants.DEFAULT_TABLE_STYLE
+        self.paragraph_span_styles = {}  # paragraph_id -> set(run_indices)
+        self.style_map = style_map or constants.DEFAULT_STYLE_MAP
+        self.tag_style_overrides = tag_style_overrides or constants.DEFAULT_TAG_OVERRIDES
+        self.default_paragraph_style = default_paragraph_style or constants.DEFAULT_PARAGRAPH_STYLE
 
     def set_initial_attrs(self, document=None):
         self.tags = {
@@ -62,33 +41,239 @@ class HtmlToDocx(HTMLParser):
             'list': [],
         }
         self.doc = document if document else Document()
-        self.document = self.doc
         self.bs = self.options['fix-html'] # whether or not to clean with BeautifulSoup
-        self.include_tables = True # TODO add this option back in?
-        self.include_images = self.options['images']
-        self.include_styles = self.options['styles']
         self.paragraph = None
+        self.run = None
         self.skip = False
         self.skip_tag = None
         self.instances_to_skip = 0
         self.bookmark_id = 0
-        # This counter simulates unique numbering IDs for <ol> elements.
-        # Each new top-level ordered list increments this to trick python-docx into restarting list numbering.
-        # Required because python-docx doesn't expose fine-grained list numbering control.
         self.in_li = False
         self.list_restart_counter = 0
         self.current_ol_num_id = None
         self._list_num_ids = {}
 
+        # NEW: Set style map & tag overrides according to options
+
+        self.use_styles = False if self.options["styles"] is False else self.options["style-map"]
+        self.use_tag_overrides = self.options["tag-override"]
+        # NEW: Style tracking variables
+        self.pending_div_style = None
+        self.pending_character_style = None
+        self.pending_inline_styles = None
+        self.pending_important_styles = None
+
     @property
-    def metadata(self):
+    def metadata(self) -> dict[str, any]:
         if not hasattr(self, '_metadata'):
             self._metadata = Metadata(self.doc)
         return self._metadata
 
+    @property
+    def include_tables(self) -> bool:
+        return self.options.get('tables', True)
+
+    @property
+    def include_images(self) -> bool:
+        return self.options.get('images', True)
+
+    @property
+    def include_styles(self) -> bool:
+        return self.options.get('styles', True)
+
+    @property
+    def include_html_comments(self) -> bool:
+        return self.options.get('html-comments', False)
+
+    @property
+    def include_stylemap(self) -> bool:
+        return self.options.get("style-map", True)
+
+    @property
+    def include_tagoverrides(self) -> bool:
+        return self.options.get("tag-override", True)
+
+    def save(self, destination) -> None:
+        """Save the document to a file path or BytesIO object."""
+        if isinstance(destination, str):
+            destination, _ = os.path.splitext(destination)
+            self.doc.save(f'{destination}.docx')
+        elif isinstance(destination, BytesIO):
+            self.doc.save(destination)
+        else:
+            raise TypeError('destination must be a str path or BytesIO object')
+
     def copy_settings_from(self, other):
         """Copy settings from another instance of HtmlToDocx"""
         self.table_style = other.table_style
+
+        # NEW: Copy extended settings if present
+        if hasattr(other, "style_map"):
+            self.style_map = other.style_map
+            self.tag_style_overrides = other.tag_style_overrides
+            self.default_paragraph_style = other.default_paragraph_style
+
+    def get_word_style_for_element(self, tag, attrs):
+        """
+            Determine the Word style to use for an HTML element.
+
+            Priority order:
+            1. CSS class from style_map (if present)
+            2. Tag override from tag_style_overrides
+            3. Default behavior
+
+            Args:
+            tag: HTML tag name (e.g., 'h1', 'p', 'div')
+            attrs: Dictionary of HTML attributes
+
+        Returns:
+            str or None: Word style name to apply, or None for default behavior
+        """
+        # Priority 1: Check if element has a class attribute mapped in style_map
+        if "class" in attrs:
+            # html class can be multiple classes separated by space
+            classes = attrs["class"].split()
+            for cls in classes:
+                if cls in self.style_map:
+                    return self.style_map[cls]
+        # Priority 2, tag override
+        if tag in self.tag_style_overrides:
+            return self.tag_style_overrides[tag]
+
+        # Priority 3, default behavior.
+        return None
+
+    def apply_style_to_paragraph(self, paragraph, style_name):
+        """
+        Apply a Word style to a paragraph by style name.
+
+        Args:
+            paragraph: python-docx Paragraph object
+            style_name (str): Name of the Word style to apply
+
+        Returns:
+            bool: True if style was applied successfully, False otherwise
+        """
+        try:
+            paragraph.style = style_name
+            return True
+        except KeyError:
+            # Style doesn't exist in document
+            print(
+                f"Warning: Style '{style_name}' not found in document. Using default."
+            )
+            return False
+
+    def apply_style_to_run(self, style_name):
+        """
+        Apply a Word character style to a run by style name.
+
+        Args:
+            run: python-docx Run object
+            style_name (str): Name of the Word character style to apply
+
+        Returns:
+            bool: True if style was applied successfully, False otherwise
+        """
+        try:
+            self.run.style = style_name
+            return True
+        except KeyError:
+            print(f"Warning: Character style '{style_name}' not found in document.")
+            return False
+        except ValueError as e:
+            if "need type CHARACTER" in str(e):
+                print(
+                    f"Warning: '{style_name}' is a paragraph style, not a character style."
+                )
+                print(
+                    "For inline elements like <code>, please create a character style in Word."
+                )
+            return False
+
+    def parse_inline_styles(self, style_string):
+        """
+        Parse inline CSS styles and separate normal styles from !important ones.
+
+        Args:
+            style_string (str): CSS style string (e.g., "color: red; font-size: 12px !important")
+
+        Returns:
+            tuple: (normal_styles dict, important_styles dict)
+        """
+        normal_styles = {}
+        important_styles = {}
+
+        if not style_string:
+            return normal_styles, important_styles
+
+        # Parse style string into individual declarations
+        style_dict = utils.parse_dict_string(style_string)
+
+        for prop, value in style_dict.items():
+            # Check if value has !important flag
+            if "!important" in value.lower():
+                # Remove !important flag and store in important_styles
+                clean_value = utils.remove_important_from_style(value)
+                important_styles[prop] = clean_value
+            else:
+                normal_styles[prop] = value
+
+        return normal_styles, important_styles
+
+    def apply_inline_styles_to_run(self, styles_dict):
+        """
+        Apply inline CSS styles to a run.
+
+        Supports: color, background-color, font-size, font-weight, font-style,
+                text-decoration, font-family
+
+        Args:
+            run: python-docx Run object
+            styles_dict: Dictionary of CSS properties and values
+        """
+        if not styles_dict:
+            return
+
+        # Apply color
+        if "color" in styles_dict:
+            try:
+                colors = utils.parse_color(styles_dict["color"])
+                self.run.font.color.rgb = RGBColor(*colors)
+            except Exception:
+                pass
+
+        # Apply font-size
+        if "font-size" in styles_dict:
+            try:
+                font_size = utils.adapt_font_size(styles_dict["font-size"])
+                if font_size:
+                    self.run.font.size = utils.unit_converter(font_size)
+            except Exception:
+                pass
+
+        # Apply font-weight (bold)
+        if "font-weight" in styles_dict:
+            weight = styles_dict["font-weight"].lower()
+            if weight in ["bold", "bolder", "700", "800", "900"]:
+                self.run.font.bold = True
+            elif weight in ["normal", "400"]:
+                self.run.font.bold = False
+
+        # Apply font-style (italic)
+        if "font-style" in styles_dict:
+            style = styles_dict["font-style"].lower()
+            if style == "italic" or style == "oblique":
+                self.run.font.italic = True
+            elif style == "normal":
+                self.run.font.italic = False
+
+        # Apply font-family
+        if "font-family" in styles_dict:
+            font_family = (
+                styles_dict["font-family"].split(",")[0].strip().strip('"').strip("'")
+            )
+            self.run.font.name = font_family
 
     def get_cell_html(self, soup):
         """
@@ -121,38 +306,18 @@ class HtmlToDocx(HTMLParser):
         tcPr = tc.get_or_add_tcPr()  # Get or add the table cell properties
 
         # Default border properties
-        default_size = 0
-        default_color = "#000000"
-        default_style = "single"
-        borders = {
-            "top": {"size": default_size, "color": default_color, "style": default_style},
-            "right": {"size": default_size, "color": default_color, "style": default_style},
-            "bottom": {"size": default_size, "color": default_color, "style": default_style},
-            "left": {"size": default_size, "color": default_color, "style": default_style},
-        }
-        border_styles = {
-            "none": "none",
-            "hidden": "none",
-            "initial": "none",
-            "solid": "single",
-            "dotted": "dotted",
-            "dashed": "dashed",
-            "double": "double",
-            "inset": "inset",
-            "outset": "outset"
-        }
-        keywords = {
-            'thin': '1px',
-            'medium': '3px',
-            'thick': '5px',
-            '0': '0px',
-        }
+        default_size = constants.DEFAULT_BORDER_SIZE
+        default_color = constants.DEFAULT_BORDER_COLOR
+        default_style = constants.DEFAULT_BORDER_STYLE
+        borders = constants.default_borders()
+        border_styles = constants.BORDER_STYLES
+        keywords = constants.BORDER_KEYWORDS
         border_sides = ("top", "right", "bottom", "left")
         border_width_pattern = re.compile(r'^[0-9]*\.?[0-9]+(px|pt|cm|in|rem|em|%)$')
 
         def parse_border_style(value: str) -> str:
             """Parses border styles to match word standart"""
-            return border_styles[value] if value in border_styles else 'none'
+            return constants.BORDER_STYLES[value] if value in constants.BORDER_STYLES.keys() else 'none'
 
         def check_unit_keywords(value: str) -> str:
             """Convert medium, thin, thick keywords to numeric values (px)"""
@@ -183,7 +348,7 @@ class HtmlToDocx(HTMLParser):
             elif unit == 'rem' or unit == 'em':
                 result = value * 12  # Assuming 1rem/em = 16px, converted to pt
             elif unit == '%':
-                result = MAX_INDENT * (value / 100)
+                result = constants.MAX_INDENT * (value / 100)
             else:
                 return None  # Unsupported units return None
 
@@ -316,6 +481,561 @@ class HtmlToDocx(HTMLParser):
         self.paragraph._element.append(bookmark_end)
         self.bookmark_id += 1
 
+    def apply_styles_to_run(self, run, style, isCustom=False):
+        if isCustom:
+            try:
+                run.style = style
+                return
+            except KeyError:
+                print(f"Warning: Character style '{style}' not found in document.")
+                return
+            except ValueError as e:
+                if "need type CHARACTER" in str(e):
+                    print(
+                        f"Warning: '{style}' is a paragraph style, not a character style."
+                    )
+                    print(
+                        "For inline elements like <code>, please create a character style in Word."
+                    )
+
+        if not style or not hasattr(run, 'font'):
+            return
+
+        # Find current paragraph and run position
+        if not hasattr(self, 'paragraph') or self.paragraph is None:
+            return
+
+        paragraph_id = id(self.paragraph)
+        if paragraph_id not in self.paragraph_span_styles:
+            self.paragraph_span_styles[paragraph_id] = {}
+
+        # The current run is the last one in the paragraph
+        run_index = len(self.paragraph.runs) - 1
+
+        if run_index not in self.paragraph_span_styles[paragraph_id]:
+            self.paragraph_span_styles[paragraph_id][run_index] = set()
+
+        for style_name, style_value in style.items():
+            if style_name in constants.RUN_STYLES:
+                if style_name.startswith('background-color') and style_value in ('inherit', 'initial'):
+                    continue
+
+                self.paragraph_span_styles[paragraph_id][run_index].add(style_name)
+
+                if style_name == 'text-decoration':
+                    # If span sets text-decoration shorthand, it conflicts with all text-decoration-* properties
+                    self.paragraph_span_styles[paragraph_id][run_index].add('text-decoration-line')
+                    self.paragraph_span_styles[paragraph_id][run_index].add('text-decoration-style')
+                    self.paragraph_span_styles[paragraph_id][run_index].add('text-decoration-color')
+                elif style_name.startswith('text-decoration-'):
+                    pass
+
+        for style_name, style_value in style.items():
+            if style_name in constants.PARAGRAPH_FORMAT_STYLES:
+                continue
+            elif style_name in constants.RUN_STYLES:
+                handler = getattr(self, constants.RUN_STYLES[style_name])
+                param_name = style_name.replace('-', '_')
+                handler(run=run, **{param_name: style_value})
+            else:
+                logging.warning(f"Warning: Unrecognized style '{style_name}', will be skipped.")
+
+    def apply_styles_to_paragraph(self, paragraph, style, isCustom=False):
+        if isCustom:
+            try:
+                paragraph.style = style
+                return
+            except KeyError:
+                print(f"Warning: Style '{style}' not found in document.  Using default.")
+                return
+
+        if not style or not hasattr(paragraph, 'paragraph_format'):
+            return
+
+        for style_name, style_value in style.items():
+            if style_name in constants.PARAGRAPH_FORMAT_STYLES:
+                handler = getattr(self, constants.PARAGRAPH_FORMAT_STYLES[style_name])
+            elif style_name in constants.PARAGRAPH_RUN_STYLES:
+                handler = getattr(self, constants.PARAGRAPH_RUN_STYLES[style_name])
+            else:
+                logging.warning(f"Warning: Unrecognized paragraph style '{style_name}', will be skipped.")
+                continue
+
+            handler(
+                paragraph=paragraph,
+                style_name=style_name,
+                value=style_value,
+                all_styles=style
+            )
+
+    def _apply_alignment_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        align = utils.remove_important_from_style(value)
+
+        if 'center' in align:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        elif 'left' in align:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        elif 'right' in align:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        elif 'justify' in align:
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
+    def _apply_line_height_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        line_height = utils.remove_important_from_style(value)
+
+        if line_height in ('normal', 'inherit'):
+            paragraph.paragraph_format.line_spacing = None
+        else:
+            try:
+                if line_height.replace('.', '').replace('%', '').isdigit():
+                    multiplier = float(line_height[:-1]) / 100.0 if line_height.endswith('%') else float(line_height)
+                    paragraph.paragraph_format.line_spacing = multiplier
+                else:
+                    converted = utils.unit_converter(line_height, target_unit="pt")
+                    if converted is not None:
+                        paragraph.paragraph_format.line_spacing = converted
+            except (ValueError, TypeError):
+                paragraph.paragraph_format.line_spacing = None
+
+    def _apply_margins_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        style_name = kwargs['style_name']
+        all_styles = kwargs['all_styles']
+
+        margin_left = all_styles.get('margin-left')
+        margin_right = all_styles.get('margin-right')
+
+        if margin_left and margin_right:
+            if 'auto' in margin_left and 'auto' in margin_right:
+                paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                return
+
+        if style_name == 'margin-left' and margin_left and 'auto' not in margin_left:
+            paragraph.paragraph_format.left_indent = utils.unit_converter(margin_left)
+
+        if style_name == 'margin-right' and margin_right and 'auto' not in margin_right:
+            paragraph.paragraph_format.right_indent = utils.unit_converter(margin_right)
+
+    def _apply_text_indent_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        indent_value = utils.remove_important_from_style(value)
+
+        paragraph.paragraph_format.first_line_indent = utils.unit_converter(indent_value, target_unit="pt")
+
+    def _apply_font_weight_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        font_weight = utils.remove_important_from_style(value).lower()
+
+        paragraph_id = id(paragraph)
+        paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+        for i, run in enumerate(paragraph.runs):
+            if i in paragraph_spans and 'font-weight' in paragraph_spans[i]:
+                continue
+
+            self._apply_font_weight_to_run(
+                run=run,
+                font_weight=font_weight,
+            )
+
+    def _apply_font_weight_to_run(self, **kwargs):
+        font_weight = kwargs['font_weight']
+        run = kwargs['run']
+        if font_weight in ('bold', 'bolder', '700', '800', '900'):
+            run.font.bold = True
+        elif font_weight in ('normal', 'lighter', '400', '300', '100'):
+            run.font.bold = False
+        # Note: Decide what to do for values between 400-700
+        elif font_weight.isdigit():
+            weight = int(font_weight)
+            run.font.bold = weight >= 700
+
+    def _apply_font_style_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        font_style = utils.remove_important_from_style(value).lower()
+
+        paragraph_id = id(paragraph)
+        paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+        for i, run in enumerate(paragraph.runs):
+            if i in paragraph_spans and 'font-style' in paragraph_spans[i]:
+                continue
+
+            self._apply_font_style_to_run(
+                run=run,
+                font_style=font_style,
+            )
+
+    def _apply_font_style_to_run(self, **kwargs):
+        font_style = kwargs['font_style']
+        run = kwargs['run']
+
+        if font_style in ('italic', 'oblique'):
+            run.font.italic = True
+        elif font_style == 'normal':
+            run.font.italic = False
+
+    def _apply_font_size_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        font_size = utils.remove_important_from_style(value).lower()
+
+        if font_size in constants.FONT_SIZES_NAMED:
+            font_size = constants.FONT_SIZES_NAMED[font_size]
+
+        paragraph_id = id(paragraph)
+        paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+        for i, run in enumerate(paragraph.runs):
+            if i in paragraph_spans and 'font-size' in paragraph_spans[i]:
+                continue
+
+            self._apply_font_size_to_run(
+                run=run,
+                font_size=font_size,
+            )
+
+    def _apply_font_size_to_run(self, **kwargs):
+        run = kwargs['run']
+        font_size = kwargs['font_size']
+
+        font_size = utils.remove_important_from_style(font_size).lower()
+        font_size = utils.adapt_font_size(font_size)
+
+        try:
+            if font_size in ('normal', 'initial', 'inherit'):
+                run.font.size = None
+            else:
+                converted_size = utils.unit_converter(font_size, target_unit="pt")
+                if converted_size is not None:
+                    run.font.size = converted_size
+
+        except (ValueError, TypeError) as e:
+            logging.warning(f"Warning: Could not parse font-size '{font_size}': {e}")
+
+    def _apply_font_family_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        font_family = utils.remove_important_from_style(value).strip()
+
+        paragraph_id = id(paragraph)
+        paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+        for i, run in enumerate(paragraph.runs):
+            if i in paragraph_spans and 'font-family' in paragraph_spans[i]:
+                continue
+
+            self._apply_font_family_to_run(
+                run=run,
+                font_family=font_family,
+            )
+
+    def _apply_font_family_to_run(self, **kwargs):
+        run = kwargs['run']
+        font_family = kwargs['font_family']
+
+        if not font_family or font_family in ('inherit', 'initial', 'unset'):
+            return
+
+        try:
+            font_families = [f.strip().strip('"\'') for f in font_family.split(',')]
+
+            for font_name in font_families:
+                if font_name and font_name not in ('inherit', 'initial', 'unset', 'serif', 'sans-serif', 'monospace',
+                                                   'cursive', 'fantasy', 'system-ui'):
+                    run.font.name = font_name
+                    break
+                elif font_name in ('serif', 'sans-serif', 'monospace'):
+                    run.font.name = constants.GENERIC_FONT_STYLES[font_name]
+                    break
+
+        except (AttributeError, Exception) as e:
+            logging.warning(f"Warning: Could not apply font-family '{font_family}': {e}")
+
+    def _apply_color_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        all_styles = kwargs['all_styles']
+        color_value = utils.remove_important_from_style(all_styles.get('color', '')).lower().strip()
+        if color_value in ('inherit', 'initial', 'transparent', 'currentcolor'):
+            return
+
+        paragraph_id = id(paragraph)
+        paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+        for i, run in enumerate(paragraph.runs):
+            if i in paragraph_spans and 'color' in paragraph_spans[i]:
+                continue
+            self._apply_color_to_run(
+                run=run,
+                color=color_value,
+            )
+
+    def _apply_color_to_run(self, **kwargs):
+        run = kwargs['run']
+        color_value = kwargs['color']
+        try:
+            colors = utils.parse_color(color_value)
+            run.font.color.rgb = RGBColor(*colors)
+        except (ValueError, AttributeError) as e:
+            logging.warning(f"Could not apply color '{color_value}': {e}")
+
+    def _apply_text_transform_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        text_transform = utils.remove_important_from_style(value).lower()
+
+        paragraph_id = id(paragraph)
+        paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+        for i, run in enumerate(paragraph.runs):
+            if i in paragraph_spans and 'text-transform' in paragraph_spans[i]:
+                continue
+
+            self._apply_text_transform_to_run(
+                run=run,
+                text_transform=text_transform,
+            )
+
+    def _apply_text_transform_to_run(self, **kwargs):
+        run = kwargs['run']
+        text_transform = kwargs['text_transform']
+
+        if not run.text:
+            return
+
+        try:
+            if text_transform == 'uppercase':
+                run.text = run.text.upper()
+            elif text_transform == 'lowercase':
+                run.text = run.text.lower()
+            elif text_transform == 'capitalize':
+                run.text = run.text.title()
+            elif text_transform in ('none', 'initial', 'inherit'):
+                # No transformation needed
+                pass
+            elif text_transform in ('full-width', 'math-auto', 'full-size-kana'):
+                logging.warning(f"Warning: Unsupported text transform '{text_transform}'")
+
+        except (AttributeError, Exception) as e:
+            logging.warning(f"Warning: Could not apply text-transform '{text_transform}': {e}")
+
+    def _apply_text_decoration_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        all_styles = kwargs['all_styles']
+
+        # Initialize decorations
+        decorations = {
+            'line_type': None,
+            'line_style': None,
+            'color': None
+        }
+
+        if 'text-decoration' in all_styles:
+            text_decoration_value = utils.remove_important_from_style(all_styles['text-decoration']).lower()
+            decorations = utils.parse_text_decoration(text_decoration_value)
+
+        if 'text-decoration-line' in all_styles:
+            line_value = utils.remove_important_from_style(all_styles['text-decoration-line']).lower()
+            decorations['line_type'] = line_value
+
+        if 'text-decoration-style' in all_styles:
+            style_value = utils.remove_important_from_style(all_styles['text-decoration-style']).lower()
+            decorations['line_style'] = style_value
+
+        if 'text-decoration-color' in all_styles:
+            color_value = utils.remove_important_from_style(all_styles['text-decoration-color']).lower()
+            decorations['color'] = color_value
+
+        paragraph_id = id(paragraph)
+        paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+        for i, run in enumerate(paragraph.runs):
+            span_styles = paragraph_spans.get(i, set())
+
+            # If span has text-decoration shorthand, skip entirely
+            if 'text-decoration' in span_styles:
+                continue
+
+            if decorations['line_type'] and 'text-decoration-line' not in span_styles:
+                self._apply_text_decoration_line_to_run(
+                    run=run,
+                    text_decoration_line=decorations['line_type'],
+                )
+
+            if decorations['line_style'] and 'text-decoration-style' not in span_styles:
+                self._apply_text_decoration_style_to_run(
+                    run=run,
+                    text_decoration_style=decorations['line_style'],
+                )
+
+            if decorations['color'] and 'text-decoration-color' not in span_styles:
+                self._apply_text_decoration_color_to_run(
+                    run=run,
+                    text_decoration_color=decorations['color'],
+                )
+
+    def _apply_text_decoration_to_run(self, **kwargs):
+        run = kwargs['run']
+        text_decoration = kwargs['text_decoration']
+
+        if not text_decoration:
+            return
+
+        decorations = utils.parse_text_decoration(text_decoration)
+        if decorations['line_type']:
+            self._apply_text_decoration_line_to_run(
+                run=run,
+                text_decoration_line=decorations['line_type'],
+            )
+
+        if decorations['line_style']:
+            self._apply_text_decoration_style_to_run(
+                run=run,
+                text_decoration_style=decorations['line_style'],
+            )
+
+        if decorations['color']:
+            self._apply_text_decoration_color_to_run(
+                run=run,
+                text_decoration_color=decorations['color'],
+            )
+
+    def _apply_text_decoration_line_to_run(self, **kwargs):
+        run = kwargs['run']
+        text_decoration_line = kwargs['text_decoration_line']
+
+        if text_decoration_line in constants.FONT_UNDERLINE:
+            if text_decoration_line == 'underline':
+                run.font.underline = True
+                run.font.strike = False
+            elif text_decoration_line == 'line-through':
+                run.font.strike = True
+                run.font.underline = False
+        elif text_decoration_line == 'none':
+            run.font.underline = False
+            run.font.strike = False
+        else:
+            logging.warning(f"Warning: Unsupported text decoration '{text_decoration_line}'")
+
+    def _apply_text_decoration_style_to_run(self, **kwargs):
+        run = kwargs['run']
+        text_decoration_style = kwargs['text_decoration_style']
+        if not text_decoration_style or run.font.underline is False:
+            return False
+
+        should_apply = False
+        if run.font.underline:
+            should_apply = True
+        elif hasattr(self.paragraph, '_pending_styles'):
+            for pending_style in self.paragraph._pending_styles:
+                if 'text-decoration' in pending_style or 'text-decoration-line' in pending_style:
+                    should_apply = True
+                    break
+
+        if not should_apply:
+            return False
+        try:
+            run.font.underline = constants.FONT_UNDERLINE_STYLES[text_decoration_style]
+        except KeyError:
+            logging.warning(f"Warning: Style not recognized'{text_decoration_style}', defaulting to single line.")
+
+        # Mark that we applied a text-decoration style by adding text-decoration-line to span_styles
+        paragraph_id = id(self.paragraph)
+        run_index = len(self.paragraph.runs) - 1
+        if paragraph_id in self.paragraph_span_styles and run_index in self.paragraph_span_styles[paragraph_id]:
+            self.paragraph_span_styles[paragraph_id][run_index].add('text-decoration-line')
+        return True
+
+    def _apply_text_decoration_color_to_run(self, **kwargs):
+        run = kwargs['run']
+        text_decoration_color = kwargs['text_decoration_color']
+
+        if not text_decoration_color or not utils.is_color(text_decoration_color):
+            return
+
+        color_hex = utils.parse_color(text_decoration_color, return_hex=True)
+        rPr = run._r.get_or_add_rPr()
+        u = rPr.find(qn('w:u'))
+        if u is not None:
+            u.set(qn('w:color'), color_hex.upper().lstrip('#'))
+
+    def _apply_background_color_paragraph(self, **kwargs):
+        paragraph = kwargs['paragraph']
+        value = kwargs['value']
+
+        background_color = utils.remove_important_from_style(value).lower().strip()
+
+        if background_color in ('inherit', 'initial'):
+            return
+        elif background_color in ('transparent', 'none'):
+            logging.warning(f"Warning: Unsupported background color '{background_color}'")
+            return
+
+        try:
+            color_hex = utils.parse_color(background_color, return_hex=True)
+            if not color_hex:
+                return
+
+            paragraph_id = id(paragraph)
+            paragraph_spans = self.paragraph_span_styles.get(paragraph_id, {})
+
+            for i, run in enumerate(paragraph.runs):
+                if i in paragraph_spans and 'background-color' in paragraph_spans[i]:
+                    continue
+                self._apply_background_color_to_run(
+                    run=run,
+                    background_color=background_color,
+                )
+
+        except Exception as e:
+            logging.warning(f"Could not apply background-color to paragraph: {e}")
+
+    def _apply_background_color_to_run(self, **kwargs):
+        run = kwargs['run']
+        background_color = kwargs['background_color']
+        try:
+            if background_color in ('inherit', 'initial'):
+                return
+            elif background_color in ('transparent', 'none'):
+                logging.warning(f"Warning: Unsupported background color '{background_color}'")
+                return
+
+            color_hex = utils.parse_color(background_color, return_hex=True)
+            if not color_hex:
+                return
+
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:val'), 'clear')
+            shd.set(qn('w:color'), 'auto')
+            shd.set(qn('w:fill'), color_hex.lstrip('#'))
+
+            r_pr = run._element.get_or_add_rPr()
+
+            # Remove existing shading
+            existing_shd = r_pr.find(qn('w:shd'))
+            if existing_shd is not None:
+                r_pr.remove(existing_shd)
+
+            r_pr.append(shd)
+
+        except Exception as e:
+            logging.warning(f"Could not apply background-color to run: {e}")
+
     def add_text_align_or_margin_to(self, obj, style):
         """Styles that can be applied on multiple objects"""
         if 'text-align' in style:
@@ -390,11 +1110,12 @@ class HtmlToDocx(HTMLParser):
             self.run.font.color.rgb = RGBColor(*colors)
 
         if 'background-color' in style:
-            color = utils.parse_color(style['background-color'], return_hex=True)
-
+            # This should stay here for div.
             # Little trick to apply background-color to paragraph
             # because `self.run.font.highlight_color`
             # has a very limited amount of colors
+            color = utils.parse_color(style['background-color'], return_hex=True)
+
             shd = OxmlElement('w:shd')
             shd.set(qn('w:val'), 'clear')
             shd.set(qn('w:color'), 'auto')
@@ -415,7 +1136,7 @@ class HtmlToDocx(HTMLParser):
         list_type = self.tags['list'][-1] if self.tags['list'] else 'ul'
         level = min(list_depth, 3)
         style_key = list_type if level <= 1 else f"{list_type}{level}"
-        list_style = utils.styles.get(style_key, 'List Number' if list_type == 'ol' else 'List Bullet')
+        list_style = constants.STYLES.get(style_key, 'List Number' if list_type == 'ol' else 'List Bullet')
 
         self.paragraph = self.doc.add_paragraph(style=list_style)
         self.in_li = True
@@ -481,9 +1202,6 @@ class HtmlToDocx(HTMLParser):
         if 'src' not in current_attrs:
             self.doc.add_paragraph("<image: no_src>")
             return
-
-        if not self.paragraph:
-            self.paragraph = self.doc.add_paragraph()
 
         src = current_attrs['src']
 
@@ -620,6 +1338,8 @@ class HtmlToDocx(HTMLParser):
         self.table = None
 
     def handle_div(self, current_attrs):
+        self.paragraph = self.doc.add_paragraph()
+
         # handle page break
         if 'style' in current_attrs and 'page-break-after: always' in current_attrs['style']:
             self.doc.add_page_break()
@@ -713,6 +1433,17 @@ class HtmlToDocx(HTMLParser):
         current_attrs = dict(attrs)
 
         if tag == 'span':
+            # Parse inline styles if present to check for !important
+            if "style" in current_attrs:
+                normal_styles, important_styles = utils.parse_inline_styles(
+                    current_attrs["style"]
+                )
+                # Store normal styles to apply to runs
+                if normal_styles:
+                    self.pending_inline_styles = normal_styles
+                # Store important styles to apply after parent's processing
+                if important_styles:
+                    self.pending_important_styles = important_styles
             self.tags['span'].append(current_attrs)
             return
         elif tag in ['ol', 'ul']:
@@ -735,37 +1466,88 @@ class HtmlToDocx(HTMLParser):
             return
 
         self.tags[tag] = current_attrs
-        if tag in ['p', 'pre']:
+
+        # Control custom_style based on the Options.  Default is True on both.
+        custom_style = (
+            self.get_word_style_for_element(tag, current_attrs)
+            if (self.use_styles or self.use_tag_overrides)
+            else None
+        )
+
+        if custom_style:
+            valid_style = utils.check_style_exists(self.doc, custom_style)
+            if not valid_style:
+                custom_style = None
+
+        if tag in ["p", "pre"]:
             if not self.in_li:
                 self.paragraph = self.doc.add_paragraph()
+                style_to_apply = self.pending_div_style or custom_style or self.default_paragraph_style
+                if style_to_apply:
+                    self.apply_styles_to_paragraph(self.paragraph, style_to_apply, True)
+                # DON'T clear pending_div_style here - it should persist for all child paragraphs
+                # It will be cleared when the div closes in handle_endtag
 
+            # Parse inline styles on the paragraph itself to apply to runs within
+            if "style" in current_attrs:
+                normal_styles, important_styles = utils.parse_inline_styles(
+                    current_attrs["style"]
+                )
+                if normal_styles:
+                    self.pending_inline_styles = normal_styles
+                if important_styles:
+                    self.pending_important_styles = important_styles
+        elif tag == "div":
+            if custom_style and not self.in_li:
+                self.pending_div_style = custom_style
+            else:
+                self.handle_div(current_attrs)
         elif tag == 'li':
             self.handle_li()
+            if custom_style and self.paragraph:
+                self.apply_styles_to_paragraph(self.paragraph, custom_style, True)
 
         elif tag == 'hr':
             self.handle_hr()
 
         elif re.match('h[1-9]', tag):
             if isinstance(self.doc, docx.document.Document):
-                h_size = int(tag[1])
-                self.paragraph = self.doc.add_heading(level=min(h_size, 9))
+                if custom_style:
+                    self.paragraph = self.doc.add_paragraph()
+                    self.apply_styles_to_paragraph(self.paragraph, custom_style, True)
+                else:
+                    h_size = int(tag[1])
+                    self.paragraph = self.doc.add_heading(level=min(h_size, 9))
             else:
                 self.paragraph = self.doc.add_paragraph()
+                if custom_style:
+                    self.apply_styles_to_paragraph(self.paragraph, custom_style, True)
 
         elif tag == 'img':
             self.handle_img(current_attrs)
             self.paragraph = self.doc.paragraphs[-1]
 
         elif tag == 'table':
-            self.handle_table(current_attrs)
+            if self.include_tables:
+                self.handle_table(current_attrs)
+                return
+
+        elif tag == "code":
+            if custom_style:
+                self.pending_character_style = custom_style
+            if "style" in current_attrs:
+                normal_styles, important_styles = utils.parse_inline_styles(
+                    current_attrs["style"]
+                )
+                if normal_styles:
+                    self.pending_inline_styles = normal_styles
+                if important_styles:
+                    self.pending_important_styles = important_styles
             return
-
-        elif tag == 'div':
-            self.handle_div(current_attrs)
-
-        # set new run reference point in case of leading line breaks
-        if tag in ['p', 'li', 'pre']:
-            self.run = self.paragraph.add_run()
+        # Commented this out.  Line breaks are already handled by try/except blocks (see the br code above).  In addition to this, I'm fixing the tests added by the previous release.
+        # # set new run reference point in case of leading line breaks
+        # if tag in ["p", "li", "pre"]:
+        #     self.run = self.paragraph.add_run()
 
         if 'id' in current_attrs:
             self.add_bookmark(current_attrs['id'])
@@ -774,11 +1556,39 @@ class HtmlToDocx(HTMLParser):
         if not self.include_styles:
             return
 
-        if 'style' in current_attrs and self.paragraph:
+        if 'style' in current_attrs and self.paragraph and (tag in ['p'] or re.match(r'h[1-9]', tag)):
+            if not hasattr(self.paragraph, '_pending_styles'):
+                self.paragraph._pending_styles = []
+            style = utils.parse_dict_string(current_attrs['style'])
+            self.paragraph._pending_styles.append(style)
+        elif 'style' in current_attrs and self.paragraph:
             style = utils.parse_dict_string(current_attrs['style'])
             self.add_text_align_or_margin_to(self.paragraph.paragraph_format, style)
 
     def handle_endtag(self, tag):
+        # Clear pending character style and inline styles when closing inline elements
+        if tag == "code":
+            self.pending_character_style = None
+            self.pending_inline_styles = None
+            self.pending_important_styles = None
+
+        # Clear important styles when closing span
+        if tag == "span":
+            self.pending_important_styles = None
+
+        # Clear pending div style when closing a div
+        if tag == "div":
+            self.pending_div_style = None
+
+        # Clear pending inline styles when closing paragraph elements
+        if tag in ["p", "pre"]:
+            self.pending_inline_styles = None
+            self.pending_important_styles = None
+
+        if re.match('h[1-9]', tag):
+            self.pending_inline_styles = None
+            self.pending_important_styles = None
+
         if self.skip:
             if not tag == self.skip_tag:
                 return
@@ -802,12 +1612,20 @@ class HtmlToDocx(HTMLParser):
                 self.current_ol_num_id = None
             return
         elif tag == 'table':
-            self.table_no += 1
-            self.table = None
-            self.doc = self.document
-            self.paragraph = None
+            if self.include_tables:
+                self.table_no += 1
+                self.table = None
+                self.paragraph = None
         elif tag == 'li':
             self.in_li = False
+
+        if tag in ['p', 'pre'] or re.match(r'h[1-9]', tag):
+            if hasattr(self.paragraph, '_pending_styles'):
+                for style in self.paragraph._pending_styles:
+                    self.apply_styles_to_paragraph(self.paragraph, style)
+                # Clear the pending styles
+                del self.paragraph._pending_styles
+            self.paragraph_span_styles.clear()
 
         if tag in self.tags:
             self.tags.pop(tag)
@@ -838,21 +1656,53 @@ class HtmlToDocx(HTMLParser):
 
         # If there's a link, dont put the data directly in the run
         self.run = self.paragraph.add_run(data)
-        spans = self.tags['span']
-        for span in spans:
-            if 'style' in span:
-                style = utils.parse_dict_string(span['style'])
-                self.add_styles_to_run(style)
 
-        # add font style and name
-        for tag in self.tags:
-            if tag in utils.font_styles:
-                font_style = utils.font_styles[tag]
+        for span in self.tags['span']:
+            if 'style' in span:
+                span_style = utils.parse_dict_string(span['style'])
+                self.apply_styles_to_run(self.run, span_style)
+
+                for tag, attrs in self.tags.items():
+                    if tag == 'div' and 'style' in attrs:
+                        div_style = utils.parse_dict_string(attrs['style'])
+
+                        for span_style_name in span_style.keys():
+                            if span_style_name in div_style:
+                                del div_style[span_style_name]
+
+                        self.tags[tag]['style'] = utils.dict_to_style_string(div_style)
+
+        for tag, attrs in self.tags.items():
+            if tag in constants.FONT_STYLES:
+                font_style = constants.FONT_STYLES[tag]
                 setattr(self.run.font, font_style, True)
 
-            if tag in utils.font_names:
-                font_name = utils.font_names[tag]
+            if tag in constants.FONT_NAMES:
+                font_name = constants.FONT_NAMES[tag]
                 self.run.font.name = font_name
+
+            if 'style' in attrs and (tag in ['div', 'li', 'pre']):
+                style = utils.parse_dict_string(attrs['style'])
+                self.add_styles_to_run(style)
+
+    def handle_comment(self, data):
+        """
+        Render HTML comments (<!-- text -->) as visible green text,
+        starting with "#", similar to how code editors show comments.
+        """
+        if not self.include_html_comments:
+            return
+
+        # Put comment on its own line
+        self.paragraph = self.doc.add_paragraph()
+
+        comment_text = f"# {data.strip()}"
+        run = self.paragraph.add_run(comment_text)
+
+        # Style: Green color to mimic HTML comment styling
+        dark_ish_green = "#008000"
+        run.font.color.rgb = utils.parse_color(dark_ish_green)
+        run.italic = True  # makes it feel more like a comment
 
     def ignore_nested_tables(self, tables_soup):
         """
@@ -908,15 +1758,15 @@ class HtmlToDocx(HTMLParser):
 
         return max_rows, max_cols
 
-    def get_tables(self):
+    def get_tables(self) -> None:
         if not hasattr(self, 'soup'):
-            self.include_tables = False
+            self.options['tables'] = False
             return
 
         self.tables = self.ignore_nested_tables(self.soup.find_all('table'))
         self.table_no = 0
 
-    def run_process(self, html):
+    def run_process(self, html: str) -> None:
         if self.bs and BeautifulSoup:
             self.soup = BeautifulSoup(html, 'html.parser')
 
@@ -925,17 +1775,19 @@ class HtmlToDocx(HTMLParser):
             self.get_tables()
         self.feed(html)
 
-    def add_html_to_document(self, html, document):
+    def add_html_to_document(self, html: str, document) -> None:
         if not isinstance(html, str):
             raise ValueError(f'First argument needs to be a {str}')
         elif not isinstance(document, docx.document.Document) and not isinstance(document, docx.table._Cell):
             raise ValueError(f'Second argument needs to be a {docx.document.Document}')
+
         self.set_initial_attrs(document)
         self.run_process(html)
 
-    def add_html_to_cell(self, html, cell):
+    def add_html_to_cell(self, html: str, cell: docx.table._Cell) -> None:
         if not isinstance(cell, docx.table._Cell):
             raise ValueError(f'Second argument needs to be a {docx.table._Cell}')
+
         unwanted_paragraph = cell.paragraphs[0]
         utils.delete_paragraph(unwanted_paragraph)
         self.set_initial_attrs(cell)
@@ -945,17 +1797,20 @@ class HtmlToDocx(HTMLParser):
         if not self.doc.paragraphs:
             self.doc.add_paragraph('')
 
-    def parse_html_file(self, filename_html, filename_docx=None, encoding='utf-8'):
+    def parse_html_file(self, filename_html: str, filename_docx, encoding: str = 'utf-8') -> None:
         with open(filename_html, 'r', encoding=encoding) as infile:
             html = infile.read()
+
         self.set_initial_attrs()
         self.run_process(html)
+
         if not filename_docx:
             path, filename = os.path.split(filename_html)
             filename_docx = f'{path}/new_docx_file_{filename}'
-        self.doc.save(f'{filename_docx}.docx')
 
-    def parse_html_string(self, html):
+        self.save(filename_docx)
+
+    def parse_html_string(self, html: str) -> docx.document.Document:
         self.set_initial_attrs()
         self.run_process(html)
         return self.doc
