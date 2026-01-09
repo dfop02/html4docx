@@ -32,6 +32,7 @@ FONT_STYLES = {
     'i': 'italic',
     'u': 'underline',
     's': 'strike',
+    'del': 'strike',  # HTML5 deletion element - same as <s>
     'sup': 'superscript',
     'sub': 'subscript',
     'th': 'bold'
