@@ -52,6 +52,7 @@ class HtmlToDocx(HTMLParser):
         self.list_restart_counter = 0
         self.current_ol_num_id = None
         self._list_num_ids = {}
+        self._ol_id_stack = []  # Stack to track parent ol IDs for nested lists
 
         # NEW: Set style map & tag overrides according to options
 
@@ -1448,7 +1449,9 @@ class HtmlToDocx(HTMLParser):
             return
         elif tag in ['ol', 'ul']:
             if tag == 'ol':
-                # Assign new ID if it's a fresh top-level list
+                # Push current ID to stack before creating new one (for nested lists)
+                self._ol_id_stack.append(self.current_ol_num_id)
+                # Assign new ID for this <ol>
                 self.list_restart_counter += 1
                 self.current_ol_num_id = self.list_restart_counter
             else:
@@ -1609,7 +1612,11 @@ class HtmlToDocx(HTMLParser):
             utils.remove_last_occurence(self.tags['list'], tag)
             if tag == 'ol':
                 self._list_num_ids.pop(self.current_ol_num_id, None)
-                self.current_ol_num_id = None
+                # Restore parent's ol ID from stack (for nested lists)
+                if self._ol_id_stack:
+                    self.current_ol_num_id = self._ol_id_stack.pop()
+                else:
+                    self.current_ol_num_id = None
             return
         elif tag == 'table':
             if self.include_tables:
