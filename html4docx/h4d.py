@@ -1681,6 +1681,19 @@ class HtmlToDocx(HTMLParser):
                 font_name = constants.FONT_NAMES[tag]
                 self.run.font.name = font_name
 
+            # Handle <mark> tag with yellow background highlight
+            if tag == 'mark':
+                shd = OxmlElement('w:shd')
+                shd.set(qn('w:val'), 'clear')
+                shd.set(qn('w:color'), 'auto')
+                shd.set(qn('w:fill'), 'FFFF00')  # Yellow - default <mark> color
+                r_pr = self.run._element.get_or_add_rPr()
+                # Remove existing shading if present
+                existing_shd = r_pr.find(qn('w:shd'))
+                if existing_shd is not None:
+                    r_pr.remove(existing_shd)
+                r_pr.append(shd)
+
             if 'style' in attrs and (tag in ['div', 'li', 'pre']):
                 style = utils.parse_dict_string(attrs['style'])
                 self.add_styles_to_run(style)
