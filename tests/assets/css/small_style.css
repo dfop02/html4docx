@@ -1,0 +1,18 @@
+#specialParagraph {
+    text-decoration: underline red;
+    background-color: lightgreen;
+    color: gray;
+}
+
+.classFromExternalCss {
+    background-color: yellow;
+}
+
+.blueSpan {
+    color: blue;
+}
+
+p {
+    color: red;
+    font-weight: bold;
+}
