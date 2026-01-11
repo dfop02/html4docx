@@ -1,5 +1,6 @@
 #specialParagraph {
     text-decoration: underline red;
+    background-color: lightgreen;
     color: gray
 }
 
