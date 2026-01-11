@@ -3032,11 +3032,7 @@ and blank lines.
 
         # Verify non-blue runs (from p CSS: color: red; font-weight: bold;)
         # All should have red color, bold, and yellow background
-        import pdb; pdb.set_trace()
         for i, run in enumerate(non_blue_runs):
-            print(f"Non-blue run {i}:")
-            print(run.text)
-            print(self.get_background_color(run))
             if run.text.strip():  # Only check non-empty runs
                 self.assertEqual(run.font.color.rgb, RGBColor(255, 0, 0), f"Non-blue run {i} should have red color from p CSS")
                 self.assertTrue(run.font.bold, f"Non-blue run {i} should be bold from p CSS")

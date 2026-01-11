@@ -44,6 +44,12 @@ class CSSParser:
         self._used_classes: set = set()
         self._used_ids: set = set()
 
+        # Store inline styles as temporary rules with very high specificity
+        # Key: (tag, element_id) where element_id is unique per element instance
+        # Value: (normal_styles, important_styles)
+        self._inline_rules: Dict[Tuple[str, str], Tuple[Dict[str, str], Dict[str, str]]] = {}
+        self._inline_rule_counter: int = 0
+
     def parse_css(self, css_content: str, selective: bool = False) -> None:
         """
         Parse CSS content and store rules by selector type.
@@ -271,23 +277,73 @@ class CSSParser:
 
         return combined_styles
 
+    def add_inline_styles(self, tag: str, attrs: Optional[Dict[str, str]] = None,
+                          inline_normal: Optional[Dict[str, str]] = None,
+                          inline_important: Optional[Dict[str, str]] = None) -> str:
+        """
+        Add inline styles as temporary rules with very high specificity.
+
+        Inline styles have higher specificity than ID selectors (1000+ points).
+        Returns a unique element_id that can be used to remove these rules later.
+
+        Args:
+            tag (str): HTML tag name
+            attrs (Dict[str, str], optional): HTML attributes
+            inline_normal (Dict[str, str], optional): Normal inline styles
+            inline_important (Dict[str, str], optional): !important inline styles
+
+        Returns:
+            str: Unique element_id for this inline rule (can be used to remove it)
+        """
+        if not inline_normal and not inline_important:
+            return None
+
+        if not attrs:
+            attrs = {}
+
+        # Generate unique element_id for this element instance
+        self._inline_rule_counter += 1
+        element_id = f"__inline_{self._inline_rule_counter}"
+
+        # Store inline styles with very high specificity (1000+)
+        # This ensures inline styles override CSS rules
+        self._inline_rules[(tag, element_id)] = (
+            inline_normal or {},
+            inline_important or {}
+        )
+
+        # Also store in attrs for retrieval
+        if 'data-inline-id' not in attrs:
+            attrs['data-inline-id'] = element_id
+
+        return element_id
+
+    def remove_inline_styles(self, element_id: str) -> None:
+        """Remove inline styles for a specific element."""
+        if not element_id:
+            return
+        # Find and remove the rule
+        keys_to_remove = [k for k in self._inline_rules.keys() if k[1] == element_id]
+        for key in keys_to_remove:
+            self._inline_rules.pop(key, None)
+
     def get_styles_for_element_with_important(
         self,
         tag: str,
-        attrs: Optional[Dict[str, str]] = None,
-        inline_styles: Optional[Dict[str, str]] = None,
-        inline_important: Optional[Dict[str, str]] = None
+        attrs: Optional[Dict[str, str]] = None
     ) -> Tuple[Dict[str, str], Dict[str, str]]:
         """
         Get styles separated by !important flag.
+
+        This is the single source of truth for all styles:
+        - CSS rules from files and <style> tags
+        - Inline styles (stored as temporary rules with high specificity)
 
         Returns normal styles and important styles separately, following CSS cascade rules.
 
         Args:
             tag (str): HTML tag name
-            attrs (Dict[str, str], optional): HTML attributes
-            inline_styles (Dict[str, str], optional): Normal inline styles
-            inline_important (Dict[str, str], optional): !important inline styles
+            attrs (Dict[str, str], optional): HTML attributes (may contain 'data-inline-id')
 
         Returns:
             Tuple[Dict[str, str], Dict[str, str]]: (normal_styles, important_styles)
@@ -301,12 +357,12 @@ class CSSParser:
         # Sort all rules by specificity (ascending) to apply in correct order
         applicable_rules = []
 
-        # Collect tag rules
+        # 1. Collect tag rules (lowest specificity)
         if tag in self.tag_rules:
             specificity = self._calculate_specificity(tag)
             applicable_rules.append((specificity, self.tag_rules[tag]))
 
-        # Collect class rules
+        # 2. Collect class rules (medium specificity)
         if 'class' in attrs:
             classes = attrs['class'].split()
             for class_name in classes:
@@ -314,14 +370,14 @@ class CSSParser:
                     specificity = self._calculate_specificity(f'.{class_name}')
                     applicable_rules.append((specificity, self.class_rules[class_name]))
 
-        # Collect ID rules
+        # 3. Collect ID rules (high specificity)
         if 'id' in attrs:
             element_id = attrs['id']
             if element_id in self.id_rules:
                 specificity = self._calculate_specificity(f'#{element_id}')
                 applicable_rules.append((specificity, self.id_rules[element_id]))
 
-        # Apply rules in order of specificity (sort by first element - specificity)
+        # 4. Apply CSS rules in order of specificity
         for specificity, styles in sorted(applicable_rules, key=lambda x: x[0]):
             for prop, value in styles.items():
                 if '!important' in value.lower():
@@ -330,13 +386,19 @@ class CSSParser:
                 else:
                     normal_styles[prop] = value
 
-        # Apply inline styles (normal)
-        if inline_styles:
-            normal_styles.update(inline_styles)
-
-        # Apply inline !important styles (highest priority)
-        if inline_important:
-            important_styles.update(inline_important)
+        # 5. Apply inline styles (highest specificity - 1000+)
+        # Check if this element has inline styles stored
+        inline_id = attrs.get('data-inline-id')
+        if inline_id:
+            # Try to find inline rules for this element
+            for (rule_tag, rule_id), (inline_normal, inline_important) in self._inline_rules.items():
+                if rule_id == inline_id and rule_tag == tag:
+                    # Inline styles override CSS rules
+                    if inline_normal:
+                        normal_styles.update(inline_normal)
+                    if inline_important:
+                        important_styles.update(inline_important)
+                    break
 
         return normal_styles, important_styles
 
@@ -346,6 +408,8 @@ class CSSParser:
         self.class_rules.clear()
         self.id_rules.clear()
         self._all_rules.clear()
+        self._inline_rules.clear()
+        self._inline_rule_counter = 0
         self.clear_used_elements()
 
     def has_rules(self) -> bool:
