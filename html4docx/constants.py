@@ -31,6 +31,7 @@ FONT_STYLES = {
     'em': 'italic',
     'i': 'italic',
     'u': 'underline',
+    'ins': 'underline',  # HTML5 insertion element - underline like <u>
     's': 'strike',
     'sup': 'superscript',
     'sub': 'subscript',
