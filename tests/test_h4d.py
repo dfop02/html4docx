@@ -2547,13 +2547,19 @@ and blank lines.
 
     def test_page_break_css2_and_css3(self):
         """Test that both CSS2 page-break-after and CSS3 break-after work"""
-        self.document.add_heading("Test: Test CSS2 and CSS3 page break properties", level=1)
+        self.document.add_heading("CSS2 and CSS3 page break properties", level=1)
 
         # Test CSS2 page-break-after: always
         html_css2 = '<div style="page-break-after: always;">Content before break</div><p>Content after break</p>'
 
         # Test CSS3 break-after: page
         html_css3 = '<div style="break-after: page;">Content before break</div><p>Content after break</p>'
+
+        # Test with extra whitespace
+        html_whitespace = '<div style="page-break-after:  always  ;">Content before break</div><p>Content after break</p>'
+
+        # Test with !important (should still work)
+        html_important = '<div style="page-break-after: always !important;">Content before break</div><p>Content after break</p>'
 
         # Test both properties in separate documents
         doc_css2 = Document()
@@ -2563,6 +2569,14 @@ and blank lines.
         doc_css3 = Document()
         parser_css3 = HtmlToDocx()
         parser_css3.add_html_to_document(html_css3, doc_css3)
+
+        doc_whitespace = Document()
+        parser_whitespace = HtmlToDocx()
+        parser_whitespace.add_html_to_document(html_whitespace, doc_whitespace)
+
+        doc_important = Document()
+        parser_important = HtmlToDocx()
+        parser_important.add_html_to_document(html_important, doc_important)
 
         # Both should have a page break element in their XML
         # Page breaks are represented as w:br elements with w:type="page"
@@ -2577,6 +2591,23 @@ and blank lines.
 
         self.assertTrue(has_page_break(doc_css2), "CSS2 page-break-after: always should create a page break")
         self.assertTrue(has_page_break(doc_css3), "CSS3 break-after: page should create a page break")
+        self.assertTrue(has_page_break(doc_whitespace), "CSS2 with extra whitespace should create a page break")
+        self.assertTrue(has_page_break(doc_important), "CSS2 with !important should create a page break")
+
+        # Test that partial matches don't trigger page breaks
+        html_no_break1 = '<div style="break-after: page-inside;">Should not break</div>'
+        html_no_break2 = '<div style="page-break-after: auto;">Should not break</div>'
+
+        doc_no_break1 = Document()
+        parser_no_break1 = HtmlToDocx()
+        parser_no_break1.add_html_to_document(html_no_break1, doc_no_break1)
+
+        doc_no_break2 = Document()
+        parser_no_break2 = HtmlToDocx()
+        parser_no_break2.add_html_to_document(html_no_break2, doc_no_break2)
+
+        self.assertFalse(has_page_break(doc_no_break1), "break-after: page-inside should NOT create a page break")
+        self.assertFalse(has_page_break(doc_no_break2), "page-break-after: auto should NOT create a page break")
 
         # Add to the main document for visual verification
         parser = HtmlToDocx()
