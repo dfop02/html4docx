@@ -2545,6 +2545,45 @@ and blank lines.
 
         self.assertEqual(len(doc.paragraphs), 1)
 
+    def test_page_break_css2_and_css3(self):
+        """Test that both CSS2 page-break-after and CSS3 break-after work"""
+        self.document.add_heading("Test: Test CSS2 and CSS3 page break properties", level=1)
+
+        # Test CSS2 page-break-after: always
+        html_css2 = '<div style="page-break-after: always;">Content before break</div><p>Content after break</p>'
+
+        # Test CSS3 break-after: page
+        html_css3 = '<div style="break-after: page;">Content before break</div><p>Content after break</p>'
+
+        # Test both properties in separate documents
+        doc_css2 = Document()
+        parser_css2 = HtmlToDocx()
+        parser_css2.add_html_to_document(html_css2, doc_css2)
+
+        doc_css3 = Document()
+        parser_css3 = HtmlToDocx()
+        parser_css3.add_html_to_document(html_css3, doc_css3)
+
+        # Both should have a page break element in their XML
+        # Page breaks are represented as w:br elements with w:type="page"
+        def has_page_break(doc):
+            for paragraph in doc.paragraphs:
+                for run in paragraph.runs:
+                    br_elements = run._element.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}br')
+                    for br in br_elements:
+                        if br.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}type') == 'page':
+                            return True
+            return False
+
+        self.assertTrue(has_page_break(doc_css2), "CSS2 page-break-after: always should create a page break")
+        self.assertTrue(has_page_break(doc_css3), "CSS3 break-after: page should create a page break")
+
+        # Add to the main document for visual verification
+        parser = HtmlToDocx()
+        parser.add_html_to_document(html_css2, self.document)
+        self.document.add_paragraph("--- CSS3 version below ---")
+        parser.add_html_to_document(html_css3, self.document)
+
     def test_invalid_color_fallback_to_black(self):
         """Test with invalid color fallback to black"""
         self.document.add_heading("Test: Test invalid color fallback to black", level=1)

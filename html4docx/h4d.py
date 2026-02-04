@@ -1341,8 +1341,10 @@ class HtmlToDocx(HTMLParser):
         self.paragraph = self.doc.add_paragraph()
 
         # handle page break
-        if 'style' in current_attrs and 'page-break-after: always' in current_attrs['style']:
-            self.doc.add_page_break()
+        if 'style' in current_attrs:
+            style = current_attrs['style']
+            if 'page-break-after: always' in style or 'break-after: page' in style:
+                self.doc.add_page_break()
 
     def handle_hr(self):
         # This implementation was taken from:
