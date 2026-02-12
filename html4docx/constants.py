@@ -1,3 +1,4 @@
+import re
 # values in inches
 from docx.enum.text import WD_UNDERLINE
 
@@ -152,3 +153,8 @@ def default_borders():
         "bottom": {"size": DEFAULT_BORDER_SIZE, "color": DEFAULT_BORDER_COLOR, "style": DEFAULT_BORDER_STYLE},
         "left": {"size": DEFAULT_BORDER_SIZE, "color": DEFAULT_BORDER_COLOR, "style": DEFAULT_BORDER_STYLE}
     }
+
+PAGE_BREAK_REGEXES = (
+    re.compile(r'page-break-after\s*:\s*always\s*(?:!important)?\s*(?:;|$)'),
+    re.compile(r'break-after\s*:\s*page\s*(?:!important)?\s*(?:;|$)'),
+)

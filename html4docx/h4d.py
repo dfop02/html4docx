@@ -1346,8 +1346,7 @@ class HtmlToDocx(HTMLParser):
             # Match CSS2 page-break-after: always or CSS3 break-after: page
             # Using regex to ensure we match the exact property-value pairs
             # Also handles optional !important flag
-            if re.search(r'page-break-after\s*:\s*always\s*(!important)?\s*(;|$)', style) or \
-               re.search(r'break-after\s*:\s*page\s*(!important)?\s*(;|$)', style):
+            if style and any(regex.search(style) for regex in constants.PAGE_BREAK_REGEXES):
                 self.doc.add_page_break()
 
     def handle_hr(self):
