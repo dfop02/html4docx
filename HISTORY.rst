@@ -16,7 +16,7 @@ Release History
 
 **New Features**
 
-- None
+- [`PR #61 <https://github.com/dfop02/html4docx/pull/61>`_] Added support for `break-after: page` css properties to determine page breaks. | `chrisonntag <https://github.com/chrisonntag>`_
 
 
 1.1.3 (2025-12-16)
