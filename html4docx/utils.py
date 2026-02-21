@@ -314,7 +314,14 @@ def check_style_exists(document, style_name):
     except Exception:
         return False
 
-# Moved from h4d.py to here.... was _parse_text_decoration
+
+def safe_int(value):
+    try:
+        return int(value)
+    except ValueError:
+        return 1
+
+
 def parse_text_decoration(text_decoration):
     """Parse text-decoration using regex to preserve color values."""
     # Pattern to match color values (rgb, hex, named colors) or other tokens

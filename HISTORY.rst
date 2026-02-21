@@ -12,7 +12,7 @@ Release History
 
 **Fixes**
 
-- None
+- Handle invalid rowspan and colspan values in tables. | `dfop02 <https://github.com/dfop02>`_ inspired by `PR #56 <https://github.com/dfop02/html4docx/pull/56>`_ from `kko-harvey <https://github.com/kko-harvey>`_ .
 
 **New Features**
 
