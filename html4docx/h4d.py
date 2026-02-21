@@ -1295,8 +1295,8 @@ class HtmlToDocx(HTMLParser):
 
                 # Reference:
                 # https://python-docx.readthedocs.io/en/latest/dev/analysis/features/table/cell-merge.html
-                rowspan = int(col.get('rowspan', 1))
-                colspan = int(col.get('colspan', 1))
+                rowspan = utils.safe_int(col.get('rowspan', 1))
+                colspan = utils.safe_int(col.get('colspan', 1))
 
                 if rowspan > 1 or colspan > 1:
                     docx_cell = docx_cell.merge(
@@ -1752,12 +1752,12 @@ class HtmlToDocx(HTMLParser):
         for row_idx, row in enumerate(rows):
             cols = self.get_table_columns(row)
             # Handle colspan
-            row_col_count = sum(int(col.get('colspan', default_span)) for col in cols)
+            row_col_count = sum(utils.safe_int(col.get('colspan', default_span)) for col in cols)
             max_cols = max(max_cols, row_col_count)
 
             # Handle rowspan
             for col in cols:
-                rowspan = int(col.get('rowspan', default_span))
+                rowspan = utils.safe_int(col.get('rowspan', default_span))
                 if rowspan > default_span:
                     max_rows = max(max_rows, row_idx + rowspan)
 

@@ -2643,5 +2643,25 @@ and blank lines.
         self.assertIn('Could not parse color \'invalidcolorname\': Invalid color value. Fallback to black.', log.output[3])
         self.assertIn('Could not parse color \'#f7272626161\': Invalid color value. Fallback to black.', log.output[4])
 
+    def test_invalid_rowspan_and_colspan(self):
+        """Test with invalid rowspan and colspan"""
+
+        html = '<table><tr><td rowspan="invalid">Test 1</td></tr></table>'
+
+        doc = Document()
+        parser = HtmlToDocx()
+        parser.add_html_to_document(html, self.document)
+        parser.add_html_to_document(html, doc)
+
+        self.assertEqual(len(doc.tables), 1)
+
+        table = doc.tables[0]
+
+        self.assertEqual(len(table.rows), 1)
+        self.assertEqual(len(table.columns), 1)
+
+        self.assertEqual(table.cell(0, 0).text.strip(), "Test 1")
+
+
 if __name__ == "__main__":
     unittest.main()
