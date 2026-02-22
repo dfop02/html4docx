@@ -1371,6 +1371,34 @@ class HtmlToDocx(HTMLParser):
         bottom.set(qn('w:color'), 'auto')
         pBdr.append(bottom)
 
+    def handle_custom_tag_styles(self, tag):
+        """
+        Handle custom or extended tag styles that require
+        more than a simple tag mapping.
+        """
+        match tag:
+            case "mark":
+                self.handle_mark()
+            case _:
+                # The underscore '_' acts as a wildcard or default case
+                # Ignore if no matches
+                return
+
+    def handle_mark(self):
+        """
+        Apply default <mark> styling using Word shading (yellow highlight).
+        """
+        shd = OxmlElement('w:shd')
+        shd.set(qn('w:val'), 'clear')
+        shd.set(qn('w:color'), 'auto')
+        shd.set(qn('w:fill'), 'FFFF00')  # Yellow - default <mark> color
+        r_pr = self.run._element.get_or_add_rPr()
+        # Remove existing shading if present
+        existing_shd = r_pr.find(qn('w:shd'))
+        if existing_shd is not None:
+            r_pr.remove(existing_shd)
+        r_pr.append(shd)
+
     def handle_link(self, href, text, tooltip=None):
         """
         A function that places a hyperlink within a paragraph object.
@@ -1680,24 +1708,14 @@ class HtmlToDocx(HTMLParser):
         for tag, attrs in self.tags.items():
             if tag in constants.FONT_STYLES:
                 font_style = constants.FONT_STYLES[tag]
-                setattr(self.run.font, font_style, True)
+                if font_style == 'custom':
+                    self.handle_custom_tag_styles(tag)
+                else:
+                    setattr(self.run.font, font_style, True)
 
             if tag in constants.FONT_NAMES:
                 font_name = constants.FONT_NAMES[tag]
                 self.run.font.name = font_name
-
-            # Handle <mark> tag with yellow background highlight
-            if tag == 'mark':
-                shd = OxmlElement('w:shd')
-                shd.set(qn('w:val'), 'clear')
-                shd.set(qn('w:color'), 'auto')
-                shd.set(qn('w:fill'), 'FFFF00')  # Yellow - default <mark> color
-                r_pr = self.run._element.get_or_add_rPr()
-                # Remove existing shading if present
-                existing_shd = r_pr.find(qn('w:shd'))
-                if existing_shd is not None:
-                    r_pr.remove(existing_shd)
-                r_pr.append(shd)
 
             if 'style' in attrs and (tag in ['div', 'li', 'pre']):
                 style = utils.parse_dict_string(attrs['style'])

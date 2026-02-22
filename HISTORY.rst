@@ -18,6 +18,8 @@ Release History
 
 - [`PR #61 <https://github.com/dfop02/html4docx/pull/61>`_] Added support for `break-after: page` css properties to determine page breaks. | `chrisonntag <https://github.com/chrisonntag>`_
 - [`PR #59 <https://github.com/dfop02/html4docx/pull/59>`_] Added support for `<del>` tag. | `arthrod <https://github.com/arthrod>`_
+- [`PR #60 <https://github.com/dfop02/html4docx/pull/60>`_] Added support for `<mark>` and `<ins>` tags. | `arthrod <https://github.com/arthrod>`_
+
 
 1.1.3 (2025-12-16)
 ++++++++++++++++++

@@ -47,6 +47,20 @@ class OutputTest(unittest.TestCase):
         u_elem = u_elems[0]
         return u_elem.get(qn('w:color'))
 
+    @staticmethod
+    def get_run_shading_fill(run):
+        """
+        Extract shading fill color from the run XML (e.g. for <mark>).
+        Returns hex string like 'FFFF00' or None if no shading.
+        """
+        r_pr = run._element.find(qn('w:rPr'))
+        if r_pr is None:
+            return None
+        shd = r_pr.find(qn('w:shd'))
+        if shd is None:
+            return None
+        return (shd.get(qn('w:fill')) or "").upper()
+
     # ============================== Setup and teardown ============================== #
     @classmethod
     def setUpClass(cls):
@@ -436,7 +450,7 @@ and blank lines.
 
     def test_bold_italic_underline_and_strike(self):
         self.document.add_heading(
-            'Test: Bold, Italic, Underline and Strike tags',
+            'Test: Bold, Italic, Underline, Inserted, Strike, Deleted and Marked tags',
             level=1
         )
 
@@ -444,8 +458,10 @@ and blank lines.
             "<p>This text has <b>Bold Words</b>.</p>"
             "<p>This text has <i>Italic Words</i>.</p>"
             "<p>This text has <u>Underline Words</u>.</p>"
+            "<p>This text has <ins>Inserted Words</ins>.</p>"
             "<p>This text has <s>Strike Words</s>.</p>"
             "<p>This text has <del>Deleted Words</del>.</p>"
+            "<p>This text has <mark>Marked Words</mark>.</p>"
             "<p>This text has <b><i><u><s>Bold, Italic, Underline and Strike Words</s></u></i></b>.</p>"
         )
         # Add on document for human validation
@@ -463,14 +479,23 @@ and blank lines.
         self.assertIn("Underline Words", paragraphs[2].text)
         self.assertTrue(paragraphs[2].runs[1].underline)
 
-        self.assertIn("Strike Words", paragraphs[3].text)
-        self.assertTrue(paragraphs[3].runs[1].font.strike)
+        self.assertIn("Inserted Words", paragraphs[3].text)
+        self.assertTrue(paragraphs[3].runs[1].underline)
 
-        self.assertIn("Deleted Words", paragraphs[4].text)
+        self.assertIn("Strike Words", paragraphs[4].text)
         self.assertTrue(paragraphs[4].runs[1].font.strike)
 
-        self.assertIn("Bold, Italic, Underline and Strike Words", paragraphs[5].text)
-        run = paragraphs[5].runs[1]
+        self.assertIn("Deleted Words", paragraphs[5].text)
+        self.assertTrue(paragraphs[5].runs[1].font.strike)
+
+        self.assertIn("Marked Words", paragraphs[6].text)
+        self.assertEqual(
+            self.get_run_shading_fill(paragraphs[6].runs[1]), 'FFFF00',
+            "<mark> should apply yellow shading (FFFF00)"
+        )
+
+        self.assertIn("Bold, Italic, Underline and Strike Words", paragraphs[7].text)
+        run = paragraphs[7].runs[1]
         self.assertTrue(run.bold)
         self.assertTrue(run.italic)
         self.assertTrue(run.underline)
