@@ -1376,13 +1376,10 @@ class HtmlToDocx(HTMLParser):
         Handle custom or extended tag styles that require
         more than a simple tag mapping.
         """
-        match tag:
-            case "mark":
-                self.handle_mark()
-            case _:
-                # The underscore '_' acts as a wildcard or default case
-                # Ignore if no matches
-                return
+        if tag == "mark":
+            self.handle_mark()
+        else:
+            return
 
     def handle_mark(self):
         """
