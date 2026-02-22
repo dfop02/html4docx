@@ -1,3 +1,4 @@
+import logging
 import os
 import unittest
 from io import BytesIO
@@ -6,11 +7,13 @@ from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.oxml.ns import qn
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_UNDERLINE
+from docx.enum.style import WD_STYLE_TYPE
 from html4docx import HtmlToDocx
 from html4docx.utils import unit_converter, parse_color
 from html4docx.colors import Color
 
 test_dir = os.path.abspath(os.path.dirname(__file__))
+
 
 class OutputTest(unittest.TestCase):
     # ============================== Helper methods ============================== #
@@ -60,6 +63,13 @@ class OutputTest(unittest.TestCase):
         if shd is None:
             return None
         return (shd.get(qn('w:fill')) or "").upper()
+
+    @staticmethod
+    def save_document_on_buffer(self, document: Document, filename: str) -> BytesIO:
+        buffer = BytesIO()
+        document.save(buffer)
+        buffer.seek(0)
+        return buffer
 
     # ============================== Setup and teardown ============================== #
     @classmethod
@@ -2204,6 +2214,116 @@ and blank lines.
 
         # Class should win over tag override
         self.assertEqual(doc.paragraphs[0].style.name, "Heading 3")
+
+    def test_code_and_pre_tag_overrides(self):
+        """Test that code and pre tag_style_overrides apply Word styles when they exist in the document."""
+        self.document.add_heading(
+            "Test: Test code and pre tag style overrides", level=1
+        )
+        tag_overrides = {
+            "code": "Inline Code",
+            "pre": "Code Block",
+        }
+        html = "<p>Text with <code>inline code</code> here.</p><pre>code block</pre>"
+
+        doc = Document()
+        doc.styles.add_style("Inline Code", WD_STYLE_TYPE.CHARACTER)
+        doc.styles.add_style("Code Block", WD_STYLE_TYPE.PARAGRAPH)
+
+        parser = HtmlToDocx(tag_style_overrides=tag_overrides)
+        parser.add_html_to_document(html, self.document)
+        parser.add_html_to_document(html, doc)
+
+        # First paragraph: "Text with " | "inline code" | " here." -> runs[1] is the code run
+        self.assertGreaterEqual(
+            len(doc.paragraphs[0].runs),
+            2,
+            "Expected at least 2 runs in first paragraph (text + code)",
+        )
+        self.assertEqual(
+            doc.paragraphs[0].runs[1].style.name,
+            "Inline Code",
+            "Inline <code> should use Inline Code character style",
+        )
+        self.assertEqual(
+            doc.paragraphs[1].style.name,
+            "Code Block",
+            "<pre> should use Code Block paragraph style",
+        )
+
+    def test_custom_style_not_found_warning(self):
+        """Warn when tag_style_override names a style that does not exist in the document."""
+        doc = Document()
+        parser = HtmlToDocx(tag_style_overrides={"h1": "NonExistentStyle"})
+        with self.assertLogs(level=logging.WARNING) as cm:
+            parser.add_html_to_document("<h1>Heading</h1>", doc)
+
+        self.assertIn(
+            "Custom style 'NonExistentStyle' not found in document",
+            cm.output[0],
+        )
+
+    def test_code_and_pre_tag_overrides_from_template(self):
+        """Test that code and pre use custom styles from an imported Word template (template.docx).
+        Saves the template-based document to tests/assets/template_output.docx so custom styles
+        are preserved; open that file in Word to verify (test.docx is the default doc, not the template)."""
+        self.document.add_heading(
+            "Test: Test code and pre from template.docx custom styles", level=1
+        )
+        doc = Document(os.path.join(test_dir, "assets", "templates", "template.docx"))
+        markdown_style = "Custom Markdown"
+        code_block_style = "Code Block"
+
+        self.assertEqual(
+            markdown_style in doc.styles,
+            True,
+            f"{markdown_style} style should be found in template",
+        )
+        self.assertEqual(
+            code_block_style in doc.styles,
+            True,
+            f"{code_block_style} style should be found in template",
+        )
+
+        tag_overrides = {
+            "code": markdown_style,
+            "pre": code_block_style,
+        }
+        html = "<p>Text with <code>inline code</code> here.</p><pre>code block</pre>"
+
+        parser = HtmlToDocx(tag_style_overrides=tag_overrides)
+        parser.add_html_to_document(html, self.document)
+        parser.add_html_to_document(html, doc)
+
+        buffer = self.save_document_on_buffer(doc, "template_output.docx")
+        buffer_doc = Document(buffer)
+        self.assertIn(
+            markdown_style,
+            buffer_doc.styles,
+            "Custom styles must be preserved after save.",
+        )
+        self.assertIn(
+            code_block_style,
+            buffer_doc.styles,
+            "Custom styles must be preserved after save.",
+        )
+
+        # Template has an initial paragraph; our HTML adds the next two (p with code, pre)
+        self.assertGreaterEqual(
+            len(buffer_doc.paragraphs[1].runs),
+            2,
+            "Expected at least 2 runs in paragraph (text + code)",
+        )
+        self.assertEqual(
+            buffer_doc.paragraphs[1].runs[1].style.name,
+            "Custom Markdown",
+            "Inline <code> should use Custom Markdown character style from template in the buffer document",
+        )
+        self.assertEqual(
+            buffer_doc.paragraphs[2].style.name,
+            "Code Block",
+            "<pre> should use Code Block paragraph style from template in the buffer document",
+        )
 
     def test_normal_default(self):
         """Test that Normal is used as default by default"""
