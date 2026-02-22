@@ -445,6 +445,7 @@ and blank lines.
             "<p>This text has <i>Italic Words</i>.</p>"
             "<p>This text has <u>Underline Words</u>.</p>"
             "<p>This text has <s>Strike Words</s>.</p>"
+            "<p>This text has <del>Deleted Words</del>.</p>"
             "<p>This text has <b><i><u><s>Bold, Italic, Underline and Strike Words</s></u></i></b>.</p>"
         )
         # Add on document for human validation
@@ -465,8 +466,11 @@ and blank lines.
         self.assertIn("Strike Words", paragraphs[3].text)
         self.assertTrue(paragraphs[3].runs[1].font.strike)
 
-        self.assertIn("Bold, Italic, Underline and Strike Words", paragraphs[4].text)
-        run = paragraphs[4].runs[1]
+        self.assertIn("Deleted Words", paragraphs[4].text)
+        self.assertTrue(paragraphs[4].runs[1].font.strike)
+
+        self.assertIn("Bold, Italic, Underline and Strike Words", paragraphs[5].text)
+        run = paragraphs[5].runs[1]
         self.assertTrue(run.bold)
         self.assertTrue(run.italic)
         self.assertTrue(run.underline)
