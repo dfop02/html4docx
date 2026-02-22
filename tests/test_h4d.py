@@ -65,7 +65,7 @@ class OutputTest(unittest.TestCase):
         return (shd.get(qn('w:fill')) or "").upper()
 
     @staticmethod
-    def save_document_on_buffer(self, document: Document, filename: str) -> BytesIO:
+    def save_document_on_buffer(document: Document) -> BytesIO:
         buffer = BytesIO()
         document.save(buffer)
         buffer.seek(0)
@@ -2295,7 +2295,7 @@ and blank lines.
         parser.add_html_to_document(html, self.document)
         parser.add_html_to_document(html, doc)
 
-        buffer = self.save_document_on_buffer(doc, "template_output.docx")
+        buffer = self.save_document_on_buffer(doc)
         buffer_doc = Document(buffer)
         self.assertIn(
             markdown_style,
