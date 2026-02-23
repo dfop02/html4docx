@@ -177,6 +177,22 @@ tag_overrides = {
 parser = HtmlToDocx(tag_style_overrides=tag_overrides)
 ```
 
+**Custom styles from a Word template:** Use a document created from a `.docx` that already defines the styles (e.g. "Code Block", "Custom Markdown"). Pass **that same document** to the parser and save it so the custom styles are preserved:
+
+```python
+from docx import Document
+from html4docx import HtmlToDocx
+
+doc = Document("path/to/template.docx")  # template has Code Block, Custom Markdown, etc.
+parser = HtmlToDocx(tag_style_overrides={"code": "Custom Markdown", "pre": "Code Block"})
+parser.add_html_to_document(html, doc)
+doc.save("output.docx")  # save the template-based doc so custom styles are preserved
+```
+
+If you save a different document (for example, by creating a new `Document()` instead of loading your template), the output file will **not** contain the template’s custom styles.
+
+If a referenced custom style does not exist in the document at generation time, a warning will be logged to help you detect the missing style.
+
 ### Default Paragraph Style
 
 Set custom default paragraph style:

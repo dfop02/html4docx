@@ -3,15 +3,16 @@
 Release History
 ---------------
 
-1.1.4 (2025-12-xx)
+1.1.4 (2026-02-xx)
 ++++++++++++++++++
 
 **Updates**
 
-- None
+- Update `README.md` for `tag_style_override` and custom styles from a Word template usage. | `dfop02 <https://github.com/dfop02>`_
 
 **Fixes**
 
+- Fixes `#62 <https://github.com/dfop02/html4docx/issues/62>`_ : `tag_style_override` not applying custom styles from a Word template. | `dfop02 <https://github.com/dfop02>`_
 - Handle invalid rowspan and colspan values in tables. | `dfop02 <https://github.com/dfop02>`_ inspired by `PR #56 <https://github.com/dfop02/html4docx/pull/56>`_ from `kko-harvey <https://github.com/kko-harvey>`_ .
 
 **New Features**
@@ -19,7 +20,7 @@ Release History
 - [`PR #61 <https://github.com/dfop02/html4docx/pull/61>`_] Added support for `break-after: page` css properties to determine page breaks. | `chrisonntag <https://github.com/chrisonntag>`_
 - [`PR #59 <https://github.com/dfop02/html4docx/pull/59>`_] Added support for `<del>` tag. | `arthrod <https://github.com/arthrod>`_
 - [`PR #60 <https://github.com/dfop02/html4docx/pull/60>`_] Added support for `<mark>` and `<ins>` tags. | `arthrod <https://github.com/arthrod>`_
-
+- Add warning when a custom style is not found in the document. | `dfop02 <https://github.com/dfop02>`_
 
 1.1.3 (2025-12-16)
 ++++++++++++++++++

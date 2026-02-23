@@ -1376,13 +1376,10 @@ class HtmlToDocx(HTMLParser):
         Handle custom or extended tag styles that require
         more than a simple tag mapping.
         """
-        match tag:
-            case "mark":
-                self.handle_mark()
-            case _:
-                # The underscore '_' acts as a wildcard or default case
-                # Ignore if no matches
-                return
+        if tag == "mark":
+            self.handle_mark()
+        else:
+            return
 
     def handle_mark(self):
         """
@@ -1510,6 +1507,7 @@ class HtmlToDocx(HTMLParser):
         if custom_style:
             valid_style = utils.check_style_exists(self.doc, custom_style)
             if not valid_style:
+                logging.warning(f"Warning: Custom style '{custom_style}' not found in document, Ignoring style.")
                 custom_style = None
 
         if tag in ["p", "pre"]:
@@ -1565,9 +1563,11 @@ class HtmlToDocx(HTMLParser):
                 self.handle_table(current_attrs)
                 return
 
-        elif tag == "code":
+        elif tag == 'code':
+            # Character style for inline code (pre uses paragraph style in the ["p", "pre"] branch)
             if custom_style:
                 self.pending_character_style = custom_style
+
             if "style" in current_attrs:
                 normal_styles, important_styles = utils.parse_inline_styles(
                     current_attrs["style"]
@@ -1577,10 +1577,6 @@ class HtmlToDocx(HTMLParser):
                 if important_styles:
                     self.pending_important_styles = important_styles
             return
-        # Commented this out.  Line breaks are already handled by try/except blocks (see the br code above).  In addition to this, I'm fixing the tests added by the previous release.
-        # # set new run reference point in case of leading line breaks
-        # if tag in ["p", "li", "pre"]:
-        #     self.run = self.paragraph.add_run()
 
         if 'id' in current_attrs:
             self.add_bookmark(current_attrs['id'])
@@ -1690,6 +1686,10 @@ class HtmlToDocx(HTMLParser):
         # If there's a link, dont put the data directly in the run
         self.run = self.paragraph.add_run(data)
 
+        # Apply tag override character style for <code> when the style exists in the document
+        if self.pending_character_style:
+            self.apply_styles_to_run(self.run, self.pending_character_style, isCustom=True)
+
         for span in self.tags['span']:
             if 'style' in span:
                 span_style = utils.parse_dict_string(span['style'])
@@ -1706,6 +1706,9 @@ class HtmlToDocx(HTMLParser):
                         self.tags[tag]['style'] = utils.dict_to_style_string(div_style)
 
         for tag, attrs in self.tags.items():
+            if self.use_tag_overrides and tag in self.tag_style_overrides:
+                continue
+
             if tag in constants.FONT_STYLES:
                 font_style = constants.FONT_STYLES[tag]
                 if font_style == 'custom':
