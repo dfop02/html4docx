@@ -53,26 +53,25 @@ jobs:
           exit 1
         fi
 
-  # Disabled for now, as it's not working as expected
-  # security:
-  #   name: Run Security Audits
-  #   needs: validate-tag
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
+  security:
+    name: Run Security Audits
+    needs: validate-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-  #     - name: install
-  #       run: |
-  #         pip install --upgrade pip
-  #         pip install -r requirements.txt
+      - name: install
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
-  #     - uses: pypa/gh-action-pip-audit@v1.1.0
-  #       with:
-  #         inputs: ${{ github.workspace }}/requirements.txt
+      - uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          inputs: requirements.txt
 
   test:
     name: Run tests
-    needs: validate-tag
+    needs: security
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
