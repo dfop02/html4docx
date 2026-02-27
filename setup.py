@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 here   = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.md')).read()
-VERSION = '1.1.3'
+VERSION = '1.1.4'
 
 setup(
     name                 = 'html-for-docx',
