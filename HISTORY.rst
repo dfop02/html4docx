@@ -14,6 +14,7 @@ Release History
 
 - Fixes `#62 <https://github.com/dfop02/html4docx/issues/62>`_ : `tag_style_override` not applying custom styles from a Word template. | `dfop02 <https://github.com/dfop02>`_
 - Handle invalid rowspan and colspan values in tables. | `dfop02 <https://github.com/dfop02>`_ inspired by `PR #56 <https://github.com/dfop02/html4docx/pull/56>`_ from `kko-harvey <https://github.com/kko-harvey>`_ .
+- Fixes `#67 <https://github.com/dfop02/html4docx/issues/67>`_: built-in typing was not supported by old python versions. | `dfop02 <https://github.com/dfop02>`_
 
 **New Features**
 
