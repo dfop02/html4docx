@@ -1,3 +1,6 @@
+[project]
+requires-python = ">=3.7"
+
 [tool.ruff]
 line-length = 127
 exclude = [

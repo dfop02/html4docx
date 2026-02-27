@@ -1,3 +1,4 @@
+import logging
 import os
 import unittest
 from io import BytesIO
@@ -6,11 +7,13 @@ from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.oxml.ns import qn
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_UNDERLINE
+from docx.enum.style import WD_STYLE_TYPE
 from html4docx import HtmlToDocx
 from html4docx.utils import unit_converter, parse_color
 from html4docx.colors import Color
 
 test_dir = os.path.abspath(os.path.dirname(__file__))
+
 
 class OutputTest(unittest.TestCase):
     # ============================== Helper methods ============================== #
@@ -46,6 +49,27 @@ class OutputTest(unittest.TestCase):
 
         u_elem = u_elems[0]
         return u_elem.get(qn('w:color'))
+
+    @staticmethod
+    def get_run_shading_fill(run):
+        """
+        Extract shading fill color from the run XML (e.g. for <mark>).
+        Returns hex string like 'FFFF00' or None if no shading.
+        """
+        r_pr = run._element.find(qn('w:rPr'))
+        if r_pr is None:
+            return None
+        shd = r_pr.find(qn('w:shd'))
+        if shd is None:
+            return None
+        return (shd.get(qn('w:fill')) or "").upper()
+
+    @staticmethod
+    def save_document_on_buffer(document: Document) -> BytesIO:
+        buffer = BytesIO()
+        document.save(buffer)
+        buffer.seek(0)
+        return buffer
 
     # ============================== Setup and teardown ============================== #
     @classmethod
@@ -436,7 +460,7 @@ and blank lines.
 
     def test_bold_italic_underline_and_strike(self):
         self.document.add_heading(
-            'Test: Bold, Italic, Underline and Strike tags',
+            'Test: Bold, Italic, Underline, Inserted, Strike, Deleted and Marked tags',
             level=1
         )
 
@@ -444,7 +468,10 @@ and blank lines.
             "<p>This text has <b>Bold Words</b>.</p>"
             "<p>This text has <i>Italic Words</i>.</p>"
             "<p>This text has <u>Underline Words</u>.</p>"
+            "<p>This text has <ins>Inserted Words</ins>.</p>"
             "<p>This text has <s>Strike Words</s>.</p>"
+            "<p>This text has <del>Deleted Words</del>.</p>"
+            "<p>This text has <mark>Marked Words</mark>.</p>"
             "<p>This text has <b><i><u><s>Bold, Italic, Underline and Strike Words</s></u></i></b>.</p>"
         )
         # Add on document for human validation
@@ -462,11 +489,23 @@ and blank lines.
         self.assertIn("Underline Words", paragraphs[2].text)
         self.assertTrue(paragraphs[2].runs[1].underline)
 
-        self.assertIn("Strike Words", paragraphs[3].text)
-        self.assertTrue(paragraphs[3].runs[1].font.strike)
+        self.assertIn("Inserted Words", paragraphs[3].text)
+        self.assertTrue(paragraphs[3].runs[1].underline)
 
-        self.assertIn("Bold, Italic, Underline and Strike Words", paragraphs[4].text)
-        run = paragraphs[4].runs[1]
+        self.assertIn("Strike Words", paragraphs[4].text)
+        self.assertTrue(paragraphs[4].runs[1].font.strike)
+
+        self.assertIn("Deleted Words", paragraphs[5].text)
+        self.assertTrue(paragraphs[5].runs[1].font.strike)
+
+        self.assertIn("Marked Words", paragraphs[6].text)
+        self.assertEqual(
+            self.get_run_shading_fill(paragraphs[6].runs[1]), 'FFFF00',
+            "<mark> should apply yellow shading (FFFF00)"
+        )
+
+        self.assertIn("Bold, Italic, Underline and Strike Words", paragraphs[7].text)
+        run = paragraphs[7].runs[1]
         self.assertTrue(run.bold)
         self.assertTrue(run.italic)
         self.assertTrue(run.underline)
@@ -2176,6 +2215,116 @@ and blank lines.
         # Class should win over tag override
         self.assertEqual(doc.paragraphs[0].style.name, "Heading 3")
 
+    def test_code_and_pre_tag_overrides(self):
+        """Test that code and pre tag_style_overrides apply Word styles when they exist in the document."""
+        self.document.add_heading(
+            "Test: Test code and pre tag style overrides", level=1
+        )
+        tag_overrides = {
+            "code": "Inline Code",
+            "pre": "Code Block",
+        }
+        html = "<p>Text with <code>inline code</code> here.</p><pre>code block</pre>"
+
+        doc = Document()
+        doc.styles.add_style("Inline Code", WD_STYLE_TYPE.CHARACTER)
+        doc.styles.add_style("Code Block", WD_STYLE_TYPE.PARAGRAPH)
+
+        parser = HtmlToDocx(tag_style_overrides=tag_overrides)
+        parser.add_html_to_document(html, self.document)
+        parser.add_html_to_document(html, doc)
+
+        # First paragraph: "Text with " | "inline code" | " here." -> runs[1] is the code run
+        self.assertGreaterEqual(
+            len(doc.paragraphs[0].runs),
+            2,
+            "Expected at least 2 runs in first paragraph (text + code)",
+        )
+        self.assertEqual(
+            doc.paragraphs[0].runs[1].style.name,
+            "Inline Code",
+            "Inline <code> should use Inline Code character style",
+        )
+        self.assertEqual(
+            doc.paragraphs[1].style.name,
+            "Code Block",
+            "<pre> should use Code Block paragraph style",
+        )
+
+    def test_custom_style_not_found_warning(self):
+        """Warn when tag_style_override names a style that does not exist in the document."""
+        doc = Document()
+        parser = HtmlToDocx(tag_style_overrides={"h1": "NonExistentStyle"})
+        with self.assertLogs(level=logging.WARNING) as cm:
+            parser.add_html_to_document("<h1>Heading</h1>", doc)
+
+        self.assertIn(
+            "Custom style 'NonExistentStyle' not found in document",
+            cm.output[0],
+        )
+
+    def test_code_and_pre_tag_overrides_from_template(self):
+        """Test that code and pre use custom styles from an imported Word template (template.docx).
+        Saves the template-based document to tests/assets/template_output.docx so custom styles
+        are preserved; open that file in Word to verify (test.docx is the default doc, not the template)."""
+        self.document.add_heading(
+            "Test: Test code and pre from template.docx custom styles", level=1
+        )
+        doc = Document(os.path.join(test_dir, "assets", "templates", "template.docx"))
+        markdown_style = "Custom Markdown"
+        code_block_style = "Code Block"
+
+        self.assertEqual(
+            markdown_style in doc.styles,
+            True,
+            f"{markdown_style} style should be found in template",
+        )
+        self.assertEqual(
+            code_block_style in doc.styles,
+            True,
+            f"{code_block_style} style should be found in template",
+        )
+
+        tag_overrides = {
+            "code": markdown_style,
+            "pre": code_block_style,
+        }
+        html = "<p>Text with <code>inline code</code> here.</p><pre>code block</pre>"
+
+        parser = HtmlToDocx(tag_style_overrides=tag_overrides)
+        parser.add_html_to_document(html, self.document)
+        parser.add_html_to_document(html, doc)
+
+        buffer = self.save_document_on_buffer(doc)
+        buffer_doc = Document(buffer)
+        self.assertIn(
+            markdown_style,
+            buffer_doc.styles,
+            "Custom styles must be preserved after save.",
+        )
+        self.assertIn(
+            code_block_style,
+            buffer_doc.styles,
+            "Custom styles must be preserved after save.",
+        )
+
+        # Template has an initial paragraph; our HTML adds the next two (p with code, pre)
+        self.assertGreaterEqual(
+            len(buffer_doc.paragraphs[1].runs),
+            2,
+            "Expected at least 2 runs in paragraph (text + code)",
+        )
+        self.assertEqual(
+            buffer_doc.paragraphs[1].runs[1].style.name,
+            "Custom Markdown",
+            "Inline <code> should use Custom Markdown character style from template in the buffer document",
+        )
+        self.assertEqual(
+            buffer_doc.paragraphs[2].style.name,
+            "Code Block",
+            "<pre> should use Code Block paragraph style from template in the buffer document",
+        )
+
     def test_normal_default(self):
         """Test that Normal is used as default by default"""
         self.document.add_heading(
@@ -2545,6 +2694,76 @@ and blank lines.
 
         self.assertEqual(len(doc.paragraphs), 1)
 
+    def test_page_break_css2_and_css3(self):
+        """Test that both CSS2 page-break-after and CSS3 break-after work"""
+        self.document.add_heading("CSS2 and CSS3 page break properties", level=1)
+
+        # Test CSS2 page-break-after: always
+        html_css2 = '<div style="page-break-after: always;">Content before break</div><p>Content after break</p>'
+
+        # Test CSS3 break-after: page
+        html_css3 = '<div style="break-after: page;">Content before break</div><p>Content after break</p>'
+
+        # Test with extra whitespace
+        html_whitespace = '<div style="page-break-after:  always  ;">Content before break</div><p>Content after break</p>'
+
+        # Test with !important (should still work)
+        html_important = '<div style="page-break-after: always !important;">Content before break</div><p>Content after break</p>'
+
+        # Test both properties in separate documents
+        doc_css2 = Document()
+        parser_css2 = HtmlToDocx()
+        parser_css2.add_html_to_document(html_css2, doc_css2)
+
+        doc_css3 = Document()
+        parser_css3 = HtmlToDocx()
+        parser_css3.add_html_to_document(html_css3, doc_css3)
+
+        doc_whitespace = Document()
+        parser_whitespace = HtmlToDocx()
+        parser_whitespace.add_html_to_document(html_whitespace, doc_whitespace)
+
+        doc_important = Document()
+        parser_important = HtmlToDocx()
+        parser_important.add_html_to_document(html_important, doc_important)
+
+        # Both should have a page break element in their XML
+        # Page breaks are represented as w:br elements with w:type="page"
+        def has_page_break(doc):
+            for paragraph in doc.paragraphs:
+                for run in paragraph.runs:
+                    br_elements = run._element.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}br')
+                    for br in br_elements:
+                        if br.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}type') == 'page':
+                            return True
+            return False
+
+        self.assertTrue(has_page_break(doc_css2), "CSS2 page-break-after: always should create a page break")
+        self.assertTrue(has_page_break(doc_css3), "CSS3 break-after: page should create a page break")
+        self.assertTrue(has_page_break(doc_whitespace), "CSS2 with extra whitespace should create a page break")
+        self.assertTrue(has_page_break(doc_important), "CSS2 with !important should create a page break")
+
+        # Test that partial matches don't trigger page breaks
+        html_no_break1 = '<div style="break-after: page-inside;">Should not break</div>'
+        html_no_break2 = '<div style="page-break-after: auto;">Should not break</div>'
+
+        doc_no_break1 = Document()
+        parser_no_break1 = HtmlToDocx()
+        parser_no_break1.add_html_to_document(html_no_break1, doc_no_break1)
+
+        doc_no_break2 = Document()
+        parser_no_break2 = HtmlToDocx()
+        parser_no_break2.add_html_to_document(html_no_break2, doc_no_break2)
+
+        self.assertFalse(has_page_break(doc_no_break1), "break-after: page-inside should NOT create a page break")
+        self.assertFalse(has_page_break(doc_no_break2), "page-break-after: auto should NOT create a page break")
+
+        # Add to the main document for visual verification
+        parser = HtmlToDocx()
+        parser.add_html_to_document(html_css2, self.document)
+        self.document.add_paragraph("--- CSS3 version below ---")
+        parser.add_html_to_document(html_css3, self.document)
+
     def test_invalid_color_fallback_to_black(self):
         """Test with invalid color fallback to black"""
         self.document.add_heading("Test: Test invalid color fallback to black", level=1)
@@ -2572,6 +2791,26 @@ and blank lines.
         self.assertIn('Could not parse color \'rgb(255, 0, 0, 0)\': Invalid color value. Fallback to black.', log.output[2])
         self.assertIn('Could not parse color \'invalidcolorname\': Invalid color value. Fallback to black.', log.output[3])
         self.assertIn('Could not parse color \'#f7272626161\': Invalid color value. Fallback to black.', log.output[4])
+
+    def test_invalid_rowspan_and_colspan(self):
+        """Test with invalid rowspan and colspan"""
+
+        html = '<table><tr><td rowspan="invalid">Test 1</td></tr></table>'
+
+        doc = Document()
+        parser = HtmlToDocx()
+        parser.add_html_to_document(html, self.document)
+        parser.add_html_to_document(html, doc)
+
+        self.assertEqual(len(doc.tables), 1)
+
+        table = doc.tables[0]
+
+        self.assertEqual(len(table.rows), 1)
+        self.assertEqual(len(table.columns), 1)
+
+        self.assertEqual(table.cell(0, 0).text.strip(), "Test 1")
+
 
 if __name__ == "__main__":
     unittest.main()

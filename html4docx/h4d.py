@@ -4,6 +4,7 @@ import os
 import re
 from io import BytesIO
 from html.parser import HTMLParser
+from typing import Dict, Any
 
 import docx
 from bs4 import BeautifulSoup
@@ -64,7 +65,7 @@ class HtmlToDocx(HTMLParser):
         self.pending_important_styles = None
 
     @property
-    def metadata(self) -> dict[str, any]:
+    def metadata(self) -> Dict[str, Any]:
         if not hasattr(self, '_metadata'):
             self._metadata = Metadata(self.doc)
         return self._metadata
@@ -1295,8 +1296,8 @@ class HtmlToDocx(HTMLParser):
 
                 # Reference:
                 # https://python-docx.readthedocs.io/en/latest/dev/analysis/features/table/cell-merge.html
-                rowspan = int(col.get('rowspan', 1))
-                colspan = int(col.get('colspan', 1))
+                rowspan = utils.safe_int(col.get('rowspan', 1))
+                colspan = utils.safe_int(col.get('colspan', 1))
 
                 if rowspan > 1 or colspan > 1:
                     docx_cell = docx_cell.merge(
@@ -1341,8 +1342,13 @@ class HtmlToDocx(HTMLParser):
         self.paragraph = self.doc.add_paragraph()
 
         # handle page break
-        if 'style' in current_attrs and 'page-break-after: always' in current_attrs['style']:
-            self.doc.add_page_break()
+        if 'style' in current_attrs:
+            style = current_attrs['style']
+            # Match CSS2 page-break-after: always or CSS3 break-after: page
+            # Using regex to ensure we match the exact property-value pairs
+            # Also handles optional !important flag
+            if style and any(regex.search(style) for regex in constants.PAGE_BREAK_REGEXES):
+                self.doc.add_page_break()
 
     def handle_hr(self):
         # This implementation was taken from:
@@ -1365,6 +1371,31 @@ class HtmlToDocx(HTMLParser):
         bottom.set(qn('w:space'), '1')
         bottom.set(qn('w:color'), 'auto')
         pBdr.append(bottom)
+
+    def handle_custom_tag_styles(self, tag):
+        """
+        Handle custom or extended tag styles that require
+        more than a simple tag mapping.
+        """
+        if tag == "mark":
+            self.handle_mark()
+        else:
+            return
+
+    def handle_mark(self):
+        """
+        Apply default <mark> styling using Word shading (yellow highlight).
+        """
+        shd = OxmlElement('w:shd')
+        shd.set(qn('w:val'), 'clear')
+        shd.set(qn('w:color'), 'auto')
+        shd.set(qn('w:fill'), 'FFFF00')  # Yellow - default <mark> color
+        r_pr = self.run._element.get_or_add_rPr()
+        # Remove existing shading if present
+        existing_shd = r_pr.find(qn('w:shd'))
+        if existing_shd is not None:
+            r_pr.remove(existing_shd)
+        r_pr.append(shd)
 
     def handle_link(self, href, text, tooltip=None):
         """
@@ -1477,6 +1508,7 @@ class HtmlToDocx(HTMLParser):
         if custom_style:
             valid_style = utils.check_style_exists(self.doc, custom_style)
             if not valid_style:
+                logging.warning(f"Warning: Custom style '{custom_style}' not found in document, Ignoring style.")
                 custom_style = None
 
         if tag in ["p", "pre"]:
@@ -1532,9 +1564,11 @@ class HtmlToDocx(HTMLParser):
                 self.handle_table(current_attrs)
                 return
 
-        elif tag == "code":
+        elif tag == 'code':
+            # Character style for inline code (pre uses paragraph style in the ["p", "pre"] branch)
             if custom_style:
                 self.pending_character_style = custom_style
+
             if "style" in current_attrs:
                 normal_styles, important_styles = utils.parse_inline_styles(
                     current_attrs["style"]
@@ -1544,10 +1578,6 @@ class HtmlToDocx(HTMLParser):
                 if important_styles:
                     self.pending_important_styles = important_styles
             return
-        # Commented this out.  Line breaks are already handled by try/except blocks (see the br code above).  In addition to this, I'm fixing the tests added by the previous release.
-        # # set new run reference point in case of leading line breaks
-        # if tag in ["p", "li", "pre"]:
-        #     self.run = self.paragraph.add_run()
 
         if 'id' in current_attrs:
             self.add_bookmark(current_attrs['id'])
@@ -1657,6 +1687,10 @@ class HtmlToDocx(HTMLParser):
         # If there's a link, dont put the data directly in the run
         self.run = self.paragraph.add_run(data)
 
+        # Apply tag override character style for <code> when the style exists in the document
+        if self.pending_character_style:
+            self.apply_styles_to_run(self.run, self.pending_character_style, isCustom=True)
+
         for span in self.tags['span']:
             if 'style' in span:
                 span_style = utils.parse_dict_string(span['style'])
@@ -1673,9 +1707,15 @@ class HtmlToDocx(HTMLParser):
                         self.tags[tag]['style'] = utils.dict_to_style_string(div_style)
 
         for tag, attrs in self.tags.items():
+            if self.use_tag_overrides and tag in self.tag_style_overrides:
+                continue
+
             if tag in constants.FONT_STYLES:
                 font_style = constants.FONT_STYLES[tag]
-                setattr(self.run.font, font_style, True)
+                if font_style == 'custom':
+                    self.handle_custom_tag_styles(tag)
+                else:
+                    setattr(self.run.font, font_style, True)
 
             if tag in constants.FONT_NAMES:
                 font_name = constants.FONT_NAMES[tag]
@@ -1747,12 +1787,12 @@ class HtmlToDocx(HTMLParser):
         for row_idx, row in enumerate(rows):
             cols = self.get_table_columns(row)
             # Handle colspan
-            row_col_count = sum(int(col.get('colspan', default_span)) for col in cols)
+            row_col_count = sum(utils.safe_int(col.get('colspan', default_span)) for col in cols)
             max_cols = max(max_cols, row_col_count)
 
             # Handle rowspan
             for col in cols:
-                rowspan = int(col.get('rowspan', default_span))
+                rowspan = utils.safe_int(col.get('rowspan', default_span))
                 if rowspan > default_span:
                     max_rows = max(max_rows, row_idx + rowspan)
 

@@ -53,9 +53,18 @@ jobs:
           exit 1
         fi
 
+  security:
+    name: Run Security Audits
+    needs: validate-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pypa/gh-action-pip-audit@v1.0.0
+        with:
+          inputs: requirements.txt
+
   test:
     name: Run tests
-    needs: validate-tag
+    needs: security
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
