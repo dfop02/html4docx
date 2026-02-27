@@ -66,6 +66,8 @@ jobs:
           pip install -r requirements.txt
 
       - uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          inputs: ${{ github.workspace }}/requirements.txt
 
   test:
     name: Run tests
