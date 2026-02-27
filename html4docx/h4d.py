@@ -4,6 +4,7 @@ import os
 import re
 from io import BytesIO
 from html.parser import HTMLParser
+from typing import Dict, Any
 
 import docx
 from bs4 import BeautifulSoup
@@ -64,7 +65,7 @@ class HtmlToDocx(HTMLParser):
         self.pending_important_styles = None
 
     @property
-    def metadata(self) -> dict[str, any]:
+    def metadata(self) -> Dict[str, Any]:
         if not hasattr(self, '_metadata'):
             self._metadata = Metadata(self.doc)
         return self._metadata
