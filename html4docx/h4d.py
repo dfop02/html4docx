@@ -1077,7 +1077,7 @@ class HtmlToDocx(HTMLParser):
             if color:
                 for paragraph in doc_cell.paragraphs:
                     for run in paragraph.runs:
-                        run.font.color.rgb = color
+                        run.font.color.rgb = RGBColor(*color)
 
         # Set vertical align (for individual cells)
         if 'vertical-align' in styles:
