@@ -1781,7 +1781,6 @@ and blank lines.
             expected_comment == text for text in paragraph_texts
         ), f"Expected comment '{expected_comment}' to appear in the document, but it was not found."
 
-        # (Optional) Check styling if needed: green color or italic
         comment_paragraph = next(
             (p for p in document.paragraphs if p.text.strip() == expected_comment),
             None
