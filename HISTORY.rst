@@ -12,7 +12,7 @@ Release History
 
 **Fixes**
 
-- None
+- Fixes `#70 <https://github.com/dfop02/html4docx/issues/70>`_: malformed table overflow. | `dfop02 <https://github.com/dfop02>`_
 
 **New Features**
 
