@@ -23,9 +23,11 @@ class ImageAlignment(Enum):
 def get_filename_from_url(url: str):
     return os.path.basename(urlparse(url).path)
 
+
 def dict_to_style_string(style_dict):
     """Convert style dictionary back to CSS string"""
-    return '; '.join([f'{k}: {v}' for k, v in style_dict.items()])
+    return "; ".join([f"{k}: {v}" for k, v in style_dict.items()])
+
 
 def is_url(url: str):
     """
@@ -87,18 +89,32 @@ def parse_dict_string(string: str, separator: str = ";"):
         return dict()
 
     new_string = re.sub(r"\s+", " ", string.replace("\n", "")).split(separator)
-    string_dict = dict(
-        (k.strip(), v.strip())
-        for x in new_string
-        if ":" in x
-        for k, v in [x.split(":", 1)]
-    )
+    string_dict = dict((k.strip(), v.strip()) for x in new_string if ":" in x for k, v in [x.split(":", 1)])
     return string_dict
+
+
+def add_px(value):
+    """
+    Append 'px' to numeric values (int, float, or numeric strings).
+    Leaves values with units or non-numeric strings unchanged.
+    """
+    if isinstance(value, (int, float)):
+        return f"{value}px"
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        try:
+            float(stripped)
+            return f"{stripped}px"
+        except ValueError:
+            return value
+
+    return value
 
 
 def unit_converter(unit_value: str, target_unit: str = "pt"):
     """
-    Converts a CSS unit value to a target unit (default is 'pt').
+    Converts a CSS unit value (default px) to a target unit (default is 'pt').
     Supported input units: px, pt, in, pc, cm, mm, em, rem, %.
     Supported target units: pt, px, in, cm, mm.
 
@@ -141,9 +157,7 @@ def unit_converter(unit_value: str, target_unit: str = "pt"):
         return None
 
     # Clamp the value to MAX_INDENT (in points)
-    value_in_pt = min(
-        value_in_pt, constants.MAX_INDENT * 72.0
-    )  # MAX_INDENT is in inches
+    value_in_pt = min(value_in_pt, constants.MAX_INDENT * 72.0)
 
     # Convert from points (pt) to the target unit
     conversion_from_pt = {
@@ -181,9 +195,9 @@ def is_color(color: str) -> bool:
         >>> is_color("000000")
         False
     """
-    is_rgb = 'rgb' in color
-    is_hex = color.startswith('#')
-    is_keyword = color == 'currentcolor'
+    is_rgb = "rgb" in color
+    is_hex = color.startswith("#")
+    is_keyword = color == "currentcolor"
     is_color_name = color in Color.__members__
     return is_rgb or is_hex or is_keyword or is_color_name
 
@@ -200,7 +214,7 @@ def parse_color(original_color: str, return_hex: bool = False):
         if "rgba" in color:
             color = re.sub(r"[^0-9,]", "", color)
             colors = [int(x) for x in color.split(",")]
-            colors = colors[:3] # remove opacity because it's not supported by python-docx
+            colors = colors[:3]  # remove opacity because it's not supported by python-docx
             logging.warning("RGBA color is not supported by python-docx. Opacity will be ignored.")
         elif "rgb" in color:
             color = re.sub(r"[^0-9,]", "", color)
@@ -209,7 +223,7 @@ def parse_color(original_color: str, return_hex: bool = False):
                 raise ValueError(f"Invalid RGB color: {original_color}")
         elif color.startswith("#"):
             color = color.lstrip("#")
-            color = ("".join([x + x for x in color]) if len(color) == 3 else color)  # convert short hex to full hex
+            color = "".join([x + x for x in color]) if len(color) == 3 else color  # convert short hex to full hex
             colors = RGBColor.from_string(color)
         elif color in Color.__members__:
             colors = Color[color].value
@@ -217,7 +231,7 @@ def parse_color(original_color: str, return_hex: bool = False):
             colors = [0, 0, 0]  # Default to black for unexpected colors
             logging.warning(f"Could not parse color '{original_color}': Invalid color value. Fallback to black.")
     except Exception:
-        colors = [0, 0, 0] # Default to black for errors
+        colors = [0, 0, 0]  # Default to black for errors
         logging.warning(f"Could not parse color '{original_color}': Invalid color value. Fallback to black.")
 
     return rgb_to_hex(colors) if return_hex else colors
