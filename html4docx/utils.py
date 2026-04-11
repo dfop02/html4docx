@@ -95,19 +95,20 @@ def parse_dict_string(string: str, separator: str = ";"):
 
 def add_px(value):
     """
-    Append 'px' to numeric values (int, float, or numeric strings).
-    Leaves values with units or non-numeric strings unchanged.
+    Append 'px' only if the value is purely numeric (int, float, or numeric string).
+    If there is any non-numeric character, return the original value unchanged.
     """
     if isinstance(value, (int, float)):
         return f"{value}px"
 
     if isinstance(value, str):
         stripped = value.strip()
-        try:
-            float(stripped)
+
+        # Check if it's a valid number (integer or float)
+        if stripped.replace(".", "", 1).isdigit():
             return f"{stripped}px"
-        except ValueError:
-            return value
+
+        return value
 
     return value
 
