@@ -3,14 +3,16 @@ import os
 import unittest
 from io import BytesIO
 from pathlib import Path
+
 from docx import Document
-from docx.shared import Pt, RGBColor
-from docx.oxml.ns import qn
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_UNDERLINE
 from docx.enum.style import WD_STYLE_TYPE
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_UNDERLINE
+from docx.oxml.ns import qn
+from docx.shared import Pt, RGBColor
+
 from html4docx import HtmlToDocx
-from html4docx.utils import unit_converter, parse_color
 from html4docx.colors import Color
+from html4docx.utils import parse_color, unit_converter
 
 test_dir = os.path.abspath(os.path.dirname(__file__))
 
@@ -24,8 +26,8 @@ class OutputTest(unittest.TestCase):
 
     @staticmethod
     def get_html_from_file(filename: str):
-        file_path = Path(f'{test_dir}/assets/htmls') / Path(filename)
-        with open(file_path, 'r') as f:
+        file_path = Path(f"{test_dir}/assets/htmls") / Path(filename)
+        with open(file_path, "r") as f:
             html = f.read()
         return html
 
@@ -43,12 +45,12 @@ class OutputTest(unittest.TestCase):
         Extract underline color from the run XML.
         Returns hex string like 'FF0000' or None.
         """
-        u_elems = run._r.xpath('.//w:u')
+        u_elems = run._r.xpath(".//w:u")
         if not u_elems:
             return None
 
         u_elem = u_elems[0]
-        return u_elem.get(qn('w:color'))
+        return u_elem.get(qn("w:color"))
 
     @staticmethod
     def get_run_shading_fill(run):
@@ -56,13 +58,13 @@ class OutputTest(unittest.TestCase):
         Extract shading fill color from the run XML (e.g. for <mark>).
         Returns hex string like 'FFFF00' or None if no shading.
         """
-        r_pr = run._element.find(qn('w:rPr'))
+        r_pr = run._element.find(qn("w:rPr"))
         if r_pr is None:
             return None
-        shd = r_pr.find(qn('w:shd'))
+        shd = r_pr.find(qn("w:shd"))
         if shd is None:
             return None
-        return (shd.get(qn('w:fill')) or "").upper()
+        return (shd.get(qn("w:fill")) or "").upper()
 
     @staticmethod
     def save_document_on_buffer(document: Document) -> BytesIO:
@@ -76,19 +78,19 @@ class OutputTest(unittest.TestCase):
     def setUpClass(cls):
         cls.clean_up_docx()
         cls.document = Document()
-        cls.text1 = cls.get_html_from_file('text1.html')
-        cls.paragraph_line_height = cls.get_html_from_file('paragraph_line_height.html')
-        cls.paragraph_first_line_indent = cls.get_html_from_file('paragraph_first_line_indent.html')
-        cls.text_decoration = cls.get_html_from_file('text_decoration.html')
-        cls.css_properties = cls.get_html_from_file('css_properties.html')
-        cls.css_properties_header = cls.get_html_from_file('header.html')
-        cls.table_html = cls.get_html_from_file('tables1.html')
-        cls.table2_html = cls.get_html_from_file('tables2.html')
-        cls.table3_html = cls.get_html_from_file('tables3.html')
+        cls.text1 = cls.get_html_from_file("text1.html")
+        cls.paragraph_line_height = cls.get_html_from_file("paragraph_line_height.html")
+        cls.paragraph_first_line_indent = cls.get_html_from_file("paragraph_first_line_indent.html")
+        cls.text_decoration = cls.get_html_from_file("text_decoration.html")
+        cls.css_properties = cls.get_html_from_file("css_properties.html")
+        cls.css_properties_header = cls.get_html_from_file("header.html")
+        cls.table_html = cls.get_html_from_file("tables1.html")
+        cls.table2_html = cls.get_html_from_file("tables2.html")
+        cls.table3_html = cls.get_html_from_file("tables3.html")
 
     @classmethod
     def tearDownClass(cls):
-        outputpath = os.path.join(test_dir, 'test.docx')
+        outputpath = os.path.join(test_dir, "test.docx")
         cls.document.save(outputpath)
 
     def setUp(self):
@@ -96,7 +98,7 @@ class OutputTest(unittest.TestCase):
 
     # ============================== Tests ============================== #
     def test_save_docx_by_filename(self):
-        filename = os.path.join(test_dir, 'new_test.docx')
+        filename = os.path.join(test_dir, "new_test.docx")
         self.parser.set_initial_attrs(self.document)
         self.parser.save(filename)
         self.assertTrue(os.path.exists(filename))
@@ -110,59 +112,41 @@ class OutputTest(unittest.TestCase):
         self.assertTrue(buffer.getvalue())
 
     def test_html_with_images_links_style(self):
-        self.document.add_heading(
-            'Test: add regular html with images, links and some formatting to document',
-            level=1
-        )
+        self.document.add_heading("Test: add regular html with images, links and some formatting to document", level=1)
         self.parser.add_html_to_document(self.text1, self.document)
 
     def test_html_with_default_paragraph_style(self):
-        self.document.add_heading(
-            'Test: add regular html with a default paragraph style defined',
-            level=1
-        )
-        self.parser.paragraph_style = 'Quote'
+        self.document.add_heading("Test: add regular html with a default paragraph style defined", level=1)
+        self.parser.paragraph_style = "Quote"
         self.parser.add_html_to_document(self.text1, self.document)
 
     def test_add_html_to_table_cell_with_default_paragraph_style(self):
-        self.document.add_heading(
-            'Test: regular html to table cell with a default paragraph style defined',
-            level=1
-        )
-        self.parser.paragraph_style = 'Quote'
-        table = self.document.add_table(1, 2, style='Table Grid')
+        self.document.add_heading("Test: regular html to table cell with a default paragraph style defined", level=1)
+        self.parser.paragraph_style = "Quote"
+        table = self.document.add_table(1, 2, style="Table Grid")
         cell = table.cell(0, 1)
         self.parser.add_html_to_document(self.text1, cell)
 
     def test_add_html_to_table_cell(self):
-        self.document.add_heading(
-            'Test: regular html with images, links, some formatting to table cell',
-            level=1
-        )
-        table = self.document.add_table(1, 2, style='Table Grid')
+        self.document.add_heading("Test: regular html with images, links, some formatting to table cell", level=1)
+        table = self.document.add_table(1, 2, style="Table Grid")
         cell = table.cell(0, 1)
         self.parser.add_html_to_document(self.text1, cell)
 
     def test_add_html_skip_images(self):
-        self.document.add_heading(
-            'Test: regular html with images, but skip adding images',
-            level=1
-        )
-        self.parser.options['images'] = False
+        self.document.add_heading("Test: regular html with images, but skip adding images", level=1)
+        self.parser.options["images"] = False
         self.parser.add_html_to_document(self.text1, self.document)
 
         document = self.parser.parse_html_string(self.text1)
-        assert any(['Graphic' in paragraph._p.xml for paragraph in document.paragraphs]) is False
+        assert any(["Graphic" in paragraph._p.xml for paragraph in document.paragraphs]) is False
 
     def test_add_html_with_tables(self):
-        self.document.add_heading(
-            'Test: add html with tables (by default no borders)',
-            level=1
-        )
+        self.document.add_heading("Test: add html with tables (by default no borders)", level=1)
         self.parser.add_html_to_document(self.table_html, self.document)
 
         # When no table style is set, use Normal Table as default
-        table_style = 'Normal Table'
+        table_style = "Normal Table"
 
         # Find the last table added to the document
         last_table = self.document.tables[-1]  # Assumes the table was added at the end
@@ -171,9 +155,9 @@ class OutputTest(unittest.TestCase):
         self.assertEqual(last_table.style.name, table_style, f"Table style does not match expected '{table_style}'")
 
     def test_add_html_with_tables_accent_style(self):
-        table_style = 'Light Grid Accent 6'
+        table_style = "Light Grid Accent 6"
         self.document.add_heading(
-            'Test: add html with tables with accent',
+            "Test: add html with tables with accent",
         )
         self.parser.table_style = table_style
         self.parser.add_html_to_document(self.table_html, self.document)
@@ -185,9 +169,9 @@ class OutputTest(unittest.TestCase):
         self.assertEqual(last_table.style.name, table_style, f"Table style does not match expected '{table_style}'")
 
     def test_add_html_with_tables_basic_style(self):
-        table_style = 'Table Grid'
+        table_style = "Table Grid"
         self.document.add_heading(
-            'Test: add html with tables with basic style',
+            "Test: add html with tables with basic style",
         )
         self.parser.table_style = table_style
         self.parser.add_html_to_document(self.table_html, self.document)
@@ -200,31 +184,28 @@ class OutputTest(unittest.TestCase):
 
     def test_add_nested_tables(self):
         self.document.add_heading(
-            'Test: add nested tables',
+            "Test: add nested tables",
         )
         self.parser.add_html_to_document(self.table2_html, self.document)
 
     def test_add_nested_tables_basic_style(self):
         self.document.add_heading(
-            'Test: add nested tables with basic style',
+            "Test: add nested tables with basic style",
         )
-        self.parser.table_style = 'Table Grid'
+        self.parser.table_style = "Table Grid"
         self.parser.add_html_to_document(self.table2_html, self.document)
 
     def test_add_nested_tables_accent_style(self):
         self.document.add_heading(
-            'Test: add nested tables with accent style',
+            "Test: add nested tables with accent style",
         )
-        self.parser.table_style = 'Light Grid Accent 6'
+        self.parser.table_style = "Light Grid Accent 6"
         self.parser.add_html_to_document(self.table2_html, self.document)
 
     def test_add_html_skip_tables(self):
         # broken until feature readded
-        self.document.add_heading(
-            'Test: add html with tables, but skip adding tables',
-            level=1
-        )
-        self.parser.options['tables'] = False
+        self.document.add_heading("Test: add html with tables, but skip adding tables", level=1)
+        self.parser.options["tables"] = False
         self.parser.add_html_to_document(self.table_html, self.document)
 
     def test_wrong_argument_type_raises_error(self):
@@ -246,39 +227,29 @@ class OutputTest(unittest.TestCase):
             assert False, "Error not raised as expected"
 
     def test_add_html_to_cells_method(self):
-        self.document.add_heading(
-            'Test: add_html_to_cells method',
-            level=1
-        )
-        table = self.document.add_table(2, 3, style='Table Grid')
+        self.document.add_heading("Test: add_html_to_cells method", level=1)
+        table = self.document.add_table(2, 3, style="Table Grid")
         cell = table.cell(0, 0)
-        html = '''Line 0 without p tags<p>Line 1 with P tags</p>'''
+        html = """Line 0 without p tags<p>Line 1 with P tags</p>"""
         self.parser.add_html_to_cell(html, cell)
 
         cell = table.cell(0, 1)
-        html = '''<p>Line 0 with p tags</p>Line 1 without p tags'''
+        html = """<p>Line 0 with p tags</p>Line 1 without p tags"""
         self.parser.add_html_to_cell(html, cell)
 
         cell = table.cell(0, 2)
         cell.text = "Pre-defined text that shouldn't be removed."
-        html = '''<p>Add HTML to non-empty cell.</p>'''
+        html = """<p>Add HTML to non-empty cell.</p>"""
         self.parser.add_html_to_cell(html, cell)
 
     def test_inline_code(self):
-        self.document.add_heading(
-            'Test: inline code block',
-            level=1
-        )
+        self.document.add_heading("Test: inline code block", level=1)
 
-        html = "<p>This is a sentence that contains <code>some code elements</code> that " \
-               "should appear as code.</p>"
+        html = "<p>This is a sentence that contains <code>some code elements</code> that should appear as code.</p>"
         self.parser.add_html_to_document(html, self.document)
 
     def test_code_block(self):
-        self.document.add_heading(
-            'Test: code block',
-            level=1
-        )
+        self.document.add_heading("Test: code block", level=1)
 
         html = """<p><code>
 This is a code block.
@@ -290,10 +261,7 @@ or blank lines.
         self.parser.add_html_to_document(html, self.document)
 
     def test_pre_block(self):
-        self.document.add_heading(
-            'Test: pre block',
-            level=1
-        )
+        self.document.add_heading("Test: pre block", level=1)
 
         html = """<pre>
 This is a pre-formatted block.
@@ -306,25 +274,19 @@ and blank lines.
         self.parser.add_html_to_document(html, self.document)
 
     def test_handling_hr(self):
-        hr_html_example = '<p>paragraph</p><hr><p>paragraph</p>'
+        hr_html_example = "<p>paragraph</p><hr><p>paragraph</p>"
 
-        self.document.add_heading(
-            'Test: Handling of hr',
-            level=1
-        )
+        self.document.add_heading("Test: Handling of hr", level=1)
         # Add on document for human validation
         self.parser.add_html_to_document(hr_html_example, self.document)
 
         document = self.parser.parse_html_string(hr_html_example)
-        assert '<w:pBdr>' in document._body._body.xml
+        assert "<w:pBdr>" in document._body._body.xml
 
     def test_external_hyperlink(self):
-        hyperlink_html_example = "<a href=\"https://www.google.com\">Google External Link</a>"
+        hyperlink_html_example = '<a href="https://www.google.com">Google External Link</a>'
 
-        self.document.add_heading(
-            'Test: Handling external hyperlink',
-            level=1
-        )
+        self.document.add_heading("Test: Handling external hyperlink", level=1)
         self.parser.add_html_to_document(hyperlink_html_example, self.document)
 
         document = self.parser.parse_html_string(hyperlink_html_example)
@@ -335,19 +297,16 @@ and blank lines.
             if "hyperlink" in rel.reltype:
                 external_hyperlinks.append(rel.target_ref)
 
-        assert 'https://www.google.com' in external_hyperlinks
-        assert '<w:hyperlink' in document._body._body.xml
+        assert "https://www.google.com" in external_hyperlinks
+        assert "<w:hyperlink" in document._body._body.xml
 
     def test_internal_hyperlink(self):
         hyperlink_html_example = (
-            "<p><h1 id=\"intro\">Introduction Header</h1></p>"
-            "<p>Click here: <a href=\"#intro\" title=\"Link to intro\">Link to intro</a></p>"
+            '<p><h1 id="intro">Introduction Header</h1></p>'
+            '<p>Click here: <a href="#intro" title="Link to intro">Link to intro</a></p>'
         )
 
-        self.document.add_heading(
-            'Test: Handling internal hyperlink',
-            level=1
-        )
+        self.document.add_heading("Test: Handling internal hyperlink", level=1)
         self.parser.add_html_to_document(hyperlink_html_example, self.document)
 
         document = self.parser.parse_html_string(hyperlink_html_example)
@@ -358,8 +317,8 @@ and blank lines.
 
     def test_internal_hyperlink_without_paragraph(self):
         hyperlink_html_example = (
-            "<h1 id=\"intro\">Introduction Header</h1>"
-            "<p>Click here: <a href=\"#intro\" title=\"Link to intro\">Link to intro</a><p/>"
+            '<h1 id="intro">Introduction Header</h1>'
+            '<p>Click here: <a href="#intro" title="Link to intro">Link to intro</a><p/>'
         )
 
         document = self.parser.parse_html_string(hyperlink_html_example)
@@ -370,9 +329,7 @@ and blank lines.
         assert '<w:hyperlink w:anchor="intro" w:tooltip="Link to intro">' in document_body
 
     def test_internal_hyperlink_without_anchor(self):
-        hyperlink_html_example = (
-            "<p>Click here: <a href=\"#intro\" title=\"Link to intro\">Link to intro</a></p>"
-        )
+        hyperlink_html_example = '<p>Click here: <a href="#intro" title="Link to intro">Link to intro</a></p>'
 
         document = self.parser.parse_html_string(hyperlink_html_example)
         document_body = document._body._body.xml
@@ -382,18 +339,15 @@ and blank lines.
         assert '<w:hyperlink w:anchor="intro" w:tooltip="Link to intro">' in document_body
 
     def test_image_no_src(self):
-        self.document.add_heading(
-            'Test: Handling img without src',
-            level=1
-        )
-        self.parser.add_html_to_document('<img />', self.document)
+        self.document.add_heading("Test: Handling img without src", level=1)
+        self.parser.add_html_to_document("<img />", self.document)
 
-        document = self.parser.parse_html_string('<img />')
-        assert '<image: no_src>' in document.paragraphs[0].text
+        document = self.parser.parse_html_string("<img />")
+        assert "<image: no_src>" in document.paragraphs[0].text
 
     def test_local_img(self):
         # A table with more td elements in latter rows than in the first
-        self.document.add_heading('Test: Local Image', level=1)
+        self.document.add_heading("Test: Local Image", level=1)
         html_local_img = '<img alt="" height="306px" src="./tests/assets/images/test_img.png" width="520px"/>'
         self.parser.add_html_to_document(html_local_img, self.document)
         document = self.parser.parse_html_string(html_local_img)
@@ -411,33 +365,50 @@ and blank lines.
 
         assert image_found, "No image was found in the document"
 
+    def test_img_with_dimensions(self):
+        self.document.add_heading("Test: Image With Dimensions", level=1)
+
+        html = '<img src="./tests/assets/images/test_img.png" width="520" height="306"/>'
+        self.parser.add_html_to_document(html, self.document)
+        document = self.parser.parse_html_string(html)
+
+        # Ensure at least one image exists
+        assert len(document.inline_shapes) > 0, "No image was found in the document"
+
+        shape = document.inline_shapes[-1]
+
+        # Convert expected px → inches (assuming 96 DPI)
+        expected_width_in = 520 / 96
+        expected_height_in = 306 / 96
+
+        actual_width_in = shape.width.inches
+        actual_height_in = shape.height.inches
+
+        # Allow tolerance (floating point + conversion differences)
+        tolerance = 0.05  # ~1.27 mm
+
+        assert abs(actual_width_in - expected_width_in) < tolerance, (
+            f"Width mismatch: expected ~{expected_width_in:.2f}in, got {actual_width_in:.2f}in"
+        )
+
+        assert abs(actual_height_in - expected_height_in) < tolerance, (
+            f"Height mismatch: expected ~{expected_height_in:.2f}in, got {actual_height_in:.2f}in"
+        )
+
     def test_inline_images(self):
-        self.document.add_heading(
-            'Test: Handling inline images',
-            level=1
-        )
-        test_img_src = 'https://github.com/dfop02/html4docx/blob/main/tests/assets/images/test_img.png?raw=true'
-        html_example = (
-            f"<p><img src='{test_img_src}' />"
-            f"<img src='{test_img_src}' />"
-            f"<img src='{test_img_src}' /></p>"
-        )
+        self.document.add_heading("Test: Handling inline images", level=1)
+        test_img_src = "https://github.com/dfop02/html4docx/blob/main/tests/assets/images/test_img.png?raw=true"
+        html_example = f"<p><img src='{test_img_src}' /><img src='{test_img_src}' /><img src='{test_img_src}' /></p>"
         self.parser.add_html_to_document(html_example, self.document)
 
         document = self.parser.parse_html_string(html_example)
 
         # Find paragraphs containing inline pictures
-        img_paragraphs = [
-            p for p in document.paragraphs
-            if any(r._element.xpath(".//pic:pic") for r in p.runs)
-        ]
+        img_paragraphs = [p for p in document.paragraphs if any(r._element.xpath(".//pic:pic") for r in p.runs)]
         assert img_paragraphs, "Expected at least one paragraph with inline images"
 
         first_img_para = img_paragraphs[0]
-        inline_img_runs = [
-            r for r in first_img_para.runs
-            if r._element.xpath(".//pic:pic")
-        ]
+        inline_img_runs = [r for r in first_img_para.runs if r._element.xpath(".//pic:pic")]
         assert len(inline_img_runs) == 3, "Expected 3 inline image runs in a single paragraph"
 
     def test_single_image_without_paragraph(self):
@@ -445,24 +416,15 @@ and blank lines.
         document = self.parser.parse_html_string(html_example)
 
         # Find paragraphs containing inline pictures
-        img_paragraphs = [
-            p for p in document.paragraphs
-            if any(r._element.xpath(".//pic:pic") for r in p.runs)
-        ]
+        img_paragraphs = [p for p in document.paragraphs if any(r._element.xpath(".//pic:pic") for r in p.runs)]
         assert img_paragraphs, "Expected at least one paragraph with inline images"
 
         first_img_para = img_paragraphs[0]
-        inline_img_runs = [
-            r for r in first_img_para.runs
-            if r._element.xpath(".//pic:pic")
-        ]
+        inline_img_runs = [r for r in first_img_para.runs if r._element.xpath(".//pic:pic")]
         assert len(inline_img_runs) == 1, "Expected 1 inline image runs in a single paragraph"
 
     def test_bold_italic_underline_and_strike(self):
-        self.document.add_heading(
-            'Test: Bold, Italic, Underline, Inserted, Strike, Deleted and Marked tags',
-            level=1
-        )
+        self.document.add_heading("Test: Bold, Italic, Underline, Inserted, Strike, Deleted and Marked tags", level=1)
 
         html_example = (
             "<p>This text has <b>Bold Words</b>.</p>"
@@ -500,8 +462,7 @@ and blank lines.
 
         self.assertIn("Marked Words", paragraphs[6].text)
         self.assertEqual(
-            self.get_run_shading_fill(paragraphs[6].runs[1]), 'FFFF00',
-            "<mark> should apply yellow shading (FFFF00)"
+            self.get_run_shading_fill(paragraphs[6].runs[1]), "FFFF00", "<mark> should apply yellow shading (FFFF00)"
         )
 
         self.assertIn("Bold, Italic, Underline and Strike Words", paragraphs[7].text)
@@ -513,64 +474,58 @@ and blank lines.
 
     def test_font_size(self):
         font_size_html_example = (
-            "<p><span style=\"font-size:8px\">paragraph 8px</span></p>"
-            "<p><span style=\"font-size: 1cm\">paragraph 1cm</span></p>"
-            "<p><span style=\"font-size: 6em !important\">paragraph 6em</span></p>"
-            "<p><span style=\"font-size: 1.2cm\">paragraph 12cm</span></p>"
-            "<p><span style=\"font-size: 1.2vh\">paragraph 12vh not supported</span></p>"
-            "<p><span style=\"font-size: 5pc\">paragraph 5pc</span></p>"
-            "<p><span style=\"font-size:14pt!important\">paragraph 14pt</span></p>"
-            "<p><span style=\"font-size: 16pt!IMPORTANT\">paragraph 16pt</span></p>"
-            "<p><span style=\"font-size:2mm!IMPORTANT\">paragraph 2mm</span></p>"
-            "<p><span style=\"font-size:small!IMPORTANT\">paragraph small</span></p>"
+            '<p><span style="font-size:8px">paragraph 8px</span></p>'
+            '<p><span style="font-size: 1cm">paragraph 1cm</span></p>'
+            '<p><span style="font-size: 6em !important">paragraph 6em</span></p>'
+            '<p><span style="font-size: 1.2cm">paragraph 12cm</span></p>'
+            '<p><span style="font-size: 1.2vh">paragraph 12vh not supported</span></p>'
+            '<p><span style="font-size: 5pc">paragraph 5pc</span></p>'
+            '<p><span style="font-size:14pt!important">paragraph 14pt</span></p>'
+            '<p><span style="font-size: 16pt!IMPORTANT">paragraph 16pt</span></p>'
+            '<p><span style="font-size:2mm!IMPORTANT">paragraph 2mm</span></p>'
+            '<p><span style="font-size:small!IMPORTANT">paragraph small</span></p>'
         )
 
-        self.document.add_heading(
-            'Test: Font-Size',
-            level=1
-        )
+        self.document.add_heading("Test: Font-Size", level=1)
         # Add on document for human validation
         self.parser.add_html_to_document(font_size_html_example, self.document)
 
         document = self.parser.parse_html_string(font_size_html_example)
         font_sizes = [str(p.runs[0].font.size) for p in document.paragraphs]
-        assert ['76200', '355600', '914400', '431800', 'None', '762000', '177800', '203200', '69850', '120650'] == font_sizes
+        assert ["76200", "355600", "914400", "431800", "None", "762000", "177800", "203200", "69850", "120650"] == font_sizes
 
     def test_font_size_paragraph(self):
         font_size_html_example = (
-            "<p style=\"font-size:8px\">paragraph 8px</p>"
-            "<p style=\"font-size: 1cm\">paragraph 1cm</p>"
-            "<p style=\"font-size: 6em !important\">paragraph 6em</p>"
-            "<p style=\"font-size: 1.2cm\">paragraph 12cm</p>"
-            "<p style=\"font-size: 1.2vh\">paragraph 12vh not supported</p>"
-            "<p style=\"font-size: 5pc\">paragraph 5pc</p>"
-            "<p style=\"font-size:14pt!important\">paragraph 14pt</p>"
-            "<p style=\"font-size: 16pt!IMPORTANT\">paragraph 16pt</p>"
-            "<p style=\"font-size:2mm!IMPORTANT\">paragraph 2mm</p>"
-            "<p style=\"font-size:small!IMPORTANT\">paragraph small</p>"
+            '<p style="font-size:8px">paragraph 8px</p>'
+            '<p style="font-size: 1cm">paragraph 1cm</p>'
+            '<p style="font-size: 6em !important">paragraph 6em</p>'
+            '<p style="font-size: 1.2cm">paragraph 12cm</p>'
+            '<p style="font-size: 1.2vh">paragraph 12vh not supported</p>'
+            '<p style="font-size: 5pc">paragraph 5pc</p>'
+            '<p style="font-size:14pt!important">paragraph 14pt</p>'
+            '<p style="font-size: 16pt!IMPORTANT">paragraph 16pt</p>'
+            '<p style="font-size:2mm!IMPORTANT">paragraph 2mm</p>'
+            '<p style="font-size:small!IMPORTANT">paragraph small</p>'
         )
 
-        self.document.add_heading(
-            'Test: Font-Size on <p>',
-            level=1
-        )
+        self.document.add_heading("Test: Font-Size on <p>", level=1)
         self.parser.add_html_to_document(font_size_html_example, self.document)
 
         document = self.parser.parse_html_string(font_size_html_example)
         font_sizes = [str(p.runs[0].font.size) for p in document.paragraphs]
-        assert ['76200', '355600', '914400', '431800', 'None', '762000', '177800', '203200', '69850', '120650'] == font_sizes
+        assert ["76200", "355600", "914400", "431800", "None", "762000", "177800", "203200", "69850", "120650"] == font_sizes
 
     def test_font_weight_paragraph(self):
-        self.document.add_heading('Test: font weight on <p>', level=1)
+        self.document.add_heading("Test: font weight on <p>", level=1)
         font_weight_html_example = (
-            "<p style=\"font-weight: bold\">bold text</p>"
-            "<p style=\"font-weight: bolder\">bolder text</p>"
-            "<p style=\"font-weight: 700\">700 weight</p>"
-            "<p style=\"font-weight: 900\">900 weight</p>"
-            "<p style=\"font-weight: normal\">normal text</p>"
-            "<p style=\"font-weight: lighter\">lighter text</p>"
-            "<p style=\"font-weight: 400\">400 weight</p>"
-            "<p style=\"font-weight: 100\">100 weight</p>"
+            '<p style="font-weight: bold">bold text</p>'
+            '<p style="font-weight: bolder">bolder text</p>'
+            '<p style="font-weight: 700">700 weight</p>'
+            '<p style="font-weight: 900">900 weight</p>'
+            '<p style="font-weight: normal">normal text</p>'
+            '<p style="font-weight: lighter">lighter text</p>'
+            '<p style="font-weight: 400">400 weight</p>'
+            '<p style="font-weight: 100">100 weight</p>'
         )
 
         self.parser.add_html_to_document(font_weight_html_example, self.document)
@@ -580,10 +535,10 @@ and blank lines.
         font_weights = [p.runs[0].font.bold for p in document.paragraphs]
 
         expected_weights = [
-            True,   # bold
-            True,   # bolder
-            True,   # 700
-            True,   # 900
+            True,  # bold
+            True,  # bolder
+            True,  # 700
+            True,  # 900
             False,  # normal
             False,  # lighter
             False,  # 400
@@ -593,11 +548,11 @@ and blank lines.
         self.assertEqual(font_weights, expected_weights)
 
     def test_font_style_paragraph(self):
-        self.document.add_heading('Test: font style on <p>', level=1)
+        self.document.add_heading("Test: font style on <p>", level=1)
         font_style_html_example = (
-            "<p style=\"font-style: italic\">italic text</p>"
-            "<p style=\"font-style: oblique\">oblique text</p>"
-            "<p style=\"font-style: normal\">normal text</p>"
+            '<p style="font-style: italic">italic text</p>'
+            '<p style="font-style: oblique">oblique text</p>'
+            '<p style="font-style: normal">normal text</p>'
         )
 
         self.parser.add_html_to_document(font_style_html_example, self.document)
@@ -607,76 +562,70 @@ and blank lines.
         font_styles = [p.runs[0].font.italic for p in document.paragraphs]
 
         expected_styles = [
-            True,   # italic
-            True,   # oblique (should be treated as italic)
+            True,  # italic
+            True,  # oblique (should be treated as italic)
             False,  # normal
         ]
 
         self.assertEqual(font_styles, expected_styles)
 
     def test_font_family_paragraph(self):
-        self.document.add_heading('Test: font family on <p>', level=1)
+        self.document.add_heading("Test: font family on <p>", level=1)
         font_family_html_example = (
-            "<p style=\"font-family: Arial, sans-serif\">Arial font text</p>"
+            '<p style="font-family: Arial, sans-serif">Arial font text</p>'
             "<p style=\"font-family: 'Helvetica', sans-serif\">Helvetica font text</p>"
             "<p style=\"font-family: 'Noto Sans', sans-serif\">Noto Sans font text</p>"
             "<p style=\"font-family: 'Times New Roman', serif\">Times New Roman font text</p>"
-            "<p style=\"font-family: serif\">Generic serif font text</p>"
-            "<p style=\"font-family: sans-serif\">Generic sans-serif font text</p>"
-            "<p style=\"font-family: monospace\">Generic monospace font text</p>"
+            '<p style="font-family: serif">Generic serif font text</p>'
+            '<p style="font-family: sans-serif">Generic sans-serif font text</p>'
+            '<p style="font-family: monospace">Generic monospace font text</p>'
             "<p style=\"font-family: 'Courier New', monospace\">Courier New font text</p>"
-            "<p style=\"font-family: inherit\">Inherit font text</p>"
+            '<p style="font-family: inherit">Inherit font text</p>'
         )
 
         self.parser.add_html_to_document(font_family_html_example, self.document)
 
     def test_text_transform_paragraph(self):
-        self.document.add_heading('Test: text-transform on <p>', level=1)
+        self.document.add_heading("Test: text-transform on <p>", level=1)
         text_transform_html_example = (
-            "<p style=\"text-transform: uppercase\">uppercase text</p>"
-            "<p style=\"text-transform: lowercase\">LOWERCASE TEXT</p>"
-            "<p style=\"text-transform: capitalize\">capitalize each word</p>"
-            "<p style=\"text-transform: none\">normal text</p>"
+            '<p style="text-transform: uppercase">uppercase text</p>'
+            '<p style="text-transform: lowercase">LOWERCASE TEXT</p>'
+            '<p style="text-transform: capitalize">capitalize each word</p>'
+            '<p style="text-transform: none">normal text</p>'
             "<p>default text</p>"
         )
 
         self.parser.add_html_to_document(text_transform_html_example, self.document)
 
     def test_text_decoration_span(self):
-        self.document.add_heading('Test: text-decoration on <span>', level=1)
+        self.document.add_heading("Test: text-decoration on <span>", level=1)
         text_decoration_html_example = (
             # Standalone spans
-            "<span style=\"text-decoration: underline red\">underlined span (red)</span>"
-            "<span style=\"text-decoration: none rgb(0,0,0)\">no decoration span (rgb(0, 0, 0))</span>"
-            "<span style=\"text-decoration: line-through gray\">strikethrough span (gray) (not supported)</span>"
-            "<span style=\"text-decoration: underline line-through orange\">underline+line-through span (orange)\
-                (should be strike)</span>"
-
+            '<span style="text-decoration: underline red">underlined span (red)</span>'
+            '<span style="text-decoration: none rgb(0,0,0)">no decoration span (rgb(0, 0, 0))</span>'
+            '<span style="text-decoration: line-through gray">strikethrough span (gray) (not supported)</span>'
+            '<span style="text-decoration: underline line-through orange">underline+line-through span (orange)\
+                (should be strike)</span>'
             # Spans inside paragraphs
-            "<p>Normal text <span style=\"text-decoration: underline wavy blue\">wavy underlined span (blue)</span> continues</p>"
-            "<p>Normal text <span style=\"text-decoration: underline dotted purple\">dotted underlined span (purple)</span> continues</p>"
-            "<p>Normal text <span style=\"text-decoration: line-through red\">strikethrough span (red)</span> continues</p>"
-
+            '<p>Normal text <span style="text-decoration: underline wavy blue">wavy underlined span (blue)</span> continues</p>'
+            '<p>Normal text <span style="text-decoration: underline dotted purple">dotted underlined span (purple)</span> continues</p>'
+            '<p>Normal text <span style="text-decoration: line-through red">strikethrough span (red)</span> continues</p>'
             # Multiple spans with different decorations in same paragraph
-            "<p>Start <span style=\"text-decoration: underline green\">underlined</span> "
-            "<span style=\"text-decoration: line-through blue\">strikethrough</span> "
-            "<span style=\"text-decoration: underline dashed orange\">dashed underline</span> end</p>"
-
+            '<p>Start <span style="text-decoration: underline green">underlined</span> '
+            '<span style="text-decoration: line-through blue">strikethrough</span> '
+            '<span style="text-decoration: underline dashed orange">dashed underline</span> end</p>'
             # Span with no decoration inside decorated paragraph
-            "<p style=\"text-decoration: underline\">Underlined paragraph with "
-            "<span style=\"text-decoration: none\">normal span</span> inside</p>"
-
+            '<p style="text-decoration: underline">Underlined paragraph with '
+            '<span style="text-decoration: none">normal span</span> inside</p>'
             # Span with decoration inside decorated paragraph (should override)
-            "<p style=\"text-decoration: line-through\">Strikethrough paragraph with "
-            "<span style=\"text-decoration: underline red\">underlined red span</span> inside</p>"
-
+            '<p style="text-decoration: line-through">Strikethrough paragraph with '
+            '<span style="text-decoration: underline red">underlined red span</span> inside</p>'
             # Override behavior with individual properties
-            "<p style=\"text-decoration-line: underline; text-decoration-color: blue\">Blue underlined paragraph with "
-            "<span style=\"text-decoration-line: line-through;\">strikethrough span</span> inside</p>"
-
+            '<p style="text-decoration-line: underline; text-decoration-color: blue">Blue underlined paragraph with '
+            '<span style="text-decoration-line: line-through;">strikethrough span</span> inside</p>'
             # Check if equal - shorthand vs individual properties
-            "<p style=\"text-decoration-line: underline; text-decoration-color: blue; text-decoration-style: wavy\">Blue underlined paragraph</p>"
-            "<p style=\"text-decoration: underline blue wavy\">Blue underlined paragraph</p>"
+            '<p style="text-decoration-line: underline; text-decoration-color: blue; text-decoration-style: wavy">Blue underlined paragraph</p>'
+            '<p style="text-decoration: underline blue wavy">Blue underlined paragraph</p>'
         )
 
         self.parser.add_html_to_document(text_decoration_html_example, self.document)
@@ -802,24 +751,24 @@ and blank lines.
         assert self.get_underline_color(p9.runs[0]) == self.hexcolor("blue")
 
     def test_text_decoration_paragraph(self):
-        self.document.add_heading('Test: text-decoration on <p>', level=1)
+        self.document.add_heading("Test: text-decoration on <p>", level=1)
         text_decoration_html_example = (
-            "<p style=\"text-decoration: underline red\">underlined text (red)</p>"
-            "<p style=\"text-decoration: none rgb(0,0,0)\">no decoration text (rgb(0, 0, 0))</p>"
-            "<p style=\"text-decoration: line-through gray\">strikethrough text (gray) (color not supported)</p>"
-            "<p style=\"text-decoration: underline line-through orange\">underline+line-through (orange)\
-                (should be strike)</p>"
-            "<p style=\"text-decoration: underline wavy blue\">wavy underline (blue)</p>"
-            "<p style=\"text-decoration: underline dotted rgb(0, 128, 0)\">dotted underline (rgb(0, 128, 0))</p>"
-            "<p style=\"text-decoration: underline dotted rgb(0, 255, 0)\">dotted underline (rgb(0, 255, 0))</p>"
-            "<p style=\"text-decoration: underline dashed purple\">dashed underline (purple)</p>"
-            "<p style=\"text-decoration: underline double rgb(255, 69, 0)\">double underline (rgb(255, 69, 0))</p>"
-            "<p style=\"text-decoration: overline hotpink\">overline text (hotpink) (not supported)</p>"
-            "<p style=\"text-decoration: blink hotpink\">blink text (hotpink) (not supported)</p>"
+            '<p style="text-decoration: underline red">underlined text (red)</p>'
+            '<p style="text-decoration: none rgb(0,0,0)">no decoration text (rgb(0, 0, 0))</p>'
+            '<p style="text-decoration: line-through gray">strikethrough text (gray) (color not supported)</p>'
+            '<p style="text-decoration: underline line-through orange">underline+line-through (orange)\
+                (should be strike)</p>'
+            '<p style="text-decoration: underline wavy blue">wavy underline (blue)</p>'
+            '<p style="text-decoration: underline dotted rgb(0, 128, 0)">dotted underline (rgb(0, 128, 0))</p>'
+            '<p style="text-decoration: underline dotted rgb(0, 255, 0)">dotted underline (rgb(0, 255, 0))</p>'
+            '<p style="text-decoration: underline dashed purple">dashed underline (purple)</p>'
+            '<p style="text-decoration: underline double rgb(255, 69, 0)">double underline (rgb(255, 69, 0))</p>'
+            '<p style="text-decoration: overline hotpink">overline text (hotpink) (not supported)</p>'
+            '<p style="text-decoration: blink hotpink">blink text (hotpink) (not supported)</p>'
         )
 
         self.parser.add_html_to_document(text_decoration_html_example, self.document)
-        with self.assertLogs(level='WARNING') as log:
+        with self.assertLogs(level="WARNING") as log:
             document = self.parser.parse_html_string(text_decoration_html_example)
 
         underline_states = []
@@ -856,45 +805,45 @@ and blank lines.
                 strike_states.append(strike)
 
         expected_underline_states = [
-            True,   # underline (default single) - explicitly True
+            True,  # underline (default single) - explicitly True
             False,  # none - explicitly False for both underline and strike
             False,  # line-through - explicitly False for underline when strike is True
             False,  # underline + line-through - line-through wins, underline explicitly False
-            WD_UNDERLINE.WAVY,      # wavy underline - explicitly set to wavy
-            WD_UNDERLINE.DOTTED,    # dotted underline - explicitly set to dotted
-            WD_UNDERLINE.DOTTED,    # dotted underline - explicitly set to dotted
-            WD_UNDERLINE.DASH,      # dashed underline - explicitly set to dash
-            WD_UNDERLINE.DOUBLE,    # double underline - explicitly set to double
+            WD_UNDERLINE.WAVY,  # wavy underline - explicitly set to wavy
+            WD_UNDERLINE.DOTTED,  # dotted underline - explicitly set to dotted
+            WD_UNDERLINE.DOTTED,  # dotted underline - explicitly set to dotted
+            WD_UNDERLINE.DASH,  # dashed underline - explicitly set to dash
+            WD_UNDERLINE.DOUBLE,  # double underline - explicitly set to double
             None,  # overline (not supported) - remains None/unchanged
             None,  # blink (not supported) - remains None/unchanged
         ]
 
         expected_underline_colors = [
-            self.hexcolor("red"),             # underline red
-            None,                             # none rgb(0,0,0)
-            None,                             # line-through gray (strike only, but color captured)
-            None,                             # underline + line-through (color should be orange)
-            self.hexcolor("blue"),            # wavy underline blue
-            self.hexcolor("rgb(0,128,0)"),    # dotted underline rgb(0,128,0)
-            self.hexcolor("rgb(0,255,0)"),    # dotted underline rgb(0,255,0)
-            self.hexcolor("purple"),          # dashed underline purple
-            self.hexcolor("rgb(255,69,0)"),   # double underline rgb(255,69,0)
-            None,                             # overline hotpink (unsupported → underline None, but color still parsed)
-            None,                             # blink hotpink (unsupported)
+            self.hexcolor("red"),  # underline red
+            None,  # none rgb(0,0,0)
+            None,  # line-through gray (strike only, but color captured)
+            None,  # underline + line-through (color should be orange)
+            self.hexcolor("blue"),  # wavy underline blue
+            self.hexcolor("rgb(0,128,0)"),  # dotted underline rgb(0,128,0)
+            self.hexcolor("rgb(0,255,0)"),  # dotted underline rgb(0,255,0)
+            self.hexcolor("purple"),  # dashed underline purple
+            self.hexcolor("rgb(255,69,0)"),  # double underline rgb(255,69,0)
+            None,  # overline hotpink (unsupported → underline None, but color still parsed)
+            None,  # blink hotpink (unsupported)
         ]
 
         expected_strike_states = [
             False,  # underline only - explicitly False for strike when underline is True
             False,  # none - explicitly False for both underline and strike
-            True,   # line-through - explicitly True
-            True,   # underline + line-through - line-through wins, strike explicitly True
+            True,  # line-through - explicitly True
+            True,  # underline + line-through - line-through wins, strike explicitly True
             False,  # wavy underline only - explicitly False for strike when underline is set
             False,  # dotted underline only - explicitly False for strike when underline is set
             False,  # dotted underline only - explicitly False for strike when underline is set
             False,  # dashed underline only - explicitly False for strike when underline is set
             False,  # double underline only - explicitly False for strike when underline is set
-            None,   # overline (not supported) - remains None/unchanged
-            None,   # blink (not supported) - remains None/unchanged
+            None,  # overline (not supported) - remains None/unchanged
+            None,  # blink (not supported) - remains None/unchanged
         ]
 
         # Test that the underline states, colors, and strike states are correct
@@ -904,13 +853,17 @@ and blank lines.
 
         # Test that the correct warnings are logged
         self.assertEqual(len(log.records), 4)
-        self.assertIn('Word does not support colored strike-through. Color \'gray\' will be ignored for line-through.', log.output[0])
-        self.assertIn('Word does not support colored strike-through. Color \'orange\' will be ignored for line-through.', log.output[1])
-        self.assertIn('Blink or overline not supported.', log.output[2])
-        self.assertIn('Blink or overline not supported.', log.output[3])
+        self.assertIn(
+            "Word does not support colored strike-through. Color 'gray' will be ignored for line-through.", log.output[0]
+        )
+        self.assertIn(
+            "Word does not support colored strike-through. Color 'orange' will be ignored for line-through.", log.output[1]
+        )
+        self.assertIn("Blink or overline not supported.", log.output[2])
+        self.assertIn("Blink or overline not supported.", log.output[3])
 
     def test_first_line_paragraph(self):
-        self.document.add_heading('Test text-indent on <p> tags', level=1)
+        self.document.add_heading("Test text-indent on <p> tags", level=1)
         self.parser.add_html_to_document(self.paragraph_first_line_indent, self.document)
         document = self.parser.parse_html_string(self.paragraph_first_line_indent)
 
@@ -922,26 +875,26 @@ and blank lines.
                 indent_values.append(indent_pt)
 
         expected_values = [
-            1080000,    # 3cm
-            254000,     # 20pt
-            381000,     # 40px
-            1260000,    # 35mm
-            None,       # Word does not support negative values here
+            1080000,  # 3cm
+            254000,  # 20pt
+            381000,  # 40px
+            1260000,  # 35mm
+            None,  # Word does not support negative values here
         ]
 
         for actual, expected in zip(indent_values, expected_values):
             self.assertAlmostEqual(actual, expected, delta=634)
 
     def test_color_paragraph(self):
-        self.document.add_heading('Test: color on p tags', level=1)
+        self.document.add_heading("Test: color on p tags", level=1)
         color_html_example = (
-            "<p style=\"color: red\">red text</p>"
-            "<p style=\"color: #00ff00\">green hex text</p>"
-            "<p style=\"color: rgb(0, 0, 255)\">blue rgb text</p>"
-            "<p style=\"color: inherit\">inherit color text</p>"
-            "<p style=\"color: transparent\">transparent color text</p>"
-            "<p style=\"color: currentcolor\">current color text</p>"
-            "<p style=\"color: #ff0000; font-size: 14pt\">red with other styles</p>"
+            '<p style="color: red">red text</p>'
+            '<p style="color: #00ff00">green hex text</p>'
+            '<p style="color: rgb(0, 0, 255)">blue rgb text</p>'
+            '<p style="color: inherit">inherit color text</p>'
+            '<p style="color: transparent">transparent color text</p>'
+            '<p style="color: currentcolor">current color text</p>'
+            '<p style="color: #ff0000; font-size: 14pt">red with other styles</p>'
             "<p>default text</p>"
         )
 
@@ -974,7 +927,7 @@ and blank lines.
         self.assertEqual(color_states, expected_colors)
 
     def test_line_height_paragraph(self):
-        self.document.add_heading('Test: line-height on <p>', level=1)
+        self.document.add_heading("Test: line-height on <p>", level=1)
         self.parser.add_html_to_document(self.paragraph_line_height, self.document)
         document = self.parser.parse_html_string(self.paragraph_line_height)
 
@@ -984,64 +937,67 @@ and blank lines.
         for p in document.paragraphs:
             line_spacing = p.paragraph_format.line_spacing
             line_rule = p.paragraph_format.line_spacing_rule
-            line_heights.append(str(line_spacing) if line_spacing is not None else 'None')
-            line_rules.append(str(line_rule) if line_rule is not None else 'None')
+            line_heights.append(str(line_spacing) if line_spacing is not None else "None")
+            line_rules.append(str(line_rule) if line_rule is not None else "None")
 
         expected_line_heights = [
-            '1.0',
-            '1.15',
-            '1.5',
-            '2.0',
-            '190500',   # line-height: 20px
-            '182880',   # line-height: 1.2em
-            '228600',   # line-height: 1.5em
-            '304800',   # line-height: 2em
-            '182880',   # line-height: 1.2rem
-            '228600',   # line-height: 1.5rem
-            '304800',   # line-height: 2rem
-            '1.5',      # line-height: 150%
-            '2.0',      # line-height: 200%
+            "1.0",
+            "1.15",
+            "1.5",
+            "2.0",
+            "190500",  # line-height: 20px
+            "182880",  # line-height: 1.2em
+            "228600",  # line-height: 1.5em
+            "304800",  # line-height: 2em
+            "182880",  # line-height: 1.2rem
+            "228600",  # line-height: 1.5rem
+            "304800",  # line-height: 2rem
+            "1.5",  # line-height: 150%
+            "2.0",  # line-height: 200%
         ]
 
-        self.assertEqual(line_heights, expected_line_heights,
-                         f"Line heights don't match expected values. Got {line_heights}, expected {expected_line_heights}")
+        self.assertEqual(
+            line_heights,
+            expected_line_heights,
+            f"Line heights don't match expected values. Got {line_heights}, expected {expected_line_heights}",
+        )
 
     def test_margins_paragraph(self):
         margins_html_example = (
-            "<p style=\"margin-left: auto; margin-right: auto\">centered paragraph</p>"
-            "<p style=\"margin-left: 20px\">left margin 20px</p>"
-            "<p style=\"margin-right: 1.5cm\">right margin 1.5cm</p>"
-            "<p style=\"margin-left: 1cm\">left margin 1cm</p>"
-            "<p style=\"margin-left: 10px; margin-right: 15px\">both margins set</p>"
-            "<p style=\"margin-left: auto\">only left auto</p>"
-            "<p style=\"margin-right: auto\">only right auto</p>"
-            "<p style=\"margin-left: 0px; margin-right: 0px\">zero margins</p>"
-            "<p style=\"margin-left: 2in\">left margin 2in</p>"
+            '<p style="margin-left: auto; margin-right: auto">centered paragraph</p>'
+            '<p style="margin-left: 20px">left margin 20px</p>'
+            '<p style="margin-right: 1.5cm">right margin 1.5cm</p>'
+            '<p style="margin-left: 1cm">left margin 1cm</p>'
+            '<p style="margin-left: 10px; margin-right: 15px">both margins set</p>'
+            '<p style="margin-left: auto">only left auto</p>'
+            '<p style="margin-right: auto">only right auto</p>'
+            '<p style="margin-left: 0px; margin-right: 0px">zero margins</p>'
+            '<p style="margin-left: 2in">left margin 2in</p>'
         )
 
-        self.document.add_heading('Test margins on <p>', level=1)
+        self.document.add_heading("Test margins on <p>", level=1)
         self.parser.add_html_to_document(margins_html_example, self.document)
         document = self.parser.parse_html_string(margins_html_example)
 
         expected_margins = [
             # Paragraph 1: "centered paragraph" - auto margins (None values)
-            {'left': None, 'right': None},
+            {"left": None, "right": None},
             # Paragraph 2: "left margin 20px" - 20px = 20 * 9525 = 190500 EMU
-            {'left': 190500, 'right': None},
+            {"left": 190500, "right": None},
             # Paragraph 3: "right margin 1.5cm" - 1.5cm = 1.5 * 360000 = 540000 EMU
-            {'left': None, 'right': 540000},
+            {"left": None, "right": 540000},
             # Paragraph 4: "left margin 1cm" - 1cm = 360000 EMU
-            {'left': 360000, 'right': None},
+            {"left": 360000, "right": None},
             # Paragraph 5: "both margins set" - 10px=95250 EMU, 15px=142875 EMU
-            {'left': 95250, 'right': 142875},
+            {"left": 95250, "right": 142875},
             # Paragraph 6: "only left auto" - auto margin
-            {'left': None, 'right': None},
+            {"left": None, "right": None},
             # Paragraph 7: "only right auto" - auto margin
-            {'left': None, 'right': None},
+            {"left": None, "right": None},
             # Paragraph 8: "zero margins" - 0px = 0 EMU
-            {'left': 0, 'right': 0},
+            {"left": 0, "right": 0},
             # Paragraph 9: "left margin 2in" - 2in = 2 * 914400 = 1828800 EMU
-            {'left': 1828800, 'right': None},
+            {"left": 1828800, "right": None},
         ]
 
         self.assertEqual(len(document.paragraphs), len(expected_margins))
@@ -1052,23 +1008,27 @@ and blank lines.
             actual_right = paragraph.paragraph_format.right_indent
 
             # Check left margin
-            if expected['left'] is None:
+            if expected["left"] is None:
                 self.assertIsNone(actual_left, f"Paragraph {i} left margin should be None")
             else:
                 self.assertIsNotNone(actual_left, f"Paragraph {i} left margin should not be None")
-                self.assertTrue(abs(actual_left - expected['left']) <= 634,
-                                f"Paragraph {i} left margin: expected {expected['left']} EMU, got {actual_left} EMU")
+                self.assertTrue(
+                    abs(actual_left - expected["left"]) <= 634,
+                    f"Paragraph {i} left margin: expected {expected['left']} EMU, got {actual_left} EMU",
+                )
 
             # Check right margin
-            if expected['right'] is None:
+            if expected["right"] is None:
                 self.assertIsNone(actual_right, f"Paragraph {i} right margin should be None")
             else:
                 self.assertIsNotNone(actual_right, f"Paragraph {i} right margin should not be None")
-                self.assertTrue(abs(actual_right - expected['right']) <= 634,
-                                f"Paragraph {i} right margin: expected {expected['right']} EMU, got {actual_right} EMU")
+                self.assertTrue(
+                    abs(actual_right - expected["right"]) <= 634,
+                    f"Paragraph {i} right margin: expected {expected['right']} EMU, got {actual_right} EMU",
+                )
 
     def test_background_color_styles(self):
-        self.document.add_heading('Test background color on <p>, multiple cases', level=1)
+        self.document.add_heading("Test background color on <p>, multiple cases", level=1)
         html_example2 = """
         <p style="background-color: lightblue;">
             Start of paragraph
@@ -1185,61 +1145,61 @@ and blank lines.
         self.parser.add_html_to_document(html_example9, self.document)
 
     def test_headers_with_css(self):
-        self.document.add_heading('Test: headers with css', level=1)
+        self.document.add_heading("Test: headers with css", level=1)
         self.parser.add_html_to_document(self.css_properties_header, self.document)
 
         document = self.parser.parse_html_string(self.css_properties_header)
 
         # Test H1 - Large and Centered
         h1 = document.paragraphs[0]
-        assert h1.style.name.startswith('Heading 1')
-        assert str(h1.runs[0].font.color.rgb) == '2C3E50'
+        assert h1.style.name.startswith("Heading 1")
+        assert str(h1.runs[0].font.color.rgb) == "2C3E50"
         assert h1.runs[0].font.bold is True
         assert h1.runs[0].font.size == 342900
         assert h1.alignment == WD_ALIGN_PARAGRAPH.CENTER
-        assert h1.runs[0].text == 'MAIN HEADING H1 - LARGE AND CENTERED'  # uppercase due to text-transform
+        assert h1.runs[0].text == "MAIN HEADING H1 - LARGE AND CENTERED"  # uppercase due to text-transform
 
         # Test H2 - Underlined with Background (no span in this one)
         h2 = document.paragraphs[1]
-        assert h2.style.name.startswith('Heading 2')
-        assert str(h2.runs[0].font.color.rgb) == '34495E'
+        assert h2.style.name.startswith("Heading 2")
+        assert str(h2.runs[0].font.color.rgb) == "34495E"
         assert h2.runs[0].font.underline is True
-        assert h2.runs[0].font.name == 'Arial'
+        assert h2.runs[0].font.name == "Arial"
         assert h2.runs[0].font.size == 266700
 
         # Test H3 - Italic and Right Aligned
         h3 = document.paragraphs[2]
-        assert h3.style.name.startswith('Heading 3')
-        assert str(h3.runs[0].font.color.rgb) == '7F8C8D'
+        assert h3.style.name.startswith("Heading 3")
+        assert str(h3.runs[0].font.color.rgb) == "7F8C8D"
         assert h3.runs[0].font.italic is True
         assert h3.runs[0].font.size == 209550
         assert h3.alignment == WD_ALIGN_PARAGRAPH.RIGHT
 
         # Test H4 - Normal Weight and Capitalized
         h4 = document.paragraphs[3]
-        assert h4.style.name.startswith('Heading 4')
-        assert str(h4.runs[0].font.color.rgb) == '95A5A6'
+        assert h4.style.name.startswith("Heading 4")
+        assert str(h4.runs[0].font.color.rgb) == "95A5A6"
         assert h4.runs[0].font.bold is False  # font-weight: normal
-        assert h4.runs[0].font.name == 'Georgia'
+        assert h4.runs[0].font.name == "Georgia"
         assert h4.runs[0].font.size == 171450
-        assert h4.runs[0].text == 'Quaternary Heading H4 - Normal Weight And Capitalized'  # capitalized
+        assert h4.runs[0].text == "Quaternary Heading H4 - Normal Weight And Capitalized"  # capitalized
 
         # Test H1 with Complex Text Decoration and Span
         h1_complex = document.paragraphs[4]
         assert h1_complex.runs[0].font.strike is True  # line-through
-        assert str(h1_complex.runs[0].font.color.rgb) == '8E44AD'
+        assert str(h1_complex.runs[0].font.color.rgb) == "8E44AD"
         assert h1_complex.runs[0].font.size == 381000
 
         # Test span in complex H1
         assert len(h1_complex.runs) >= 2
         span_in_h1 = h1_complex.runs[1]
         assert span_in_h1.font.underline is True  # underline in span
-        assert str(span_in_h1.font.color.rgb) == '2980B9'
+        assert str(span_in_h1.font.color.rgb) == "2980B9"
 
         # Test H3 with Light Weight and Span
         h3_light = document.paragraphs[5]
         assert h3_light.runs[0].font.bold is False  # font-weight: 100
-        assert str(h3_light.runs[0].font.color.rgb) == 'D35400'
+        assert str(h3_light.runs[0].font.color.rgb) == "D35400"
         assert h3_light.runs[0].font.size == 190500
 
         # Test bold span in light H3
@@ -1249,21 +1209,21 @@ and blank lines.
 
         # Test H3 with Text Transform
         h3_transform = document.paragraphs[6]
-        assert h3_transform.runs[0].text == 'h3 forced to lowercase with text-transform '
+        assert h3_transform.runs[0].text == "h3 forced to lowercase with text-transform "
         assert len(h3_transform.runs) >= 2
         uppercase_span = h3_transform.runs[1]
-        assert uppercase_span.text == 'SPAN FORCED TO UPPERCASE'
+        assert uppercase_span.text == "SPAN FORCED TO UPPERCASE"
 
         # Test H4 with Serif Font
         h4_serif = document.paragraphs[7]
-        assert h4_serif.runs[0].font.name == 'Times New Roman'
-        assert str(h4_serif.runs[0].font.color.rgb) == '7D3C98'
+        assert h4_serif.runs[0].font.name == "Times New Roman"
+        assert str(h4_serif.runs[0].font.color.rgb) == "7D3C98"
         assert h4_serif.alignment == WD_ALIGN_PARAGRAPH.CENTER
 
         # Test H1 with Auto Margins and Background
         h1_centered = document.paragraphs[8]
         assert h1_centered.alignment == WD_ALIGN_PARAGRAPH.CENTER
-        assert str(h1_centered.runs[0].font.color.rgb) == 'FFFFFF'
+        assert str(h1_centered.runs[0].font.color.rgb) == "FFFFFF"
 
         # Test H2 with Lighter Weight and Span
         h2_lighter = document.paragraphs[9]
@@ -1278,13 +1238,13 @@ and blank lines.
 
         # Test H3 with RGB Colors and Span
         h3_rgb = document.paragraphs[10]
-        assert str(h3_rgb.runs[0].font.color.rgb) == '3498DB'  # rgb(52, 152, 219)
+        assert str(h3_rgb.runs[0].font.color.rgb) == "3498DB"  # rgb(52, 152, 219)
         assert h3_rgb.runs[0].font.size == 177800
 
         # Test RGB span
         assert len(h3_rgb.runs) >= 2
         rgb_span = h3_rgb.runs[1]
-        assert str(rgb_span.font.color.rgb) == 'E74C3C'  # rgb(231, 76, 60)
+        assert str(rgb_span.font.color.rgb) == "E74C3C"  # rgb(231, 76, 60)
 
         # Test H4 with Strike-through and Span
         h4_strike = document.paragraphs[11]
@@ -1295,17 +1255,17 @@ and blank lines.
         assert len(h4_strike.runs) >= 2
         no_strike_span = h4_strike.runs[1]
         assert no_strike_span.font.strike is False
-        assert str(no_strike_span.font.color.rgb) == 'E74C3C'
+        assert str(no_strike_span.font.color.rgb) == "E74C3C"
 
         # Test H3 with Unsupported Transform and Span
         h3_unsupported = document.paragraphs[12]
-        assert str(h3_unsupported.runs[0].font.color.rgb) == 'F39C12'
+        assert str(h3_unsupported.runs[0].font.color.rgb) == "F39C12"
         assert h3_unsupported.runs[0].font.size == 196850
 
         # Test supported transform in span
         assert len(h3_unsupported.runs) >= 2
         supported_span = h3_unsupported.runs[1]
-        assert supported_span.text == 'Supported Transform In Span'  # capitalize
+        assert supported_span.text == "Supported Transform In Span"  # capitalize
 
         # Test H4 with Reset Styles and Span
         h4_reset = document.paragraphs[13]
@@ -1324,7 +1284,7 @@ and blank lines.
         h1_transparent = document.paragraphs[14]
         assert h1_transparent.runs[0].font.size == 361950
         visible_span = h1_transparent.runs[1]
-        assert str(visible_span.font.color.rgb) == 'ECF0F1'
+        assert str(visible_span.font.color.rgb) == "ECF0F1"
 
         # Test H3 with All Three Decorations and Span
         h3_all_decorations = document.paragraphs[15]
@@ -1352,40 +1312,34 @@ and blank lines.
 
     def test_color_by_name(self):
         color_html_example = (
-            "<p><span style=\"color:red\">paragraph red</span></p>"
-            "<p><span style=\"color: yellow\">paragraph yellow</span></p>"
-            "<p><span style=\"color: blue !important\">paragraph blue</span></p>"
-            "<p><span style=\"color: green!important\">paragraph green</span></p>"
-            "<p><span style=\"color: darkgray!IMPORTANT\">paragraph darkgray</span></p>"
-            "<p><span style=\"color: MAGENTA !IMPORTANT\">paragraph magenta</span></p>"
-            "<p><span style=\"color: invalidcolor\">paragraph has default black because of invalid color name</span></p>"
+            '<p><span style="color:red">paragraph red</span></p>'
+            '<p><span style="color: yellow">paragraph yellow</span></p>'
+            '<p><span style="color: blue !important">paragraph blue</span></p>'
+            '<p><span style="color: green!important">paragraph green</span></p>'
+            '<p><span style="color: darkgray!IMPORTANT">paragraph darkgray</span></p>'
+            '<p><span style="color: MAGENTA !IMPORTANT">paragraph magenta</span></p>'
+            '<p><span style="color: invalidcolor">paragraph has default black because of invalid color name</span></p>'
         )
 
-        self.document.add_heading(
-            'Test: Color by name',
-            level=1
-        )
+        self.document.add_heading("Test: Color by name", level=1)
         # Add on document for human validation
         self.parser.add_html_to_document(color_html_example, self.document)
 
         document = self.parser.parse_html_string(color_html_example)
         colors = [str(p.runs[0].font.color.rgb) for p in document.paragraphs]
 
-        assert 'FF0000' in colors # Red
-        assert 'FFFF00' in colors # Yellow
-        assert '0000FF' in colors # Blue
-        assert '008000' in colors # Green
-        assert 'A9A9A9' in colors # Darkgray
-        assert '000000' in colors # Black
-        assert 'FF00FF' in colors # Magenta
+        assert "FF0000" in colors  # Red
+        assert "FFFF00" in colors  # Yellow
+        assert "0000FF" in colors  # Blue
+        assert "008000" in colors  # Green
+        assert "A9A9A9" in colors  # Darkgray
+        assert "000000" in colors  # Black
+        assert "FF00FF" in colors  # Magenta
 
     def test_table_cell_border_properties(self):
         """Validates that all table cells have the expected border size, style, and color."""
 
-        self.document.add_heading(
-            'Test: Table Cell Border Properties',
-            level=1
-        )
+        self.document.add_heading("Test: Table Cell Border Properties", level=1)
         # Add on document for human validation
         self.parser.add_html_to_document(self.table3_html, self.document)
         document = self.parser.parse_html_string(self.table3_html)
@@ -1396,38 +1350,38 @@ and blank lines.
                 "top": {"color": "D95B48", "style": "single", "size": "1.0"},
                 "bottom": {"color": "D95B48", "style": "single", "size": "1.0"},
                 "left": {"color": "FF0000", "style": "single", "size": "1.0"},
-                "right": {"color": "8B0000", "style": "single", "size": "1.0"}
+                "right": {"color": "8B0000", "style": "single", "size": "1.0"},
             },
             {
                 "top": {"color": "FAC32A", "style": "single", "size": "1.0"},
                 "bottom": {"color": "FAC32A", "style": "single", "size": "1.125"},
                 "left": {"color": "none", "style": "none", "size": "none"},
-                "right": {"color": "FAC32A", "style": "single", "size": "12.0"}
+                "right": {"color": "FAC32A", "style": "single", "size": "12.0"},
             },
             {
                 "top": {"color": "30E667", "style": "none", "size": "5.67"},
                 "bottom": {"color": "30E667", "style": "single", "size": "5.67"},
                 "left": {"color": "30E667", "style": "single", "size": "5.67"},
-                "right": {"color": "30E667", "style": "single", "size": "5.67"}
+                "right": {"color": "30E667", "style": "single", "size": "5.67"},
             },
             {
                 "top": {"color": "none", "style": "none", "size": "none"},
                 "bottom": {"color": "D948CF", "style": "single", "size": "1.5"},
                 "left": {"color": "none", "style": "none", "size": "none"},
-                "right": {"color": "D948CF", "style": "single", "size": "5.67"}
+                "right": {"color": "D948CF", "style": "single", "size": "5.67"},
             },
             {
                 "top": {"color": "EAAAA7", "style": "single", "size": "1.1"},
                 "bottom": {"color": "EAAAA7", "style": "single", "size": "1.1"},
                 "left": {"color": "EAAAA7", "style": "single", "size": "1.1"},
-                "right": {"color": "EAAAA7", "style": "single", "size": "1.1"}
+                "right": {"color": "EAAAA7", "style": "single", "size": "1.1"},
             },
             {
                 "top": {"color": "none", "style": "none", "size": "none"},
                 "bottom": {"color": "ACC4AA", "style": "dashed", "size": "7.2"},
                 "left": {"color": "none", "style": "none", "size": "none"},
-                "right": {"color": "ACC4AA", "style": "dotted", "size": "4.8"}
-            }
+                "right": {"color": "ACC4AA", "style": "dotted", "size": "4.8"},
+            },
         ]
 
         # Validate border properties for each cell
@@ -1437,21 +1391,21 @@ and blank lines.
                 # Get the table cell element and properties
                 tc = cell._tc
                 tcPr = tc.get_or_add_tcPr()
-                tcBorders = tcPr.find(qn('w:tcBorders'))
+                tcBorders = tcPr.find(qn("w:tcBorders"))
 
                 # Extract border properties
                 border_sides = {
-                    'top': tcBorders.find(qn('w:top')) if tcBorders is not None else None,
-                    'bottom': tcBorders.find(qn('w:bottom')) if tcBorders is not None else None,
-                    'left': tcBorders.find(qn('w:left')) if tcBorders is not None else None,
-                    'right': tcBorders.find(qn('w:right')) if tcBorders is not None else None,
+                    "top": tcBorders.find(qn("w:top")) if tcBorders is not None else None,
+                    "bottom": tcBorders.find(qn("w:bottom")) if tcBorders is not None else None,
+                    "left": tcBorders.find(qn("w:left")) if tcBorders is not None else None,
+                    "right": tcBorders.find(qn("w:right")) if tcBorders is not None else None,
                 }
 
                 for side, border in border_sides.items():
                     if border is not None:
-                        color = border.get(qn('w:color'), "").upper()  # Ensure uppercase and no #
-                        size = border.get(qn('w:sz'))
-                        style = border.get(qn('w:val'))
+                        color = border.get(qn("w:color"), "").upper()  # Ensure uppercase and no #
+                        size = border.get(qn("w:sz"))
+                        style = border.get(qn("w:val"))
                     else:
                         color, size, style = "none", "none", "none"
 
@@ -1480,22 +1434,19 @@ and blank lines.
     def test_table_cell_background_color(self):
         """Validates that all table cells have the expected background color."""
 
-        self.document.add_heading(
-            'Test: Table Cell Background Color',
-            level=1
-        )
+        self.document.add_heading("Test: Table Cell Background Color", level=1)
         # Add on document for human validation
         self.parser.add_html_to_document(self.table3_html, self.document)
         document = self.parser.parse_html_string(self.table3_html)
 
         # Define expected background colors for each cell
         expected_background_colors = [
-            "3749EF", # Row 1 Column 1
-            "33b32e", # Row 1 Column 2
-            "BFBFBF", # Row 2 Column 1
-            "2eaab3", # Row 2 Column 2
-            "99fffa", # Row 3 Column 1
-            "2eaab3"  # Row 3 Column 2
+            "3749EF",  # Row 1 Column 1
+            "33b32e",  # Row 1 Column 2
+            "BFBFBF",  # Row 2 Column 1
+            "2eaab3",  # Row 2 Column 2
+            "99fffa",  # Row 3 Column 1
+            "2eaab3",  # Row 3 Column 2
         ]
 
         # Validate background colors for each cell
@@ -1507,9 +1458,9 @@ and blank lines.
                 tcPr = tc.get_or_add_tcPr()
 
                 # Get the background color (shading) if it exists
-                shading = tcPr.find(qn('w:shd'))
+                shading = tcPr.find(qn("w:shd"))
                 if shading is not None:
-                    background_color = shading.get(qn('w:fill'), "").upper()  # Ensure uppercase and no #
+                    background_color = shading.get(qn("w:fill"), "").upper()  # Ensure uppercase and no #
                 else:
                     background_color = "None"
 
@@ -1525,10 +1476,7 @@ and blank lines.
     def test_table_cell_dimensions(self):
         """Validates that all table cells have the expected width and height."""
 
-        self.document.add_heading(
-            'Test: Table Cell Dimensions',
-            level=1
-        )
+        self.document.add_heading("Test: Table Cell Dimensions", level=1)
         # Add on document for human validation
         self.parser.add_html_to_document(self.table3_html, self.document)
         document = self.parser.parse_html_string(self.table3_html)
@@ -1539,35 +1487,35 @@ and blank lines.
             [
                 {
                     "width": "258.35px",  # Width for the first cell
-                    "height": "23.75pt"   # Height for the first cell
+                    "height": "23.75pt",  # Height for the first cell
                 },
                 {
-                    "width": "222.2pt",   # Width for the second cell
-                    "height": "23.75pt"   # Height for the second cell
-                }
+                    "width": "222.2pt",  # Width for the second cell
+                    "height": "23.75pt",  # Height for the second cell
+                },
             ],
             # Second row
             [
                 {
                     "width": "258.35in",  # Width for the first cell
-                    "height": "15.5pt"    # Height for the first cell
+                    "height": "15.5pt",  # Height for the first cell
                 },
                 {
-                    "width": "6cm",       # Width for the second cell
-                    "height": "15.5pt"    # Height for the second cell
-                }
+                    "width": "6cm",  # Width for the second cell
+                    "height": "15.5pt",  # Height for the second cell
+                },
             ],
             # Third row
             [
                 {
                     "width": "258.35pt",  # Width for the first cell
-                    "height": "2rem"      # Height for the first cell
+                    "height": "2rem",  # Height for the first cell
                 },
                 {
-                    "width": "6cm",       # Width for the second cell
-                    "height": "2em"       # Height for the second cell
-                }
-            ]
+                    "width": "6cm",  # Width for the second cell
+                    "height": "2em",  # Height for the second cell
+                },
+            ],
         ]
 
         # Validate dimensions for each cell
@@ -1589,8 +1537,7 @@ and blank lines.
                 expected_height_px = unit_converter(expected_height, "px")
 
                 assert round(abs(cell_width_px - expected_width_px), 2) <= 0.03, (
-                    f"Width mismatch for cell ({row_idx}, {cell_idx}): "
-                    f"expected {expected_width_px}px, got {cell_width_px}px"
+                    f"Width mismatch for cell ({row_idx}, {cell_idx}): expected {expected_width_px}px, got {cell_width_px}px"
                 )
                 assert round(abs(cell_height_px - expected_height_px), 2) <= 0.03, (
                     f"Height mismatch for cell ({row_idx}, {cell_idx}): "
@@ -1624,18 +1571,18 @@ and blank lines.
                 # Get the table cell element and properties
                 tc = cell._tc
                 tcPr = tc.get_or_add_tcPr()
-                tcBorders = tcPr.find(qn('w:tcBorders'))
+                tcBorders = tcPr.find(qn("w:tcBorders"))
 
                 # Extract border properties
                 border_sides = {
-                    'top': tcBorders.find(qn('w:top')) if tcBorders is not None else None,
-                    'bottom': tcBorders.find(qn('w:bottom')) if tcBorders is not None else None,
-                    'left': tcBorders.find(qn('w:left')) if tcBorders is not None else None,
-                    'right': tcBorders.find(qn('w:right')) if tcBorders is not None else None,
+                    "top": tcBorders.find(qn("w:top")) if tcBorders is not None else None,
+                    "bottom": tcBorders.find(qn("w:bottom")) if tcBorders is not None else None,
+                    "left": tcBorders.find(qn("w:left")) if tcBorders is not None else None,
+                    "right": tcBorders.find(qn("w:right")) if tcBorders is not None else None,
                 }
 
                 for side, border in border_sides.items():
-                    size = border.get(qn('w:sz')) if border is not None else "none"
+                    size = border.get(qn("w:sz")) if border is not None else "none"
 
                     # Convert size from eighths of a point to points
                     size_in_pt = str(float(size) / 8) if size and size != "none" else "none"
@@ -1667,20 +1614,20 @@ and blank lines.
                 "top": {"color": "ADD8E6", "style": "single", "size": "1.0"},
                 "bottom": {"color": "none", "style": "none", "size": "none"},
                 "left": {"color": "000000", "style": "none", "size": "2.25"},
-                "right": {"color": "000000", "style": "single", "size": "1.0"}
+                "right": {"color": "000000", "style": "single", "size": "1.0"},
             },
             {
                 "top": {"color": "000000", "style": "single", "size": "3.75"},
                 "bottom": {"color": "none", "style": "none", "size": "none"},
                 "left": {"color": "000000", "style": "single", "size": "0.75"},
-                "right": {"color": "773366", "style": "single", "size": "0.75"}
+                "right": {"color": "773366", "style": "single", "size": "0.75"},
             },
             {
                 "top": {"color": "FFA500", "style": "single", "size": "1.0"},
                 "bottom": {"color": "FF00FF", "style": "single", "size": "3.75"},
                 "left": {"color": "000000", "style": "dashed", "size": "2.25"},
-                "right": {"color": "none", "style": "none", "size": "none"}
-            }
+                "right": {"color": "none", "style": "none", "size": "none"},
+            },
         ]
 
         cell_idx = 0
@@ -1689,21 +1636,21 @@ and blank lines.
                 # Get the table cell element and properties
                 tc = cell._tc
                 tcPr = tc.get_or_add_tcPr()
-                tcBorders = tcPr.find(qn('w:tcBorders'))
+                tcBorders = tcPr.find(qn("w:tcBorders"))
 
                 # Extract border properties
                 border_sides = {
-                    'top': tcBorders.find(qn('w:top')) if tcBorders is not None else None,
-                    'bottom': tcBorders.find(qn('w:bottom')) if tcBorders is not None else None,
-                    'left': tcBorders.find(qn('w:left')) if tcBorders is not None else None,
-                    'right': tcBorders.find(qn('w:right')) if tcBorders is not None else None,
+                    "top": tcBorders.find(qn("w:top")) if tcBorders is not None else None,
+                    "bottom": tcBorders.find(qn("w:bottom")) if tcBorders is not None else None,
+                    "left": tcBorders.find(qn("w:left")) if tcBorders is not None else None,
+                    "right": tcBorders.find(qn("w:right")) if tcBorders is not None else None,
                 }
 
                 for side, border in border_sides.items():
                     if border is not None:
-                        color = border.get(qn('w:color'), "").upper()  # Ensure uppercase and no #
-                        size = border.get(qn('w:sz'))
-                        style = border.get(qn('w:val'))
+                        color = border.get(qn("w:color"), "").upper()  # Ensure uppercase and no #
+                        size = border.get(qn("w:sz"))
+                        style = border.get(qn("w:val"))
                     else:
                         color, size, style = "none", "none", "none"
 
@@ -1731,7 +1678,7 @@ and blank lines.
 
     def test_unbalanced_table(self):
         # A table with more td elements in latter rows than in the first
-        self.document.add_heading('Test: Handling unbalanced tables', level=1)
+        self.document.add_heading("Test: Handling unbalanced tables", level=1)
 
         html_unbalanced_table = """
             <table>
@@ -1766,7 +1713,7 @@ and blank lines.
         """
 
         # Process document using parser
-        self.parser.options['html-comments'] = True
+        self.parser.options["html-comments"] = True
         self.parser.add_html_to_document(html_with_comment, self.document)
         document = self.parser.parse_html_string(html_with_comment)
 
@@ -1777,15 +1724,12 @@ and blank lines.
         expected_comment = "# This is a comment"
 
         # Assert the comment paragraph exists
-        assert any(
-            expected_comment == text for text in paragraph_texts
-        ), f"Expected comment '{expected_comment}' to appear in the document, but it was not found."
+        assert any(expected_comment == text for text in paragraph_texts), (
+            f"Expected comment '{expected_comment}' to appear in the document, but it was not found."
+        )
 
         # (Optional) Check styling if needed: green color or italic
-        comment_paragraph = next(
-            (p for p in document.paragraphs if p.text.strip() == expected_comment),
-            None
-        )
+        comment_paragraph = next((p for p in document.paragraphs if p.text.strip() == expected_comment), None)
         assert comment_paragraph is not None, "Comment paragraph not found for style checks."
 
         comment_run = comment_paragraph.runs[0]
@@ -1795,10 +1739,9 @@ and blank lines.
 
         # color assertion (dark-ish green #008000)
         expected_rgb = parse_color("#008000")
-        assert (
-            comment_run.font.color.rgb is not None
-            and comment_run.font.color.rgb == RGBColor(*expected_rgb)
-        ), f"Comment run color should be green ({expected_rgb})."
+        assert comment_run.font.color.rgb is not None and comment_run.font.color.rgb == RGBColor(*expected_rgb), (
+            f"Comment run color should be green ({expected_rgb})."
+        )
 
     def test_emojis_and_special_characters(self):
         emojis_and_special_chars_html_example = """
@@ -1811,10 +1754,7 @@ and blank lines.
         </html>
         """
 
-        self.document.add_heading(
-            'Test: Emojis and Special Characters',
-            level=1
-        )
+        self.document.add_heading("Test: Emojis and Special Characters", level=1)
         # Add on document for human validation
         self.parser.add_html_to_document(emojis_and_special_chars_html_example, self.document)
 
@@ -1849,9 +1789,7 @@ and blank lines.
         document = self.parser.parse_html_string(ordered_list_html_example)
 
         # Extract paragraphs with 'ListNumber' style (ordered list)
-        ordered_list_paragraphs = [
-            p for p in document.paragraphs if p.style.name == "List Number"
-        ]
+        ordered_list_paragraphs = [p for p in document.paragraphs if p.style.name == "List Number"]
 
         # Expected items in order
         expected_items = [
@@ -1860,15 +1798,13 @@ and blank lines.
             "first list, item 3 within a paragraph",
         ]
 
-        assert len(ordered_list_paragraphs) >= len(
-            expected_items
-        ), f"Expected at least {len(expected_items)} ordered list items, found {len(ordered_list_paragraphs)}"
+        assert len(ordered_list_paragraphs) >= len(expected_items), (
+            f"Expected at least {len(expected_items)} ordered list items, found {len(ordered_list_paragraphs)}"
+        )
 
         for i, expected_text in enumerate(expected_items):
             actual_text = ordered_list_paragraphs[i].text.strip()
-            assert (
-                actual_text == expected_text
-            ), f"Expected ordered list item '{expected_text}', but got '{actual_text}'"
+            assert actual_text == expected_text, f"Expected ordered list item '{expected_text}', but got '{actual_text}'"
 
     def test_unordered_list(self):
         self.document.add_heading("Test: Unordered List", level=1)
@@ -1885,21 +1821,19 @@ and blank lines.
         document = self.parser.parse_html_string(unordered_list_html_example)
 
         # Extract paragraphs with 'ListBullet' style (unordered list)
-        unordered_list_paragraphs = [
-            p for p in document.paragraphs if p.style.name == "List Bullet"
-        ]
+        unordered_list_paragraphs = [p for p in document.paragraphs if p.style.name == "List Bullet"]
 
         # Expected unordered items
         expected_items = ["Unorderd list", "with circle markers", "last option"]
 
-        assert len(unordered_list_paragraphs) >= len(
-            expected_items
-        ), f"Expected at least {len(expected_items)} unordered list items, found {len(unordered_list_paragraphs)}"
+        assert len(unordered_list_paragraphs) >= len(expected_items), (
+            f"Expected at least {len(expected_items)} unordered list items, found {len(unordered_list_paragraphs)}"
+        )
 
         for expected_text in expected_items:
-            assert any(
-                expected_text == p.text.strip() for p in unordered_list_paragraphs
-            ), f"Unordered list item '{expected_text}' not found in List Bullet paragraphs"
+            assert any(expected_text == p.text.strip() for p in unordered_list_paragraphs), (
+                f"Unordered list item '{expected_text}' not found in List Bullet paragraphs"
+            )
 
     def test_table_rowspan_and_colspan(self):
         self.document.add_heading("Test: Table rowspan and colspan", level=1)
@@ -1925,7 +1859,7 @@ and blank lines.
             <td>7,634</td>
           </tr>
         </table>"""
-        self.parser.table_style = 'Table Grid'
+        self.parser.table_style = "Table Grid"
         self.parser.add_html_to_document(rowspan_and_colspan_html_example, self.document)
         document = self.parser.parse_html_string(rowspan_and_colspan_html_example)
 
@@ -1958,7 +1892,7 @@ and blank lines.
         assert "7,634" in table.cell(3, 2).text
 
     def test_complex_colspan_rowspan_combinations(self):
-        self.document.add_heading('Test: Complex Colspan and Rowspan Combinations', level=1)
+        self.document.add_heading("Test: Complex Colspan and Rowspan Combinations", level=1)
 
         complex_table_html = """
         <table border="1">
@@ -1985,7 +1919,7 @@ and blank lines.
         """
 
         try:
-            self.parser.table_style = 'Table Grid'
+            self.parser.table_style = "Table Grid"
             self.parser.add_html_to_document(complex_table_html, self.document)
             document = self.parser.parse_html_string(complex_table_html)
 
@@ -2005,8 +1939,8 @@ and blank lines.
             self.fail(f"Processing complex table failed with unexpected error: {e}")
 
     def test_extreme_colspan_rowspan_cases(self):
-        """ Test extreme colspan and rowspan cases """
-        self.document.add_heading('Test: Extreme Colspan and Rowspan Cases', level=1)
+        """Test extreme colspan and rowspan cases"""
+        self.document.add_heading("Test: Extreme Colspan and Rowspan Cases", level=1)
 
         extreme_table_html = """
         <table border="1">
@@ -2035,7 +1969,7 @@ and blank lines.
         """
 
         try:
-            self.parser.table_style = 'Table Grid'
+            self.parser.table_style = "Table Grid"
             self.parser.add_html_to_document(extreme_table_html, self.document)
             document = self.parser.parse_html_string(extreme_table_html)
 
@@ -2056,8 +1990,8 @@ and blank lines.
             self.fail(f"Processing extreme table failed with unexpected error: {e}")
 
     def test_nested_styles_on_multiple_tags(self):
-        """ Test nested styles on multiple tags """
-        self.document.add_heading('Test: Test nested styles on multiple tags', level=1)
+        """Test nested styles on multiple tags"""
+        self.document.add_heading("Test: Test nested styles on multiple tags", level=1)
 
         nested_styles_html = """
         <h3 style="color: red; font-size:24px">Title Text</h3>
@@ -2080,42 +2014,42 @@ and blank lines.
         document = self.parser.parse_html_string(nested_styles_html)
 
         # -------- H3 ----------
-        h3_paragraphs = [p for p in document.paragraphs if 'Title Text' in p.text]
+        h3_paragraphs = [p for p in document.paragraphs if "Title Text" in p.text]
         assert len(h3_paragraphs) == 1
         h3_run = h3_paragraphs[0].runs[0]
-        assert h3_run.text == 'Title Text'
-        assert h3_run.font.color.rgb == Color['red'].value
+        assert h3_run.text == "Title Text"
+        assert h3_run.font.color.rgb == Color["red"].value
         assert h3_run.font.size is not None
 
         # -------- Div ----------
-        div_paragraphs = [p for p in document.paragraphs if 'Div Text' in p.text]
+        div_paragraphs = [p for p in document.paragraphs if "Div Text" in p.text]
         assert len(div_paragraphs) == 1
         div_run = div_paragraphs[0].runs[0]
-        assert div_run.text.strip() == 'Div Text'
-        assert div_run.font.color.rgb == Color['white'].value
+        assert div_run.text.strip() == "Div Text"
+        assert div_run.font.color.rgb == Color["white"].value
         assert div_paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.CENTER
 
         # -------- P inside div ----------
-        p_paragraphs = [p for p in document.paragraphs if 'P Text' in p.text]
+        p_paragraphs = [p for p in document.paragraphs if "P Text" in p.text]
         assert len(p_paragraphs) == 1
         p_run = p_paragraphs[0].runs[0]
-        assert p_run.text.strip() == 'P Text'
-        assert p_run.font.color.rgb == Color['lightgreen'].value
+        assert p_run.text.strip() == "P Text"
+        assert p_run.font.color.rgb == Color["lightgreen"].value
         assert p_paragraphs[0].alignment == WD_ALIGN_PARAGRAPH.CENTER
 
         # -------- List items ----------
-        li1_paragraphs = [p for p in document.paragraphs if 'Li Text 1' in p.text]
+        li1_paragraphs = [p for p in document.paragraphs if "Li Text 1" in p.text]
         assert len(li1_paragraphs) == 1
         li1_run = li1_paragraphs[0].runs[0]
-        assert li1_run.text.strip() == 'Li Text 1'
-        assert li1_run.font.color.rgb == Color['lightblue'].value
+        assert li1_run.text.strip() == "Li Text 1"
+        assert li1_run.font.color.rgb == Color["lightblue"].value
         assert li1_run.font.size is not None
 
-        li2_paragraphs = [p for p in document.paragraphs if 'Li Text 2' in p.text]
+        li2_paragraphs = [p for p in document.paragraphs if "Li Text 2" in p.text]
         assert len(li2_paragraphs) == 1
         li2_run = li2_paragraphs[0].runs[0]
-        assert li2_run.text.strip() == 'Li Text 2'
-        assert li2_run.font.color.rgb == Color['lightyellow'].value
+        assert li2_run.text.strip() == "Li Text 2"
+        assert li2_run.font.color.rgb == Color["lightyellow"].value
         assert li2_run.font.size is not None
 
     def test_basic_class_mapping(self):
@@ -2138,9 +2072,7 @@ and blank lines.
 
     def test_multiple_classes(self):
         """Test that first matching class in style_map wins"""
-        self.document.add_heading(
-            "Test: Test that first matching class in style_map wins", level=1
-        )
+        self.document.add_heading("Test: Test that first matching class in style_map wins", level=1)
         style_map = {
             "first": "Heading 2",
             "second": "Heading 3",
@@ -2159,9 +2091,7 @@ and blank lines.
 
     def test_unmapped_class_uses_default(self):
         """Test that unmapped classes fall back to default behavior"""
-        self.document.add_heading(
-            "Test: Test that unmapped classes fall back to default behavior", level=1
-        )
+        self.document.add_heading("Test: Test that unmapped classes fall back to default behavior", level=1)
         style_map = {
             "mapped": "Heading 450",
         }
@@ -2197,9 +2127,7 @@ and blank lines.
 
     def test_class_overrides_tag_override(self):
         """Test that class mapping has priority over tag override"""
-        self.document.add_heading(
-            "Test: Test class mapping priority over tag override", level=1
-        )
+        self.document.add_heading("Test: Test class mapping priority over tag override", level=1)
         style_map = {"custom": "Heading 3"}
         tag_overrides = {"h1": "Heading 2"}
 
@@ -2217,9 +2145,7 @@ and blank lines.
 
     def test_code_and_pre_tag_overrides(self):
         """Test that code and pre tag_style_overrides apply Word styles when they exist in the document."""
-        self.document.add_heading(
-            "Test: Test code and pre tag style overrides", level=1
-        )
+        self.document.add_heading("Test: Test code and pre tag style overrides", level=1)
         tag_overrides = {
             "code": "Inline Code",
             "pre": "Code Block",
@@ -2267,9 +2193,7 @@ and blank lines.
         """Test that code and pre use custom styles from an imported Word template (template.docx).
         Saves the template-based document to tests/assets/template_output.docx so custom styles
         are preserved; open that file in Word to verify (test.docx is the default doc, not the template)."""
-        self.document.add_heading(
-            "Test: Test code and pre from template.docx custom styles", level=1
-        )
+        self.document.add_heading("Test: Test code and pre from template.docx custom styles", level=1)
         doc = Document(os.path.join(test_dir, "assets", "templates", "template.docx"))
         markdown_style = "Custom Markdown"
         code_block_style = "Code Block"
@@ -2327,9 +2251,7 @@ and blank lines.
 
     def test_normal_default(self):
         """Test that Normal is used as default by default"""
-        self.document.add_heading(
-            "Test: Test that Normal style is used as default", level=1
-        )
+        self.document.add_heading("Test: Test that Normal style is used as default", level=1)
         html = "<p>Test paragraph</p>"
 
         doc = Document()
@@ -2353,9 +2275,7 @@ and blank lines.
 
     def test_none_default_uses_normal(self):
         """Test that None uses Word's default Normal style"""
-        self.document.add_heading(
-            "Test: Test default of None will use 'Normal' as default style", level=1
-        )
+        self.document.add_heading("Test: Test default of None will use 'Normal' as default style", level=1)
         html = "<p>Test paragraph</p>"
 
         doc = Document()
@@ -2527,9 +2447,7 @@ and blank lines.
 
     def test_important_on_paragraph(self):
         """Test !important on paragraph inline style"""
-        self.document.add_heading(
-            "Test: Test !important override for paragraph", level=1
-        )
+        self.document.add_heading("Test: Test !important override for paragraph", level=1)
         html = '<p style="color: blue !important">Blue important</p>'
 
         doc = Document()
@@ -2593,9 +2511,7 @@ and blank lines.
 
     def test_basic_html_still_works(self):
         """Test that basic HTML conversion works without new features"""
-        self.document.add_heading(
-            "Test: Test Basic HTML still works after changes", level=1
-        )
+        self.document.add_heading("Test: Test Basic HTML still works after changes", level=1)
         html = "<p>Simple paragraph</p><h3> and here we have heading 3</h3>"
 
         doc = Document()
@@ -2621,9 +2537,7 @@ and blank lines.
 
     def test_bold_italic_tags_work(self):
         """Test that <b>, <i>, <u> tags still work"""
-        self.document.add_heading(
-            "Test: bold, itatlic, and underline tags to ensure they still work", level=1
-        )
+        self.document.add_heading("Test: bold, itatlic, and underline tags to ensure they still work", level=1)
         html = "<p><b>Bold</b> <i>Italic</i> <u>Underline</u></p>"
 
         doc = Document()
@@ -2640,15 +2554,11 @@ and blank lines.
 
         self.assertTrue(len(bold_runs) > 0, "Should have at least one bold run")
         self.assertTrue(len(italic_runs) > 0, "Should have at least one italic run")
-        self.assertTrue(
-            len(underline_runs) > 0, "Should have at least one underline run"
-        )
+        self.assertTrue(len(underline_runs) > 0, "Should have at least one underline run")
 
     def test_nonexistent_style_graceful_failure(self):
         """Test that non-existent styles don't crash"""
-        self.document.add_heading(
-            "Test: Test crash protection when style doesn't exist", level=1
-        )
+        self.document.add_heading("Test: Test crash protection when style doesn't exist", level=1)
         style_map = {
             "custom": "NonExistentStyle",
         }
@@ -2708,7 +2618,9 @@ and blank lines.
         html_whitespace = '<div style="page-break-after:  always  ;">Content before break</div><p>Content after break</p>'
 
         # Test with !important (should still work)
-        html_important = '<div style="page-break-after: always !important;">Content before break</div><p>Content after break</p>'
+        html_important = (
+            '<div style="page-break-after: always !important;">Content before break</div><p>Content after break</p>'
+        )
 
         # Test both properties in separate documents
         doc_css2 = Document()
@@ -2732,9 +2644,9 @@ and blank lines.
         def has_page_break(doc):
             for paragraph in doc.paragraphs:
                 for run in paragraph.runs:
-                    br_elements = run._element.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}br')
+                    br_elements = run._element.findall(".//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}br")
                     for br in br_elements:
-                        if br.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}type') == 'page':
+                        if br.get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}type") == "page":
                             return True
             return False
 
@@ -2767,18 +2679,18 @@ and blank lines.
     def test_invalid_color_fallback_to_black(self):
         """Test with invalid color fallback to black"""
         self.document.add_heading("Test: Test invalid color fallback to black", level=1)
-        html = '''
+        html = """
         <p style="color: rgba(255, 0, 0, 0.5)">Test Unsupported RGBA Color with opacity Fallback to Black</p>
         <p style="color: rgba(A, B, C, D, E)">Test Invalid RGBA Color with letters Fallback to Black</p>
         <p style="color: rgb(255, 0, 0, 0)">Test Invalid RGB Color with extra value Fallback to Black</p>
         <p style="color: invalidcolorname">Test Invalid Color Name Fallback to Black</p>
         <p style="color: #F7272626161">Test Invalid Hex Color with extra value Fallback to Black</p>
-        '''
+        """
 
         doc = Document()
         parser = HtmlToDocx()
         parser.add_html_to_document(html, self.document)
-        with self.assertLogs(level='WARNING') as log:
+        with self.assertLogs(level="WARNING") as log:
             parser.add_html_to_document(html, doc)
 
         self.assertEqual(doc.paragraphs[1].runs[0].font.color.rgb, RGBColor(*Color["red"].value))
@@ -2786,11 +2698,11 @@ and blank lines.
             self.assertEqual(paragraph.runs[0].font.color.rgb, RGBColor(*Color["black"].value))
 
         self.assertEqual(len(log.records), 5)
-        self.assertIn('RGBA color is not supported by python-docx. Opacity will be ignored.', log.output[0])
-        self.assertIn('Could not parse color \'rgba(a, b, c, d, e)\': Invalid color value. Fallback to black.', log.output[1])
-        self.assertIn('Could not parse color \'rgb(255, 0, 0, 0)\': Invalid color value. Fallback to black.', log.output[2])
-        self.assertIn('Could not parse color \'invalidcolorname\': Invalid color value. Fallback to black.', log.output[3])
-        self.assertIn('Could not parse color \'#f7272626161\': Invalid color value. Fallback to black.', log.output[4])
+        self.assertIn("RGBA color is not supported by python-docx. Opacity will be ignored.", log.output[0])
+        self.assertIn("Could not parse color 'rgba(a, b, c, d, e)': Invalid color value. Fallback to black.", log.output[1])
+        self.assertIn("Could not parse color 'rgb(255, 0, 0, 0)': Invalid color value. Fallback to black.", log.output[2])
+        self.assertIn("Could not parse color 'invalidcolorname': Invalid color value. Fallback to black.", log.output[3])
+        self.assertIn("Could not parse color '#f7272626161': Invalid color value. Fallback to black.", log.output[4])
 
     def test_invalid_rowspan_and_colspan(self):
         """Test with invalid rowspan and colspan"""
