@@ -1272,8 +1272,11 @@ class HtmlToDocx(HTMLParser):
         for cell_row, row in enumerate(self.get_table_rows(table_soup)):
             col_offset = 0  # Shift index if some columns are occupied
             for col in self.get_table_columns(row):
-                while used_cells[cell_row][col_offset]:
+                while col_offset < cols and used_cells[cell_row][col_offset]:
                     col_offset += 1
+
+                if col_offset >= cols:
+                    raise ValueError(f"Table layout mismatch: exceeded column count ({cols}) at row {cell_row}")
 
                 current_row = cell_row
                 current_col = col_offset
@@ -1778,20 +1781,46 @@ class HtmlToDocx(HTMLParser):
 
         default_span = 1
         max_cols = 0
-        max_rows = len(rows)
+
+        # Track occupied cells caused by rowspan
+        used_cells = []
 
         for row_idx, row in enumerate(rows):
             cols = self.get_table_columns(row)
-            # Handle colspan
-            row_col_count = sum(utils.safe_int(col.get("colspan", default_span)) for col in cols)
-            max_cols = max(max_cols, row_col_count)
 
-            # Handle rowspan
+            # Ensure used_cells has current row
+            while len(used_cells) <= row_idx:
+                used_cells.append([])
+
+            col_offset = 0
+
             for col in cols:
-                rowspan = utils.safe_int(col.get("rowspan", default_span))
-                if rowspan > default_span:
-                    max_rows = max(max_rows, row_idx + rowspan)
+                # Expand row if needed
+                while len(used_cells[row_idx]) <= col_offset:
+                    used_cells[row_idx].append(False)
 
+                # Skip already occupied cells
+                while col_offset < len(used_cells[row_idx]) and used_cells[row_idx][col_offset]:
+                    col_offset += 1
+
+                rowspan = utils.safe_int(col.get("rowspan", default_span))
+                colspan = utils.safe_int(col.get("colspan", default_span))
+
+                # Mark occupied cells
+                for r in range(row_idx, row_idx + rowspan):
+                    while len(used_cells) <= r:
+                        used_cells.append([])
+
+                    for c in range(col_offset, col_offset + colspan):
+                        while len(used_cells[r]) <= c:
+                            used_cells[r].append(False)
+                        used_cells[r][c] = True
+
+                col_offset += colspan
+
+            max_cols = max(max_cols, len(used_cells[row_idx]))
+
+        max_rows = len(used_cells)
         return max_rows, max_cols
 
     def get_tables(self) -> None:

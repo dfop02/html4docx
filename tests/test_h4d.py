@@ -1989,6 +1989,56 @@ and blank lines.
         except Exception as e:
             self.fail(f"Processing extreme table failed with unexpected error: {e}")
 
+    def test_malformed_table_overflow(self):
+        """Test table where rowspan or colspan causes column overflow beyond initial dimension calculation"""
+        self.document.add_heading('Test: Malformed Table Overflow', level=1)
+
+        malformed_html = """
+        <table>
+        <tr>
+            <td rowspan="2">spans down</td>
+            <td>B1</td>
+        </tr>
+        <tr>
+            <td>A2</td>
+            <td>B2</td>
+        </tr>
+        </table>
+        """
+
+        try:
+            self.parser.table_style = 'Table Grid'
+            self.parser.add_html_to_document(malformed_html, self.document)
+            document = self.parser.parse_html_string(malformed_html)
+
+            tables = document.tables
+            assert len(tables) == 1, "Should create exactly one table"
+
+            table = tables[0]
+
+            assert len(table.columns) == 3, (
+                f"Expected 3 columns due to rowspan shift, but got {len(table.columns)}"
+            )
+
+            assert len(table.rows) == 2, (
+                f"Expected 2 rows, but got {len(table.rows)}"
+            )
+
+            # Validate content placement
+            assert "spans down" in table.cell(0, 0).text, "Rowspan cell not in correct position"
+            assert "B1" in table.cell(0, 1).text, "B1 should be in row 0, col 1"
+
+            # Second row:
+            # col 0 is occupied by rowspan
+            # so A2 → col 1, B2 → col 2
+            assert "A2" in table.cell(1, 1).text, "A2 should be shifted to column 1"
+            assert "B2" in table.cell(1, 2).text, "B2 should be in column 2"
+
+        except IndexError as e:
+            self.fail(f"Malformed table caused IndexError (regression): {e}")
+        except Exception as e:
+            self.fail(f"Malformed table failed with unexpected error: {e}")
+
     def test_nested_styles_on_multiple_tags(self):
         """Test nested styles on multiple tags"""
         self.document.add_heading("Test: Test nested styles on multiple tags", level=1)
