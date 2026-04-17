@@ -17,6 +17,7 @@ from docx.oxml.ns import qn
 from docx.shared import RGBColor
 
 from html4docx import constants, utils
+from html4docx.css_parser import CSSParser
 from html4docx.metadata import Metadata
 
 
@@ -61,8 +62,18 @@ class HtmlToDocx(HTMLParser):
         # NEW: Style tracking variables
         self.pending_div_style = None
         self.pending_character_style = None
-        self.pending_inline_styles = None
-        self.pending_important_styles = None
+        # Track paragraphs created within divs to apply div styles
+        if not hasattr(self, "div_paragraphs"):
+            self.div_paragraphs = []  # Stack of lists: each div level has its own list of paragraphs
+        else:
+            self.div_paragraphs = []  # Reset for new document
+        # Track inline style IDs for cleanup
+        self._element_inline_ids = {}  # tag -> element_id
+
+        # CSS Parser for <style> tags
+        # Preserve CSS parser between calls (don't reset if it already exists)
+        if not hasattr(self, "css_parser"):
+            self.css_parser = CSSParser()
 
     @property
     def metadata(self) -> Dict[str, Any]:
@@ -1329,6 +1340,9 @@ class HtmlToDocx(HTMLParser):
 
     def handle_div(self, current_attrs):
         self.paragraph = self.doc.add_paragraph()
+        # Track this paragraph in the current div (div paragraphs don't have own styles)
+        if hasattr(self, "div_paragraphs") and self.div_paragraphs:
+            self.div_paragraphs[-1]["paragraphs"].append(self.paragraph)
 
         # handle page break
         if "style" in current_attrs:
@@ -1456,32 +1470,96 @@ class HtmlToDocx(HTMLParser):
         # Add hyperlink to run
         self.paragraph._p.append(hyperlink)
 
+    def _resolve_styles_for_element(self, tag, attrs) -> tuple:
+        """
+        Resolve CSS and inline styles for an element using CSS parser.
+
+        CSS parser is the single source of truth for all styles:
+        - CSS rules from files and <style> tags (already parsed)
+        - Inline styles (added as temporary rules with high specificity)
+
+        This method:
+        1. Parses inline styles if present
+        2. Adds them to CSS parser as temporary rules
+        3. Gets all styles from CSS parser (which handles specificity correctly)
+
+        Args:
+            tag: HTML tag name
+            attrs: HTML attributes dict (will be modified to include data-inline-id)
+
+        Returns:
+            tuple: (normal_styles_dict, important_styles_dict)
+        """
+        # Parse inline styles if present
+        inline_normal = {}
+        inline_important = {}
+        if "style" in attrs:
+            inline_normal, inline_important = utils.parse_inline_styles(attrs["style"])
+
+        # Add inline styles to CSS parser as temporary rules with high specificity
+        # This ensures inline styles override CSS rules correctly
+        element_id = None
+        if inline_normal or inline_important:
+            element_id = self.css_parser.add_inline_styles(tag, attrs, inline_normal, inline_important)
+            # Store element_id in attrs for later retrieval
+            if element_id:
+                attrs["data-inline-id"] = element_id
+                # Track for cleanup
+                self._element_inline_ids[tag] = element_id
+
+        # Get all styles from CSS parser (single source of truth)
+        # CSS parser handles: CSS rules, inline styles, specificity, cascade
+        normal, important = self.css_parser.get_styles_for_element_with_important(tag, attrs)
+
+        return normal, important
+
+    def _resolve_custom_style(self, tag, attrs):
+        # Control custom_style based on the Options. Default is True on both.
+        custom_style = self.get_word_style_for_element(tag, attrs) if (self.use_styles or self.use_tag_overrides) else None
+
+        if custom_style:
+            valid_style = utils.check_style_exists(self.doc, custom_style)
+            if not valid_style:
+                logging.warning(f"Warning: Custom style '{custom_style}' not found in document, Ignoring style.")
+                custom_style = None
+
+        return custom_style
+
     def handle_starttag(self, tag, attrs):
         if self.skip:
             return
+
         if tag == "head":
             self.skip = True
             self.skip_tag = tag
             self.instances_to_skip = 0
             return
-        elif tag == "body":
+
+        if tag == "body":
+            return
+
+        if tag == "br":
+            if not self.paragraph:
+                self.paragraph = self.doc.add_paragraph()
+            if not self.run:
+                self.run = self.paragraph.add_run()
+            self.run.add_break()
             return
 
         current_attrs = dict(attrs)
 
         if tag == "span":
-            # Parse inline styles if present to check for !important
-            if "style" in current_attrs:
-                normal_styles, important_styles = utils.parse_inline_styles(current_attrs["style"])
-                # Store normal styles to apply to runs
-                if normal_styles:
-                    self.pending_inline_styles = normal_styles
-                # Store important styles to apply after parent's processing
-                if important_styles:
-                    self.pending_important_styles = important_styles
+            # Resolve styles using CSS parser (adds inline styles as temporary rules)
+            self._resolve_styles_for_element(tag, current_attrs)
             self.tags["span"].append(current_attrs)
             return
-        elif tag in ["ol", "ul"]:
+
+        self.tags[tag] = current_attrs
+
+        # Control custom_style based on the Options. Default is True on both.
+        custom_style = self._resolve_custom_style(tag, current_attrs)
+
+        if tag in ["ol", "ul"]:
             if tag == "ol":
                 # Assign new ID if it's a fresh top-level list
                 self.list_restart_counter += 1
@@ -1490,37 +1568,25 @@ class HtmlToDocx(HTMLParser):
                 self.current_ol_num_id = None  # unordered list
 
             self.tags["list"].append(tag)
-            return  # don't apply styles for now
-        elif tag == "br":
-            try:
-                self.run.add_break()
-            except AttributeError:
-                self.paragraph = self.doc.add_paragraph()
-                self.run = self.paragraph.add_run()
-                self.run.add_break()
             return
 
-        self.tags[tag] = current_attrs
-
-        # Control custom_style based on the Options.  Default is True on both.
-        custom_style = (
-            self.get_word_style_for_element(tag, current_attrs) if (self.use_styles or self.use_tag_overrides) else None
-        )
-
-        if custom_style:
-            valid_style = utils.check_style_exists(self.doc, custom_style)
-            if not valid_style:
-                logging.warning(f"Warning: Custom style '{custom_style}' not found in document, Ignoring style.")
-                custom_style = None
-
-        if tag in ["p", "pre"]:
+        elif tag in ["p", "pre"]:
             if not self.in_li:
                 self.paragraph = self.doc.add_paragraph()
                 style_to_apply = self.pending_div_style or custom_style or self.default_paragraph_style
                 if style_to_apply:
                     self.apply_styles_to_paragraph(self.paragraph, style_to_apply, True)
+                # Mark this paragraph as having its own styles (p/pre have priority over div)
+                self.paragraph._has_own_styles = True
+                # Add paragraph to div's list so div styles (like background-color) can be applied
+                # even though paragraph has its own styles
+                if hasattr(self, "div_paragraphs") and self.div_paragraphs:
+                    self.div_paragraphs[-1]["paragraphs"].append(self.paragraph)
                 # DON'T clear pending_div_style here - it should persist for all child paragraphs
                 # It will be cleared when the div closes in handle_endtag
+
+            # Resolve styles using CSS parser (will be applied at endtag)
+            self._resolve_styles_for_element(tag, current_attrs)
 
             # Parse inline styles on the paragraph itself to apply to runs within
             if "style" in current_attrs:
@@ -1529,15 +1595,29 @@ class HtmlToDocx(HTMLParser):
                     self.pending_inline_styles = normal_styles
                 if important_styles:
                     self.pending_important_styles = important_styles
+
         elif tag == "div":
+            # Resolve div styles using CSS parser (handles CSS rules, inline styles, specificity)
+            normal, important = self._resolve_styles_for_element(tag, current_attrs)
+            div_css_styles = {**normal, **important}
+
+            # Track this div's CSS styles and paragraphs
+            # Initialize list for paragraphs in this div BEFORE creating paragraphs
+            self.div_paragraphs.append({"styles": div_css_styles, "paragraphs": []})
+
             if custom_style and not self.in_li:
                 self.pending_div_style = custom_style
             else:
                 self.handle_div(current_attrs)
+
         elif tag == "li":
             self.handle_li()
             if custom_style and self.paragraph:
                 self.apply_styles_to_paragraph(self.paragraph, custom_style, True)
+
+            # Resolve styles using CSS parser (will be applied at endtag)
+            if self.paragraph:
+                self._resolve_styles_for_element(tag, current_attrs)
 
         elif tag == "hr":
             self.handle_hr()
@@ -1555,6 +1635,9 @@ class HtmlToDocx(HTMLParser):
                 if custom_style:
                     self.apply_styles_to_paragraph(self.paragraph, custom_style, True)
 
+            # Resolve styles using CSS parser (will be applied at endtag)
+            self._resolve_styles_for_element(tag, current_attrs)
+
         elif tag == "img":
             self.handle_img(current_attrs)
             self.paragraph = self.doc.paragraphs[-1]
@@ -1569,12 +1652,16 @@ class HtmlToDocx(HTMLParser):
             if custom_style:
                 self.pending_character_style = custom_style
 
+            # Resolve styles using CSS parser (adds inline styles as temporary rules)
+            self._resolve_styles_for_element(tag, current_attrs)
+
             if "style" in current_attrs:
                 normal_styles, important_styles = utils.parse_inline_styles(current_attrs["style"])
                 if normal_styles:
                     self.pending_inline_styles = normal_styles
                 if important_styles:
                     self.pending_important_styles = important_styles
+
             return
 
         if "id" in current_attrs:
@@ -1589,33 +1676,69 @@ class HtmlToDocx(HTMLParser):
                 self.paragraph._pending_styles = []
             style = utils.parse_dict_string(current_attrs["style"])
             self.paragraph._pending_styles.append(style)
+
         elif "style" in current_attrs and self.paragraph:
             style = utils.parse_dict_string(current_attrs["style"])
             self.add_text_align_or_margin_to(self.paragraph.paragraph_format, style)
 
     def handle_endtag(self, tag):
-        # Clear pending character style and inline styles when closing inline elements
+        # Clear pending character style when closing code
         if tag == "code":
             self.pending_character_style = None
-            self.pending_inline_styles = None
-            self.pending_important_styles = None
+            # Clean up inline styles from CSS parser
+            if tag in self._element_inline_ids:
+                self.css_parser.remove_inline_styles(self._element_inline_ids.pop(tag))
 
-        # Clear important styles when closing span
+        # Clean up inline styles when closing span
         if tag == "span":
-            self.pending_important_styles = None
+            if tag in self._element_inline_ids:
+                self.css_parser.remove_inline_styles(self._element_inline_ids.pop(tag))
 
         # Clear pending div style when closing a div
         if tag == "div":
             self.pending_div_style = None
+            # Apply div styles to all paragraphs created within this div
+            # But only to paragraphs that don't have their own CSS styles (p, h1-h9 have priority)
+            if self.div_paragraphs:
+                div_info = self.div_paragraphs.pop()
+                div_styles = div_info.get("styles", {})
+                div_paras = div_info.get("paragraphs", [])
 
-        # Clear pending inline styles when closing paragraph elements
+                # Apply div styles to paragraphs
+                # For paragraphs with own styles, only apply paragraph-level properties (like background-color)
+                # For paragraphs without own styles, apply all div styles
+                for para in div_paras:
+                    has_own_styles = (hasattr(para, "_has_own_styles") and para._has_own_styles) or (
+                        hasattr(para, "_styles_applied") and para._styles_applied
+                    )
+
+                    if div_styles:
+                        if has_own_styles:
+                            # Paragraph has own styles - only apply paragraph-level properties from div
+                            # (like background-color, text-align, margins, etc.)
+                            paragraph_only_styles = {}
+                            for prop, value in div_styles.items():
+                                # Check if this is a paragraph-level property
+                                if prop in constants.PARAGRAPH_FORMAT_STYLES:
+                                    paragraph_only_styles[prop] = value
+                                elif prop == "background-color":
+                                    # background-color is applied to paragraph but affects runs
+                                    paragraph_only_styles[prop] = value
+
+                            if paragraph_only_styles:
+                                self.apply_styles_to_paragraph(para, paragraph_only_styles)
+                        else:
+                            # Paragraph doesn't have own styles - apply all div styles
+                            self.apply_styles_to_paragraph(para, div_styles)
+
+        # Clean up inline styles when closing paragraph elements
         if tag in ["p", "pre"]:
-            self.pending_inline_styles = None
-            self.pending_important_styles = None
+            if tag in self._element_inline_ids:
+                self.css_parser.remove_inline_styles(self._element_inline_ids.pop(tag))
 
         if re.match("h[1-9]", tag):
-            self.pending_inline_styles = None
-            self.pending_important_styles = None
+            if tag in self._element_inline_ids:
+                self.css_parser.remove_inline_styles(self._element_inline_ids.pop(tag))
 
         if self.skip:
             if not tag == self.skip_tag:
@@ -1646,13 +1769,48 @@ class HtmlToDocx(HTMLParser):
                 self.paragraph = None
         elif tag == "li":
             self.in_li = False
+            # Get styles from CSS parser (single source of truth)
+            if self.paragraph:
+                tag_attrs = self.tags.get(tag, {})
+                normal, important = self.css_parser.get_styles_for_element_with_important(tag, tag_attrs)
+
+                # Apply normal styles first, then important styles
+                if normal:
+                    self.apply_styles_to_paragraph(self.paragraph, normal)
+                if important:
+                    self.apply_styles_to_paragraph(self.paragraph, important)
+
+                # Mark that paragraph has had its styles applied
+                self.paragraph._styles_applied = True
+
+                # Clean up inline styles
+                if tag in self._element_inline_ids:
+                    self.css_parser.remove_inline_styles(self._element_inline_ids.pop(tag))
 
         if tag in ["p", "pre"] or re.match(r"h[1-9]", tag):
+            if not self.paragraph:
+                return
+
             if hasattr(self.paragraph, "_pending_styles"):
                 for style in self.paragraph._pending_styles:
                     self.apply_styles_to_paragraph(self.paragraph, style)
                 # Clear the pending styles
                 del self.paragraph._pending_styles
+
+            # Get styles from CSS parser (single source of truth)
+            # Find the attrs for this tag to get inline styles
+            tag_attrs = self.tags.get(tag, {})
+            normal, important = self.css_parser.get_styles_for_element_with_important(tag, tag_attrs)
+
+            # Apply normal styles first, then important styles
+            if normal:
+                self.apply_styles_to_paragraph(self.paragraph, normal)
+            if important:
+                self.apply_styles_to_paragraph(self.paragraph, important)
+
+            # Mark that paragraph has had its styles applied
+            self.paragraph._styles_applied = True
+
             self.paragraph_span_styles.clear()
 
         if tag in self.tags:
@@ -1685,25 +1843,6 @@ class HtmlToDocx(HTMLParser):
         # If there's a link, dont put the data directly in the run
         self.run = self.paragraph.add_run(data)
 
-        # Apply tag override character style for <code> when the style exists in the document
-        if self.pending_character_style:
-            self.apply_styles_to_run(self.run, self.pending_character_style, isCustom=True)
-
-        for span in self.tags["span"]:
-            if "style" in span:
-                span_style = utils.parse_dict_string(span["style"])
-                self.apply_styles_to_run(self.run, span_style)
-
-                for tag, attrs in self.tags.items():
-                    if tag == "div" and "style" in attrs:
-                        div_style = utils.parse_dict_string(attrs["style"])
-
-                        for span_style_name in span_style.keys():
-                            if span_style_name in div_style:
-                                del div_style[span_style_name]
-
-                        self.tags[tag]["style"] = utils.dict_to_style_string(div_style)
-
         for tag, attrs in self.tags.items():
             if self.use_tag_overrides and tag in self.tag_style_overrides:
                 continue
@@ -1719,9 +1858,35 @@ class HtmlToDocx(HTMLParser):
                 font_name = constants.FONT_NAMES[tag]
                 self.run.font.name = font_name
 
-            if "style" in attrs and (tag in ["div", "li", "pre"]):
-                style = utils.parse_dict_string(attrs["style"])
-                self.add_styles_to_run(style)
+        # Apply character style (e.g., from <code> tag)
+        if self.pending_character_style:
+            self.apply_style_to_run(self.pending_character_style)
+
+        # Apply CSS / inline styles for inline elements (span, code)
+        # Get styles from CSS parser (single source of truth)
+        # Check for span or code tags and get their styles
+        combined_styles = {}
+
+        # Check span tag
+        if "span" in self.tags and self.tags["span"]:
+            span_attrs = self.tags["span"][-1]  # Get most recent span
+            normal, important = self.css_parser.get_styles_for_element_with_important("span", span_attrs)
+            if normal:
+                combined_styles.update(normal)
+            if important:
+                combined_styles.update(important)
+
+        # Check code tag
+        if "code" in self.tags:
+            code_attrs = self.tags["code"]
+            normal, important = self.css_parser.get_styles_for_element_with_important("code", code_attrs)
+            if normal:
+                combined_styles.update(normal)
+            if important:
+                combined_styles.update(important)
+
+        if combined_styles:
+            self.apply_styles_to_run(self.run, combined_styles)
 
     def handle_comment(self, data):
         """
@@ -1831,11 +1996,160 @@ class HtmlToDocx(HTMLParser):
         self.tables = self.ignore_nested_tables(self.soup.find_all("table"))
         self.table_no = 0
 
+    def _extract_and_parse_style_tags(self) -> None:
+        """Extract CSS from <style> tags using BeautifulSoup and parse it."""
+        if not hasattr(self, "soup") or not self.soup:
+            return
+
+        style_tags = self.soup.find_all("style")
+        for style_tag in style_tags:
+            css_content = style_tag.string
+            if css_content:
+                self.css_parser.parse_css(css_content)
+                # Remove style tag from soup so it doesn't appear in output
+                style_tag.decompose()
+
+    def _extract_style_tags_from_string(self, html: str) -> None:
+        """Extract CSS from <style> tags using regex (fallback when BeautifulSoup not used)."""
+        # Pattern to match <style>...</style> tags
+        style_pattern = re.compile(r"<style[^>]*>(.*?)</style>", re.DOTALL | re.IGNORECASE)
+
+        for match in style_pattern.finditer(html):
+            css_content = match.group(1)
+            if css_content:
+                self.css_parser.parse_css(css_content)
+
+    def _scan_html_for_elements(self, html: str) -> None:
+        """
+        Scan HTML to identify all used tags, classes, and IDs.
+        This allows selective CSS parsing to only load relevant rules.
+
+        Args:
+            html (str): HTML content to scan (can be string or BeautifulSoup object as string)
+        """
+        if not html:
+            return
+
+        # Use existing soup if available (more efficient)
+        if hasattr(self, "soup") and self.soup:
+            try:
+                # Find all elements in existing soup
+                for element in self.soup.find_all(True):  # True finds all tags
+                    tag_name = element.name
+                    if tag_name and tag_name not in ["style", "link", "script", "meta", "head"]:
+                        self.css_parser.mark_element_used(tag_name, element.attrs)
+                return
+            except Exception:
+                pass
+
+        # Use BeautifulSoup if available for better parsing
+        if BeautifulSoup:
+            try:
+                soup = BeautifulSoup(html, "html.parser")
+                # Find all elements
+                for element in soup.find_all(True):  # True finds all tags
+                    tag_name = element.name
+                    if tag_name and tag_name not in ["style", "link", "script", "meta", "head"]:
+                        self.css_parser.mark_element_used(tag_name, element.attrs)
+            except Exception:
+                # Fallback to regex if BeautifulSoup fails
+                self._scan_html_with_regex(html)
+        else:
+            # Fallback to regex parsing
+            self._scan_html_with_regex(html)
+
+    def _scan_html_with_regex(self, html: str) -> None:
+        """
+        Scan HTML using regex to find tags, classes, and IDs.
+        Less accurate than BeautifulSoup but works as fallback.
+        """
+        # Find all tags
+        tag_pattern = re.compile(r"<(\w+)", re.IGNORECASE)
+        for match in tag_pattern.finditer(html):
+            tag_name = match.group(1).lower()
+            if tag_name and tag_name not in ["style", "link", "script", "meta"]:
+                self.css_parser.mark_element_used(tag_name, {})
+
+        # Find all class attributes
+        class_pattern = re.compile(r'class=["\']([^"\']+)["\']', re.IGNORECASE)
+        for match in class_pattern.finditer(html):
+            classes_str = match.group(1)
+            classes = classes_str.split()
+            for class_name in classes:
+                if class_name:
+                    self.css_parser.mark_element_used("", {"class": class_name})
+
+        # Find all id attributes
+        id_pattern = re.compile(r'id=["\']([^"\']+)["\']', re.IGNORECASE)
+        for match in id_pattern.finditer(html):
+            element_id = match.group(1)
+            if element_id:
+                self.css_parser.mark_element_used("", {"id": element_id})
+
+    def _extract_and_parse_link_tags(self) -> None:
+        """
+        Extract CSS from <link> tags pointing to external CSS files.
+        Uses selective parsing to only load CSS rules relevant to HTML elements.
+        """
+        if not hasattr(self, "soup") or not self.soup:
+            return
+
+        link_tags = self.soup.find_all("link", rel="stylesheet")
+        if not link_tags:
+            return
+
+        for link_tag in link_tags:
+            href = link_tag.get("href", None) or link_tag.get("data-href", None)
+            if href is None:
+                continue
+
+            # Fetch external CSS
+            css_content = utils.fetch_external_css(href)
+            if css_content:
+                # Use selective parsing to only load relevant rules
+                # This prevents loading thousands of unused CSS rules from frameworks
+                self.css_parser.parse_css(css_content, selective=True)
+                # Remove link tag from soup so it doesn't appear in output
+                link_tag.decompose()
+
+    def _extract_link_tags_from_string(self, html: str) -> None:
+        """
+        Extract CSS from <link> tags using regex (fallback when BeautifulSoup not used).
+        Uses selective parsing to only load CSS rules relevant to HTML elements.
+        """
+        # Pattern to match <link rel="stylesheet" href="..."> tags
+        link_pattern = re.compile(r'<link[^>]*rel=["\']stylesheet["\'][^>]*href=["\']([^"\']+)["\'][^>]*>', re.IGNORECASE)
+
+        for match in link_pattern.finditer(html):
+            href = match.group(1)
+            if href:
+                css_content = utils.fetch_external_css(href)
+                if css_content:
+                    # Use selective parsing
+                    self.css_parser.parse_css(css_content, selective=True)
+
     def run_process(self, html: str) -> None:
         if self.bs and BeautifulSoup:
             self.soup = BeautifulSoup(html, "html.parser")
 
+            if self.include_styles:
+                # Step 1: Scan HTML to identify used elements (for selective CSS parsing)
+                self._scan_html_for_elements(str(self.soup))
+                # Step 2: Extract and parse <style> tags (always parse all, they're usually small)
+                self._extract_and_parse_style_tags()
+                # Step 3: Extract and parse <link> tags (use selective parsing for efficiency)
+                self._extract_and_parse_link_tags()
+
             html = str(self.soup)
+        elif self.include_styles:
+            # If BeautifulSoup is not used, try to extract manually
+            # Step 1: Scan HTML
+            self._scan_html_for_elements(html)
+            # Step 2: Extract style tags
+            self._extract_style_tags_from_string(html)
+            # Step 3: Extract link tags
+            self._extract_link_tags_from_string(html)
+
         if self.include_tables:
             self.get_tables()
         self.feed(html)
