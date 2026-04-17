@@ -3,6 +3,45 @@
 Release History
 ---------------
 
+1.1.5 (2026-04-17)
+++++++++++++++++++
+
+**Updates**
+
+- None
+
+**Fixes**
+
+- Fixes `#70 <https://github.com/dfop02/html4docx/issues/70>`_: malformed table overflow. | `dfop02 <https://github.com/dfop02>`_
+- Fixes `#73 <https://github.com/dfop02/html4docx/issues/73>`_: Error parsing styles with spaces. | `dfop02 <https://github.com/dfop02>`_
+- Fixes `#71 <https://github.com/dfop02/html4docx/issues/71>`_: Error applying color to table cells. | `vvalchev <https://github.com/vvalchev>`_
+- Fixes `#76 <https://github.com/dfop02/html4docx/issues/76>`_: Invalid image width and height. | `dfop02 <https://github.com/dfop02>`_
+
+**New Features**
+
+- None
+
+
+1.1.4 (2026-02-27)
+++++++++++++++++++
+
+**Updates**
+
+- Update `README.md` for `tag_style_override` and custom styles from a Word template usage. | `dfop02 <https://github.com/dfop02>`_
+
+**Fixes**
+
+- Fixes `#62 <https://github.com/dfop02/html4docx/issues/62>`_ : `tag_style_override` not applying custom styles from a Word template. | `dfop02 <https://github.com/dfop02>`_
+- Handle invalid rowspan and colspan values in tables. | `dfop02 <https://github.com/dfop02>`_ inspired by `PR #56 <https://github.com/dfop02/html4docx/pull/56>`_ from `kko-harvey <https://github.com/kko-harvey>`_ .
+- Fixes `#67 <https://github.com/dfop02/html4docx/issues/67>`_: built-in typing was not supported by old python versions. | `dfop02 <https://github.com/dfop02>`_
+
+**New Features**
+
+- [`PR #61 <https://github.com/dfop02/html4docx/pull/61>`_] Added support for `break-after: page` css properties to determine page breaks. | `chrisonntag <https://github.com/chrisonntag>`_
+- [`PR #59 <https://github.com/dfop02/html4docx/pull/59>`_] Added support for `<del>` tag. | `arthrod <https://github.com/arthrod>`_
+- [`PR #60 <https://github.com/dfop02/html4docx/pull/60>`_] Added support for `<mark>` and `<ins>` tags. | `arthrod <https://github.com/arthrod>`_
+- Add warning when a custom style is not found in the document. | `dfop02 <https://github.com/dfop02>`_
+
 1.1.3 (2025-12-16)
 ++++++++++++++++++
 

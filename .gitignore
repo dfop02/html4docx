@@ -51,6 +51,7 @@ coverage.xml
 .pytest_cache/
 cover/
 tests/**/*.docx
+!tests/assets/templates/template.docx
 calc_cov/
 .ruff_cache/
 
