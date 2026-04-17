@@ -352,10 +352,11 @@ class HtmlToDocx(HTMLParser):
             Parses a border value like:
             '1px solid #000000', 'solid 1px red', or '#000000 medium dashed' in any order.
             """
-            parts = value.split()
+            value = value.strip()
+            parts = utils.normalize_rgb_spaces(value).split()
 
             # Return all default if there is only 'none' or empty
-            if (len(parts) == 1 and parts[0] == "none") or (not value or value.strip() == ""):
+            if (len(parts) == 1 and parts[0].lower() == "none") or (not value or value.strip() == ""):
                 return default_size, default_style, default_color
 
             size = None
@@ -1048,8 +1049,10 @@ class HtmlToDocx(HTMLParser):
     def add_styles_to_table_cell(self, styles, doc_cell, cell_row):
         """Styles that must be applied specifically in a _Cell object"""
         # Set background color
+
         if "background-color" in styles:
-            self.set_cell_background(doc_cell, styles["background-color"])
+            color = utils.parse_color(styles["background-color"], return_hex=True)
+            self.set_cell_background(doc_cell, color)
 
         # Set width (approximate, since DOCX uses different units)
         if "width" in styles:
@@ -1733,7 +1736,8 @@ class HtmlToDocx(HTMLParser):
 
         # Style: Green color to mimic HTML comment styling
         dark_ish_green = "#008000"
-        run.font.color.rgb = utils.parse_color(dark_ish_green)
+        dark_ish_green_color = utils.parse_color(dark_ish_green)
+        run.font.color.rgb = RGBColor(*dark_ish_green_color)
         run.italic = True  # makes it feel more like a comment
 
     def ignore_nested_tables(self, tables_soup):

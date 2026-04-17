@@ -161,3 +161,5 @@ PAGE_BREAK_REGEXES = (
     re.compile(r'page-break-after\s*:\s*always\s*(?:!important)?\s*(?:;|$)'),
     re.compile(r'break-after\s*:\s*page\s*(?:!important)?\s*(?:;|$)'),
 )
+
+RGB_SPACES_REGEX = re.compile(r'(rgba?\()([^)]+)(\))', re.IGNORECASE)

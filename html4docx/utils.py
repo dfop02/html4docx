@@ -238,6 +238,22 @@ def parse_color(original_color: str, return_hex: bool = False):
     return rgb_to_hex(colors) if return_hex else colors
 
 
+def normalize_rgb_spaces(value: str) -> str:
+    """
+    Removes spaces inside rgb()/rgba() so it can be safely split.
+    Example:
+    rgb(222, 222, 222) -> rgb(222,222,222)
+    """
+
+    def _replace(match):
+        prefix, content, suffix = match.groups()
+        # remove spaces only inside the function
+        content = content.replace(" ", "")
+        return f"{prefix}{content}{suffix}"
+
+    return constants.RGB_SPACES_REGEX.sub(_replace, value)
+
+
 def remove_last_occurence(ls, x):
     ls.pop(len(ls) - ls[::-1].index(x) - 1)
 

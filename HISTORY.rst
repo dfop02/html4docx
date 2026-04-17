@@ -12,7 +12,8 @@ Release History
 
 **Fixes**
 
-- None
+- Fixes `#73 <https://github.com/dfop02/html4docx/issues/73>`_: Error parsing styles with spaces. | `dfop02 <https://github.com/dfop02>`_
+- Fixes `#71 <https://github.com/dfop02/html4docx/issues/71>`_: Error applying color to table cells. | `vvalchev <https://github.com/vvalchev>`_
 
 **New Features**
 
