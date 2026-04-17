@@ -3,6 +3,25 @@
 Release History
 ---------------
 
+1.1.5 (2026-04-17)
+++++++++++++++++++
+
+**Updates**
+
+- None
+
+**Fixes**
+
+- Fixes `#70 <https://github.com/dfop02/html4docx/issues/70>`_: malformed table overflow. | `dfop02 <https://github.com/dfop02>`_
+- Fixes `#73 <https://github.com/dfop02/html4docx/issues/73>`_: Error parsing styles with spaces. | `dfop02 <https://github.com/dfop02>`_
+- Fixes `#71 <https://github.com/dfop02/html4docx/issues/71>`_: Error applying color to table cells. | `vvalchev <https://github.com/vvalchev>`_
+- Fixes `#76 <https://github.com/dfop02/html4docx/issues/76>`_: Invalid image width and height. | `dfop02 <https://github.com/dfop02>`_
+
+**New Features**
+
+- None
+
+
 1.1.4 (2026-02-27)
 ++++++++++++++++++
 
