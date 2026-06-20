@@ -411,7 +411,7 @@ class HtmlToDocx(HTMLParser):
                         borders[side]["size"] = lr_size
                 elif len(values) == 4:
                     # Four widths (top, right, bottom, left)
-                    for side, val in zip(border_sides, values, strict=False):
+                    for side, val in zip(border_sides, values):
                         borders[side]["size"] = border_unit_converter(val) or default_size
 
             # Case 2: 'border-width', 'border-color', 'border-style' — apply to all sides

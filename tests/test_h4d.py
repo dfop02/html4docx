@@ -882,7 +882,7 @@ and blank lines.
             None,  # Word does not support negative values here
         ]
 
-        for actual, expected in zip(indent_values, expected_values, strict=False):
+        for actual, expected in zip(indent_values, expected_values):
             self.assertAlmostEqual(actual, expected, delta=634)
 
     def test_color_paragraph(self):
