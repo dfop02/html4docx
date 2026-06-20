@@ -2794,21 +2794,29 @@ and blank lines.
         )
 
     def test_unrecognized_css_style_emits_debug_not_warning(self):
-        """CSS properties that html4docx does not support (e.g. 'letter-spacing') must
-        be logged at DEBUG level, not WARNING. They are expected skips for any real-world
-        HTML and should not pollute production logs. Issue #80."""
+        """CSS properties that html4docx does not support (e.g. 'letter-spacing', 'padding')
+        must be logged at DEBUG level, not WARNING. They are expected skips for any
+        real-world HTML and should not pollute production logs. Issue #80."""
         doc = Document()
         parser = HtmlToDocx()
-        html = '<p style="letter-spacing: 2px; margin: 0; padding: 10px;">text</p>'
+        # 'letter-spacing' and 'padding' are unrecognised paragraph styles -> DEBUG
+        # 'margin-left' is recognised -> no log at all
+        html = '<p style="letter-spacing: 2px; padding: 10px;">text</p>'
 
-        # No WARNING records should be emitted for unknown CSS properties.
         with self.assertLogs("html4docx.h4d", level=logging.DEBUG) as cm:
-            # Trigger at least one debug record so assertLogs does not raise on an
-            # empty capture (we inject one ourselves via the named logger).
-            import html4docx.h4d as h4d_module
-            h4d_module.logger.debug("probe")
             parser.add_html_to_document(html, doc)
 
+        # Must have produced at least one DEBUG record for each skipped property
+        debug_records = [r for r in cm.output if r.startswith("DEBUG")]
+        self.assertTrue(
+            any("letter-spacing" in r for r in debug_records),
+            f"Expected a DEBUG record mentioning 'letter-spacing'; got: {cm.output}",
+        )
+        self.assertTrue(
+            any("padding" in r for r in debug_records),
+            f"Expected a DEBUG record mentioning 'padding'; got: {cm.output}",
+        )
+        # Must not have produced any WARNING records for these routine skips
         warning_records = [r for r in cm.output if r.startswith("WARNING")]
         self.assertEqual(
             warning_records,
