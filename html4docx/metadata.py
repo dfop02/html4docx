@@ -1,8 +1,12 @@
 import json
+import logging
 from datetime import datetime
+
 from docx import Document
 
-class Metadata():
+logger = logging.getLogger(__name__)
+
+class Metadata:
     """Handle docx document metadata"""
     def __init__(self, document: Document):
         self.document = document
@@ -28,18 +32,18 @@ class Metadata():
                     try:
                         value = int(value)
                     except ValueError:
-                        print(f'Invalid revision number "{value}". Must be an integer. Skipping...')
+                        logger.warning(f'Invalid revision number "{value}". Must be an integer. Skipping...')
                         continue
                 elif key in ['last_printed', 'modified', 'created']:
                     try:
                         value = datetime.fromisoformat(value)
                     except ValueError:
-                        print(f'Invalid datetime string on property "{key}", must be in ISO format. Skipping...')
+                        logger.warning(f'Invalid datetime string on property "{key}", must be in ISO format. Skipping...')
                         continue
 
                 setattr(core_props, key, value)
             else:
-                print(f'Property "{key}" not found in core properties. Skipping...')
+                logger.warning(f'Property "{key}" not found in core properties. Skipping...')
 
     def get_metadata(self, print_result: bool = False):
         """

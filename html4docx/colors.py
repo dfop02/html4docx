@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 # Reference colors from W3
 # https://www.w3.org/wiki/CSS/Properties/color/keywords
 class Color(Enum):
