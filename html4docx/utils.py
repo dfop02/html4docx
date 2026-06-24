@@ -13,6 +13,7 @@ from docx.shared import Cm, Inches, Mm, Pt, RGBColor
 from html4docx import constants
 from html4docx.colors import Color
 
+logger = logging.getLogger(__name__)
 
 class ImageAlignment(Enum):
     LEFT = 1
@@ -43,7 +44,7 @@ def rgb_to_hex(rgb: str):
 
 
 def adapt_font_size(size: str):
-    if size in constants.FONT_SIZES_NAMED.keys():
+    if size in constants.FONT_SIZES_NAMED:
         return constants.FONT_SIZES_NAMED[size]
 
     return size
@@ -154,7 +155,7 @@ def unit_converter(unit_value: str, target_unit: str = "pt"):
     if unit in conversion_to_pt:
         value_in_pt = conversion_to_pt[unit]
     else:
-        print(f"Warning: unsupported unit {unit}, return None instead.")
+        logger.warning(f"Unsupported CSS unit '{unit}', returning None.")
         return None
 
     # Clamp the value to MAX_INDENT (in points)
@@ -216,7 +217,7 @@ def parse_color(original_color: str, return_hex: bool = False):
             color = re.sub(r"[^0-9,]", "", color)
             colors = [int(x) for x in color.split(",")]
             colors = colors[:3]  # remove opacity because it's not supported by python-docx
-            logging.warning("RGBA color is not supported by python-docx. Opacity will be ignored.")
+            logger.warning("RGBA color is not supported by python-docx. Opacity will be ignored.")
         elif "rgb" in color:
             color = re.sub(r"[^0-9,]", "", color)
             colors = [int(x) for x in color.split(",")]
@@ -230,10 +231,10 @@ def parse_color(original_color: str, return_hex: bool = False):
             colors = Color[color].value
         else:
             colors = [0, 0, 0]  # Default to black for unexpected colors
-            logging.warning(f"Could not parse color '{original_color}': Invalid color value. Fallback to black.")
+            logger.warning(f"Could not parse color '{original_color}': Invalid color value. Fallback to black.")
     except Exception:
         colors = [0, 0, 0]  # Default to black for errors
-        logging.warning(f"Could not parse color '{original_color}': Invalid color value. Fallback to black.")
+        logger.warning(f"Could not parse color '{original_color}': Invalid color value. Fallback to black.")
 
     return rgb_to_hex(colors) if return_hex else colors
 
@@ -373,10 +374,10 @@ def parse_text_decoration(text_decoration):
             result["color"] = token
         elif token in ("blink", "overline"):
             result["line_style"] = None
-            logging.warning("Blink or overline not supported.")
+            logger.warning("Blink or overline not supported.")
 
     if result["line_type"] == "line-through" and result["color"] is not None:
-        logging.warning(
+        logger.warning(
             f"Word does not support colored strike-through. Color '{result['color']}' will be ignored for line-through."
         )
     return result

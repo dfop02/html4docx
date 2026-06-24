@@ -27,7 +27,7 @@ class OutputTest(unittest.TestCase):
     @staticmethod
     def get_html_from_file(filename: str):
         file_path = Path(f"{test_dir}/assets/htmls") / Path(filename)
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             html = f.read()
         return html
 
@@ -215,7 +215,7 @@ class OutputTest(unittest.TestCase):
             assert isinstance(e, ValueError)
             assert "First argument needs to be a <class 'str'>" in str(e)
         else:
-            assert False, "Error not raised as expected"
+            raise AssertionError("Error not raised as expected")
 
         try:
             self.parser.add_html_to_document(self.text1, self.text1)
@@ -224,7 +224,7 @@ class OutputTest(unittest.TestCase):
             assert "Second argument" in str(e)
             assert "<class 'docx.document.Document'>" in str(e)
         else:
-            assert False, "Error not raised as expected"
+            raise AssertionError("Error not raised as expected")
 
     def test_add_html_to_cells_method(self):
         self.document.add_heading("Test: add_html_to_cells method", level=1)
@@ -492,7 +492,7 @@ and blank lines.
 
         document = self.parser.parse_html_string(font_size_html_example)
         font_sizes = [str(p.runs[0].font.size) for p in document.paragraphs]
-        assert ["76200", "355600", "914400", "431800", "None", "762000", "177800", "203200", "69850", "120650"] == font_sizes
+        assert font_sizes == ["76200", "355600", "914400", "431800", "None", "762000", "177800", "203200", "69850", "120650"]
 
     def test_font_size_paragraph(self):
         font_size_html_example = (
@@ -513,7 +513,7 @@ and blank lines.
 
         document = self.parser.parse_html_string(font_size_html_example)
         font_sizes = [str(p.runs[0].font.size) for p in document.paragraphs]
-        assert ["76200", "355600", "914400", "431800", "None", "762000", "177800", "203200", "69850", "120650"] == font_sizes
+        assert font_sizes == ["76200", "355600", "914400", "431800", "None", "762000", "177800", "203200", "69850", "120650"]
 
     def test_font_weight_paragraph(self):
         self.document.add_heading("Test: font weight on <p>", level=1)
@@ -1459,10 +1459,7 @@ and blank lines.
 
                 # Get the background color (shading) if it exists
                 shading = tcPr.find(qn("w:shd"))
-                if shading is not None:
-                    background_color = shading.get(qn("w:fill"), "").upper()  # Ensure uppercase and no #
-                else:
-                    background_color = "None"
+                background_color = shading.get(qn("w:fill"), "").upper() if shading is not None else "None"
 
                 # Get expected background color for the current cell
                 expected_color = expected_background_colors[cell_idx].upper()
@@ -1521,11 +1518,8 @@ and blank lines.
         # Validate dimensions for each cell
         for row_idx, row in enumerate(document.tables[0].rows):
             for cell_idx, cell in enumerate(row.cells):
-                # Get the table cell element and properties
-                docx_cell = document.tables[0].cell(row_idx, cell_idx)
-
                 # Convert width from EMUs to px
-                cell_width_px = round((docx_cell.width / 914400) * 96, 2)  # 1 EMU = 1/914400 inch, 1 inch = 96px
+                cell_width_px = round((cell.width / 914400) * 96, 2)  # 1 EMU = 1/914400 inch, 1 inch = 96px
                 # Get expected width and convert it to points using unit_converter
                 expected_width = expected_dimensions[row_idx][cell_idx]["width"]
                 expected_width_px = unit_converter(expected_width, "px")
@@ -2228,10 +2222,16 @@ and blank lines.
         )
 
     def test_custom_style_not_found_warning(self):
-        """Warn when tag_style_override names a style that does not exist in the document."""
+        """Warn when tag_style_override names a style that does not exist in the document.
+
+        Records must be emitted on the named 'html4docx.h4d' logger so that consumers
+        can silence or configure them via their logging config without affecting the
+        root logger (see GitHub issue #80).
+        """
         doc = Document()
         parser = HtmlToDocx(tag_style_overrides={"h1": "NonExistentStyle"})
-        with self.assertLogs(level=logging.WARNING) as cm:
+        # Use the named logger so the assertion is tied to 'html4docx.h4d', not the root logger.
+        with self.assertLogs("html4docx.h4d", level=logging.WARNING) as cm:
             parser.add_html_to_document("<h1>Heading</h1>", doc)
 
         self.assertIn(
@@ -2772,6 +2772,94 @@ and blank lines.
         self.assertEqual(len(table.columns), 1)
 
         self.assertEqual(table.cell(0, 0).text.strip(), "Test 1")
+
+    def test_logger_is_named_html4docx_h4d(self):
+        """The module-level logger must be named 'html4docx.h4d' so consumers can
+        target it in their logging config (e.g. Django LOGGING dict). Issue #80."""
+        import html4docx.h4d as h4d_module
+
+        self.assertEqual(h4d_module.logger.name, "html4docx.h4d")
+
+    def test_package_logger_has_null_handler(self):
+        """The package-level 'html4docx' logger carries a NullHandler so the library
+        is silent by default. Child loggers (html4docx.h4d, etc.) inherit it via
+        propagation — no NullHandler is needed on each module logger. Issue #80."""
+
+        package_logger = logging.getLogger("html4docx")
+        handler_types = [type(h) for h in package_logger.handlers]
+        self.assertIn(
+            logging.NullHandler,
+            handler_types,
+            "html4docx package logger should have a NullHandler attached",
+        )
+
+    def test_unrecognized_css_style_emits_debug_not_warning(self):
+        """CSS properties that html4docx does not support (e.g. 'letter-spacing', 'padding')
+        must be logged at DEBUG level, not WARNING. They are expected skips for any
+        real-world HTML and should not pollute production logs. Issue #80."""
+        doc = Document()
+        parser = HtmlToDocx()
+        # 'letter-spacing' and 'padding' are unrecognised paragraph styles -> DEBUG
+        # 'margin-left' is recognised -> no log at all
+        html = '<p style="letter-spacing: 2px; padding: 10px;">text</p>'
+
+        with self.assertLogs("html4docx.h4d", level=logging.DEBUG) as cm:
+            parser.add_html_to_document(html, doc)
+
+        # Must have produced at least one DEBUG record for each skipped property
+        debug_records = [r for r in cm.output if r.startswith("DEBUG")]
+        self.assertTrue(
+            any("letter-spacing" in r for r in debug_records),
+            f"Expected a DEBUG record mentioning 'letter-spacing'; got: {cm.output}",
+        )
+        self.assertTrue(
+            any("padding" in r for r in debug_records),
+            f"Expected a DEBUG record mentioning 'padding'; got: {cm.output}",
+        )
+        # Must not have produced any WARNING records for these routine skips
+        warning_records = [r for r in cm.output if r.startswith("WARNING")]
+        self.assertEqual(
+            warning_records,
+            [],
+            "Unknown CSS properties must not generate WARNING log records; "
+            f"got: {warning_records}",
+        )
+
+    def test_warning_logger_is_silenceable_via_named_logger(self):
+        """Consumers must be able to suppress html4docx warnings by configuring the
+        'html4docx' logger without touching the root logger. Issue #80."""
+
+        named_logger = logging.getLogger("html4docx.h4d")
+        original_level = named_logger.level
+        try:
+            # Raise the effective level to ERROR — warnings should now be invisible.
+            named_logger.setLevel(logging.ERROR)
+            doc = Document()
+            parser = HtmlToDocx(tag_style_overrides={"h1": "NonExistentStyle"})
+
+            # assertLogs would raise if no records are emitted at the requested level,
+            # so we use a manual handler to verify silence instead.
+            captured = []
+
+            class _Capture(logging.Handler):
+                def emit(self, record):
+                    captured.append(record)
+
+            handler = _Capture(level=logging.WARNING)
+            named_logger.addHandler(handler)
+            try:
+                parser.add_html_to_document("<h1>Heading</h1>", doc)
+            finally:
+                named_logger.removeHandler(handler)
+
+            self.assertEqual(
+                captured,
+                [],
+                "Setting html4docx.h4d to ERROR should suppress WARNING records; "
+                f"got: {[r.getMessage() for r in captured]}",
+            )
+        finally:
+            named_logger.setLevel(original_level)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,22 @@
 Release History
 ---------------
 
+1.1.6 (2026-xx-xx)
+++++++++++++++++++
+
+**Updates**
+
+- Improve code quality with more Ruff linters
+
+**Fixes**
+
+- Fixes `#80 <https://github.com/dfop02/html4docx/issues/80>`_: Update logging to use module-level logger. | `dfop02 <https://github.com/dfop02>`_
+
+**New Features**
+
+- None
+
+
 1.1.5 (2026-04-17)
 ++++++++++++++++++
 

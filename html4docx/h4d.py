@@ -2,10 +2,9 @@ import argparse
 import logging
 import os
 import re
-from functools import lru_cache
+from functools import cache
 from html.parser import HTMLParser
 from io import BytesIO
-from typing import Any, Dict
 
 import docx
 from bs4 import BeautifulSoup
@@ -19,6 +18,7 @@ from docx.shared import RGBColor
 from html4docx import constants, utils
 from html4docx.metadata import Metadata
 
+logger = logging.getLogger(__name__)
 
 class HtmlToDocx(HTMLParser):
     """
@@ -65,7 +65,7 @@ class HtmlToDocx(HTMLParser):
         self.pending_important_styles = None
 
     @property
-    def metadata(self) -> Dict[str, Any]:
+    def metadata(self) -> Metadata:
         if not hasattr(self, "_metadata"):
             self._metadata = Metadata(self.doc)
         return self._metadata
@@ -160,7 +160,7 @@ class HtmlToDocx(HTMLParser):
             return True
         except KeyError:
             # Style doesn't exist in document
-            print(f"Warning: Style '{style_name}' not found in document. Using default.")
+            logger.warning(f"Style '{style_name}' not found in document. Using default.")
             return False
 
     def apply_style_to_run(self, style_name):
@@ -178,12 +178,14 @@ class HtmlToDocx(HTMLParser):
             self.run.style = style_name
             return True
         except KeyError:
-            print(f"Warning: Character style '{style_name}' not found in document.")
+            logger.warning(f"Character style '{style_name}' not found in document.")
             return False
         except ValueError as e:
             if "need type CHARACTER" in str(e):
-                print(f"Warning: '{style_name}' is a paragraph style, not a character style.")
-                print("For inline elements like <code>, please create a character style in Word.")
+                logger.warning(
+                    f"'{style_name}' is a paragraph style, not a character style. "
+                    "For inline elements like <code>, please create a character style in Word."
+                )
             return False
 
     def parse_inline_styles(self, style_string):
@@ -310,14 +312,14 @@ class HtmlToDocx(HTMLParser):
 
         def parse_border_style(value: str) -> str:
             """Parses border styles to match word standart"""
-            return constants.BORDER_STYLES[value] if value in constants.BORDER_STYLES.keys() else "none"
+            return constants.BORDER_STYLES.get(value, "none")
 
         def check_unit_keywords(value: str) -> str:
             """Convert medium, thin, thick keywords to numeric values (px)"""
             lower_val = value.lower()
             return keywords.get(lower_val, value)
 
-        @lru_cache(maxsize=None)
+        @cache
         def border_unit_converter(unit_value: str):
             """Convert multiple units to pt that is used on Word table cell border"""
             unit_value = utils.remove_important_from_style(unit_value)
@@ -481,12 +483,14 @@ class HtmlToDocx(HTMLParser):
                 run.style = style
                 return
             except KeyError:
-                print(f"Warning: Character style '{style}' not found in document.")
+                logger.warning(f"Character style '{style}' not found in document.")
                 return
             except ValueError as e:
                 if "need type CHARACTER" in str(e):
-                    print(f"Warning: '{style}' is a paragraph style, not a character style.")
-                    print("For inline elements like <code>, please create a character style in Word.")
+                    logger.warning(
+                        f"'{style}' is a paragraph style, not a character style. "
+                        "For inline elements like <code>, please create a character style in Word."
+                    )
 
         if not style or not hasattr(run, "font"):
             return
@@ -528,7 +532,7 @@ class HtmlToDocx(HTMLParser):
                 param_name = style_name.replace("-", "_")
                 handler(run=run, **{param_name: style_value})
             else:
-                logging.warning(f"Warning: Unrecognized style '{style_name}', will be skipped.")
+                logger.debug(f"Unrecognized style '{style_name}', will be skipped.")
 
     def apply_styles_to_paragraph(self, paragraph, style, isCustom=False):
         if isCustom:
@@ -536,7 +540,7 @@ class HtmlToDocx(HTMLParser):
                 paragraph.style = style
                 return
             except KeyError:
-                print(f"Warning: Style '{style}' not found in document.  Using default.")
+                logger.warning(f"Style '{style}' not found in document. Using default.")
                 return
 
         if not style or not hasattr(paragraph, "paragraph_format"):
@@ -548,7 +552,7 @@ class HtmlToDocx(HTMLParser):
             elif style_name in constants.PARAGRAPH_RUN_STYLES:
                 handler = getattr(self, constants.PARAGRAPH_RUN_STYLES[style_name])
             else:
-                logging.warning(f"Warning: Unrecognized paragraph style '{style_name}', will be skipped.")
+                logger.debug(f"Unrecognized paragraph style '{style_name}', will be skipped.")
                 continue
 
             handler(paragraph=paragraph, style_name=style_name, value=style_value, all_styles=style)
@@ -596,10 +600,9 @@ class HtmlToDocx(HTMLParser):
         margin_left = all_styles.get("margin-left")
         margin_right = all_styles.get("margin-right")
 
-        if margin_left and margin_right:
-            if "auto" in margin_left and "auto" in margin_right:
-                paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                return
+        if margin_left and margin_right and "auto" in margin_left and "auto" in margin_right:
+            paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            return
 
         if style_name == "margin-left" and margin_left and "auto" not in margin_left:
             paragraph.paragraph_format.left_indent = utils.unit_converter(margin_left)
@@ -709,7 +712,7 @@ class HtmlToDocx(HTMLParser):
                     run.font.size = converted_size
 
         except (ValueError, TypeError) as e:
-            logging.warning(f"Warning: Could not parse font-size '{font_size}': {e}")
+            logger.warning(f"Warning: Could not parse font-size '{font_size}': {e}")
 
     def _apply_font_family_paragraph(self, **kwargs):
         paragraph = kwargs["paragraph"]
@@ -758,7 +761,7 @@ class HtmlToDocx(HTMLParser):
                     break
 
         except (AttributeError, Exception) as e:
-            logging.warning(f"Warning: Could not apply font-family '{font_family}': {e}")
+            logger.warning(f"Warning: Could not apply font-family '{font_family}': {e}")
 
     def _apply_color_paragraph(self, **kwargs):
         paragraph = kwargs["paragraph"]
@@ -785,7 +788,7 @@ class HtmlToDocx(HTMLParser):
             colors = utils.parse_color(color_value)
             run.font.color.rgb = RGBColor(*colors)
         except (ValueError, AttributeError) as e:
-            logging.warning(f"Could not apply color '{color_value}': {e}")
+            logger.warning(f"Could not apply color '{color_value}': {e}")
 
     def _apply_text_transform_paragraph(self, **kwargs):
         paragraph = kwargs["paragraph"]
@@ -823,10 +826,10 @@ class HtmlToDocx(HTMLParser):
                 # No transformation needed
                 pass
             elif text_transform in ("full-width", "math-auto", "full-size-kana"):
-                logging.warning(f"Warning: Unsupported text transform '{text_transform}'")
+                logger.warning(f"Warning: Unsupported text transform '{text_transform}'")
 
         except (AttributeError, Exception) as e:
-            logging.warning(f"Warning: Could not apply text-transform '{text_transform}': {e}")
+            logger.warning(f"Warning: Could not apply text-transform '{text_transform}': {e}")
 
     def _apply_text_decoration_paragraph(self, **kwargs):
         paragraph = kwargs["paragraph"]
@@ -920,7 +923,7 @@ class HtmlToDocx(HTMLParser):
             run.font.underline = False
             run.font.strike = False
         else:
-            logging.warning(f"Warning: Unsupported text decoration '{text_decoration_line}'")
+            logger.warning(f"Warning: Unsupported text decoration '{text_decoration_line}'")
 
     def _apply_text_decoration_style_to_run(self, **kwargs):
         run = kwargs["run"]
@@ -942,7 +945,7 @@ class HtmlToDocx(HTMLParser):
         try:
             run.font.underline = constants.FONT_UNDERLINE_STYLES[text_decoration_style]
         except KeyError:
-            logging.warning(f"Warning: Style not recognized'{text_decoration_style}', defaulting to single line.")
+            logger.warning(f"Warning: Style not recognized'{text_decoration_style}', defaulting to single line.")
 
         # Mark that we applied a text-decoration style by adding text-decoration-line to span_styles
         paragraph_id = id(self.paragraph)
@@ -973,7 +976,7 @@ class HtmlToDocx(HTMLParser):
         if background_color in ("inherit", "initial"):
             return
         elif background_color in ("transparent", "none"):
-            logging.warning(f"Warning: Unsupported background color '{background_color}'")
+            logger.warning(f"Warning: Unsupported background color '{background_color}'")
             return
 
         try:
@@ -993,7 +996,7 @@ class HtmlToDocx(HTMLParser):
                 )
 
         except Exception as e:
-            logging.warning(f"Could not apply background-color to paragraph: {e}")
+            logger.warning(f"Could not apply background-color to paragraph: {e}")
 
     def _apply_background_color_to_run(self, **kwargs):
         run = kwargs["run"]
@@ -1002,7 +1005,7 @@ class HtmlToDocx(HTMLParser):
             if background_color in ("inherit", "initial"):
                 return
             elif background_color in ("transparent", "none"):
-                logging.warning(f"Warning: Unsupported background color '{background_color}'")
+                logger.warning(f"Warning: Unsupported background color '{background_color}'")
                 return
 
             color_hex = utils.parse_color(background_color, return_hex=True)
@@ -1024,7 +1027,7 @@ class HtmlToDocx(HTMLParser):
             r_pr.append(shd)
 
         except Exception as e:
-            logging.warning(f"Could not apply background-color to run: {e}")
+            logger.warning(f"Could not apply background-color to run: {e}")
 
     def add_text_align_or_margin_to(self, obj, style):
         """Styles that can be applied on multiple objects"""
@@ -1082,7 +1085,7 @@ class HtmlToDocx(HTMLParser):
                 doc_cell.vertical_alignment = WD_ALIGN_VERTICAL.BOTTOM
 
         # Set borders
-        if any("border" in style for style in styles.keys()):
+        if any("border" in style for style in styles):
             self.set_cell_borders(doc_cell, styles)
 
         self.add_text_align_or_margin_to(doc_cell.paragraphs[0], styles)
@@ -1221,10 +1224,10 @@ class HtmlToDocx(HTMLParser):
 
         if not image:
             if utils.is_url(src):
-                self.doc.add_paragraph("<image: %s>" % src)
+                self.doc.add_paragraph(f"<image: {src}>")
             else:
                 # avoid exposing filepaths in document
-                self.doc.add_paragraph("<image: %s>" % utils.get_filename_from_url(src))
+                self.doc.add_paragraph(f"<image: {utils.get_filename_from_url(src)}>")
 
         """
         #adding style
@@ -1283,7 +1286,7 @@ class HtmlToDocx(HTMLParser):
 
                 cell_html = self.get_cell_html(col)
                 if col.name == "th":
-                    cell_html = "<b>%s</b>" % cell_html
+                    cell_html = f"<b>{cell_html}</b>"
 
                 # Get _Cell object from table based on cell_row and cell_col
                 docx_cell = self.table.cell(current_row, current_col)
@@ -1510,7 +1513,7 @@ class HtmlToDocx(HTMLParser):
         if custom_style:
             valid_style = utils.check_style_exists(self.doc, custom_style)
             if not valid_style:
-                logging.warning(f"Warning: Custom style '{custom_style}' not found in document, Ignoring style.")
+                logger.warning(f"Warning: Custom style '{custom_style}' not found in document, Ignoring style.")
                 custom_style = None
 
         if tag in ["p", "pre"]:
@@ -1618,7 +1621,7 @@ class HtmlToDocx(HTMLParser):
             self.pending_important_styles = None
 
         if self.skip:
-            if not tag == self.skip_tag:
+            if tag != self.skip_tag:
                 return
 
             if self.instances_to_skip > 0:
@@ -1698,7 +1701,7 @@ class HtmlToDocx(HTMLParser):
                     if tag == "div" and "style" in attrs:
                         div_style = utils.parse_dict_string(attrs["style"])
 
-                        for span_style_name in span_style.keys():
+                        for span_style_name in span_style:
                             if span_style_name in div_style:
                                 del div_style[span_style_name]
 
@@ -1863,7 +1866,7 @@ class HtmlToDocx(HTMLParser):
             self.doc.add_paragraph("")
 
     def parse_html_file(self, filename_html: str, filename_docx, encoding: str = "utf-8") -> None:
-        with open(filename_html, "r", encoding=encoding) as infile:
+        with open(filename_html, encoding=encoding) as infile:
             html = infile.read()
 
         self.set_initial_attrs()
