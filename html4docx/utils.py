@@ -21,6 +21,15 @@ class ImageAlignment(Enum):
     RIGHT = 3
 
 
+# The whitespace HTML collapses: ASCII space, tab, line feed, form feed and
+# carriage return. Deliberately narrower than ``\s``, which in Python also
+# matches the non-breaking space (U+00A0) and other Unicode spaces such as the
+# narrow no-break space (U+202F) or the figure space (U+2007). These are
+# meaningful characters, not layout whitespace, so they must not be collapsed.
+# https://infra.spec.whatwg.org/#ascii-whitespace
+HTML_WHITESPACE = r"[ \t\n\r\f]"
+
+
 def get_filename_from_url(url: str):
     return os.path.basename(urlparse(url).path)
 
@@ -310,19 +319,28 @@ def remove_whitespace(string, leading=False, trailing=False):
 
             >>> remove_whitespace("abc  \\n  ", trailing=True)
             'abc'
+
+        Non-breaking spaces (U+00A0, written ``&nbsp;`` in HTML) and other non-ASCII
+        spaces are not layout whitespace and are left untouched, so ``&nbsp;`` keeps
+        text on one line as intended:
+
+            >>> remove_whitespace("19\\u00a0000,00\\u00a0\\u20ac")
+            '19\\xa0000,00\\xa0€'
+            >>> remove_whitespace("abc \\n \\u00a0 def")
+            'abc \\xa0 def'
     """
     # Remove any leading new line characters along with any surrounding white space
     if leading:
-        string = re.sub(r"^\s*\n+\s*", "", string)
+        string = re.sub(rf"^{HTML_WHITESPACE}*\n+{HTML_WHITESPACE}*", "", string)
 
     # Remove any trailing new line characters along with any surrounding white space
     if trailing:
-        string = re.sub(r"\s*\n+\s*$", "", string)
+        string = re.sub(rf"{HTML_WHITESPACE}*\n+{HTML_WHITESPACE}*$", "", string)
 
     # Replace new line characters and absorb any surrounding space.
-    string = re.sub(r"\s*\n\s*", " ", string)
+    string = re.sub(rf"{HTML_WHITESPACE}*\n{HTML_WHITESPACE}*", " ", string)
     # TODO need some way to get rid of extra spaces in e.g. text <span>   </span>  text
-    return re.sub(r"\s+", " ", string)
+    return re.sub(rf"{HTML_WHITESPACE}+", " ", string)
 
 
 def delete_paragraph(paragraph):

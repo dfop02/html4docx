@@ -8,7 +8,7 @@ from docx import Document
 from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_UNDERLINE
 from docx.oxml.ns import qn
-from docx.shared import Pt, RGBColor
+from docx.shared import Cm, Pt, RGBColor
 
 from html4docx import HtmlToDocx
 from html4docx.colors import Color
@@ -272,6 +272,53 @@ and blank lines.
 </pre>
 """
         self.parser.add_html_to_document(html, self.document)
+
+    def test_non_breaking_spaces_are_preserved(self):
+        nbsp_html = (
+            "<p>Montant :&nbsp;19&nbsp;000,00&nbsp;&euro;</p>"
+            "<p>Literal:\xa0kept</p>"
+            "<p>Narrow:\u202fkept</p>"
+        )
+
+        document = self.parser.parse_html_string(nbsp_html)
+        paragraphs = document.paragraphs
+
+        assert paragraphs[0].text == "Montant :\xa019\xa0000,00\xa0€"
+        assert paragraphs[1].text == "Literal:\xa0kept"
+        assert paragraphs[2].text == "Narrow:\u202fkept"
+
+        # The separator reaching Word must be a real U+00A0
+        amount = paragraphs[0]._p.findall(".//" + qn("w:t"))[0].text
+        assert amount.count("\xa0") == 3
+        # The one ordinary space, after "Montant", must stay ordinary.
+        assert amount.count(" ") == 1
+
+        # -------- human validation --------
+        # The editor decides line breaks, so the bug is only visible where a break
+        # falls inside the amount.
+        self.document.add_heading("Test: non-breaking spaces", level=1)
+        self.document.add_paragraph(
+            "The two justified paragraphs below differ only in the separators inside the "
+            'amount. The first must not break between "19" and "000,00"; the second uses '
+            "ordinary spaces and is expected to break there."
+        )
+        for separator in ("&nbsp;", " "):
+            first_paragraph = len(self.document.paragraphs)
+            self.parser.add_html_to_document(
+                '<p style="text-align: justify;">'
+                f"mot mot mot Total 19{separator}000,00{separator}&euro; fin</p>",
+                self.document,
+            )
+            for paragraph in self.document.paragraphs[first_paragraph:]:
+                # 10.25-11.25cm all break inside the amount; midpoint chosen for margin.
+                paragraph.paragraph_format.right_indent = Cm(10.75)
+
+    def test_ordinary_whitespace_is_still_collapsed(self):
+        whitespace_html = "<p>collapse   these \n\n  spaces\t\tplease</p>"
+
+        document = self.parser.parse_html_string(whitespace_html)
+
+        assert document.paragraphs[0].text == "collapse these spaces please"
 
     def test_handling_hr(self):
         hr_html_example = "<p>paragraph</p><hr><p>paragraph</p>"
