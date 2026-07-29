@@ -3,6 +3,22 @@
 Release History
 ---------------
 
+1.1.7 (unreleased)
+++++++++++++++++++
+
+**Updates**
+
+- None
+
+**Fixes**
+
+- Non-breaking spaces (``&nbsp;``, U+00A0) and other non-ASCII spaces are no longer collapsed into ordinary spaces, so text kept deliberately on one line stays unbroken. | `Lynuxen <https://github.com/Lynuxen>`_
+
+**New Features**
+
+- None
+
+
 1.1.6 (2026-06-24)
 ++++++++++++++++++
 

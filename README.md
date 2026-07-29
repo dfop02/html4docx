@@ -333,6 +333,7 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Fixed highlighting a single word | [Lynuxen](https://github.com/Lynuxen)
 - Fix color parsing failing due to invalid colors, falling back to black. | [dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/53)
 - Fix logging noise: replace root-logger calls with named module loggers so consumers can silence or configure html4docx output independently. | [dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/80)
+- Fixed non-breaking spaces (`&nbsp;`) being collapsed into ordinary spaces, which let Word break lines inside amounts like `1 000,00 €` | [Lynuxen](https://github.com/Lynuxen)
 
 **New Features**
 - Add Witdh/Height style to images | [maifeeulasad](https://github.com/maifeeulasad) from [PR](https://github.com/pqzx/html2docx/pull/29)
