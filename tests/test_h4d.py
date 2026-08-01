@@ -227,10 +227,12 @@ class OutputTest(unittest.TestCase):
         self.parser.add_html_to_document(self.table2_html, self.document)
 
     def test_add_html_skip_tables(self):
-        # broken until feature readded
-        self.document.add_heading("Test: add html with tables, but skip adding tables", level=1)
+        """When tables option is False, no tables should be added to the document."""
+        before_count = len(self.document.tables)
         self.parser.options["tables"] = False
         self.parser.add_html_to_document(self.table_html, self.document)
+        after_count = len(self.document.tables)
+        self.assertEqual(before_count, after_count, "Tables should be skipped when options['tables'] is False")
 
     def test_wrong_argument_type_raises_error(self):
         try:
@@ -641,6 +643,7 @@ and blank lines.
         self.assertEqual(font_styles, expected_styles)
 
     def test_font_family_paragraph(self):
+        """font-family inline styles should be reflected in the run's font name."""
         self.document.add_heading("Test: font family on <p>", level=1)
         font_family_html_example = (
             '<p style="font-family: Arial, sans-serif">Arial font text</p>'
@@ -654,9 +657,27 @@ and blank lines.
             '<p style="font-family: inherit">Inherit font text</p>'
         )
 
-        self.parser.add_html_to_document(font_family_html_example, self.document)
+        doc = Document()
+        parser = HtmlToDocx()
+        parser.add_html_to_document(font_family_html_example, doc)
+
+        paras = doc.paragraphs
+        self.assertGreaterEqual(len(paras), 8)
+        # First paragraph: Arial
+        if paras[0].runs:
+            self.assertEqual(paras[0].runs[0].font.name, "Arial")
+        # Times New Roman (4th paragraph, index 3)
+        if paras[3].runs:
+            self.assertEqual(paras[3].runs[0].font.name, "Times New Roman")
+        # Generic serif → Times New Roman (fallback)
+        if paras[4].runs:
+            self.assertEqual(paras[4].runs[0].font.name, "Times New Roman")
+        # Generic monospace → Courier New (fallback)
+        if paras[6].runs:
+            self.assertEqual(paras[6].runs[0].font.name, "Courier New")
 
     def test_text_transform_paragraph(self):
+        """text-transform inline styles should transform the run text correctly."""
         self.document.add_heading("Test: text-transform on <p>", level=1)
         text_transform_html_example = (
             '<p style="text-transform: uppercase">uppercase text</p>'
@@ -666,7 +687,24 @@ and blank lines.
             "<p>default text</p>"
         )
 
-        self.parser.add_html_to_document(text_transform_html_example, self.document)
+        doc = Document()
+        parser = HtmlToDocx()
+        parser.add_html_to_document(text_transform_html_example, doc)
+
+        paras = doc.paragraphs
+        self.assertGreaterEqual(len(paras), 5)
+        # uppercase: text should be uppercased in the run
+        if paras[0].runs:
+            self.assertEqual(paras[0].runs[0].text, "UPPERCASE TEXT")
+        # lowercase
+        if paras[1].runs:
+            self.assertEqual(paras[1].runs[0].text, "lowercase text")
+        # capitalize
+        if paras[2].runs:
+            self.assertEqual(paras[2].runs[0].text, "Capitalize Each Word")
+        # none → unchanged
+        if paras[3].runs:
+            self.assertEqual(paras[3].runs[0].text, "normal text")
 
     def test_text_decoration_span(self):
         self.document.add_heading("Test: text-decoration on <span>", level=1)
@@ -2428,24 +2466,6 @@ and blank lines.
         run = doc.paragraphs[0].runs[0]
         self.assertTrue(run.font.italic)
 
-    # def test_textdecoration(self):
-    #     """Test text-decoration"""
-    #     # 16px = 12pt
-    #     html = '<p><span style="text-decoration: underline wavy blue 16px">An underlined, blue wavy text.</span></p>'
-    #     self.document.add_heading("Test: Test Text-Decoration", level=1)
-
-    #     doc = Document()
-    #     parser = HtmlToDocx()
-    #     parser.add_html_to_document(html, self.document)
-    #     parser.add_html_to_document(html, doc)
-
-    #     run = doc.paragraphs[0].runs[0]
-    #     blue_font = run.font.color.rgb == Color["blue"].value
-    #     is_underlined = True if run.font.underline is not None else False
-    #     is_underline_wavy = True if run.font.underline == WD_UNDERLINE.WAVY else False
-    #     result_list = [blue_font, is_underlined, is_underline_wavy]
-    #     self.assertTrue(all(result_list))
-
     def test_fontweight_none(self):
         """Test None as font-weight Value"""
         html = '<p><span style="font-weight: None">Regular text</span></p>'
@@ -2472,25 +2492,6 @@ and blank lines.
         run = doc.paragraphs[0].runs[0]
         self.assertTrue(run.font.italic is not True)
 
-    # def test_textdecoration_none(self):
-    #     """Test text-decoration as None"""
-    #     # 16px = 12pt
-    #     html = '<p><span style="text-decoration: none;">An regular boring text with no decorations...</span></p>'
-    #     self.document.add_heading("Test: Test Text-Decoration None", level=1)
-
-    #     doc = Document()
-    #     parser = HtmlToDocx()
-    #     parser.add_html_to_document(html, self.document)
-    #     parser.add_html_to_document(html, doc)
-
-    #     run = doc.paragraphs[0].runs[0]
-    #     black_font = run.font.color.rgb == Color["black"].value
-    #     is_not_underlined = True if run.font.underline is None else True
-    #     is_not_underline_wavy = True if run.font.underline is None else False
-    #     results = [black_font, is_not_underlined, is_not_underline_wavy]
-    #     print(results)
-    #     self.assertTrue(all(results))
-
     def test_paragraph_inline_styles(self):
         """Test inline styles on paragraph elements"""
         html = '<p style="color: blue; font-size: 14pt">Blue 14pt paragraph</p>'
@@ -2502,7 +2503,7 @@ and blank lines.
         parser.add_html_to_document(html, doc)
 
         run = doc.paragraphs[0].runs[0]
-        self.assertIsNotNone(run.font.color.rgb)
+        self.assertEqual(run.font.color.rgb, RGBColor(0, 0, 255))
         self.assertEqual(run.font.size, Pt(14))
 
     def test_important_overrides_normal(self):
@@ -2563,7 +2564,7 @@ and blank lines.
         self.assertEqual(run.font.color.rgb, Color["red"].value)
 
     def test_important_on_paragraph(self):
-        """Test !important on paragraph inline style"""
+        """Test !important on paragraph inline style applies the correct color."""
         self.document.add_heading("Test: Test !important override for paragraph", level=1)
         html = '<p style="color: blue !important">Blue important</p>'
 
@@ -2573,7 +2574,7 @@ and blank lines.
         parser.add_html_to_document(html, doc)
 
         run = doc.paragraphs[0].runs[0]
-        self.assertIsNotNone(run.font.color.rgb)
+        self.assertEqual(run.font.color.rgb, RGBColor(0, 0, 255))
 
     def test_multi_paragraph_code_block(self):
         """Test that all paragraphs in code block maintain style"""
@@ -2640,7 +2641,7 @@ and blank lines.
         self.assertEqual(doc.paragraphs[1].style.name, "Heading 3")
 
     def test_existing_span_styles_work(self):
-        """Test that existing <span style="..."> still works"""
+        """Test that existing <span style="..."> still works and applies the correct color."""
         self.document.add_heading("Test: Test Existing span styles", level=1)
         html = '<p><span style="color: #FF0000">Red text</span></p>'
 
@@ -2650,7 +2651,7 @@ and blank lines.
         parser.add_html_to_document(html, doc)
 
         run = doc.paragraphs[0].runs[0]
-        self.assertIsNotNone(run.font.color.rgb)
+        self.assertEqual(run.font.color.rgb, RGBColor(255, 0, 0))
 
     def test_bold_italic_tags_work(self):
         """Test that <b>, <i>, <u> tags still work"""
@@ -2794,11 +2795,14 @@ and blank lines.
         parser.add_html_to_document(html_css3, self.document)
 
     def test_invalid_color_fallback_to_black(self):
-        """Test with invalid color fallback to black"""
+        """
+        RGBA with valid RGB values: opacity is ignored and the RGB color is kept (not black).
+        All other unparseable color values fall back to black.
+        """
         self.document.add_heading("Test: Test invalid color fallback to black", level=1)
 
         html = """
-        <p style="color: rgba(255, 0, 0, 0.5)">Test Unsupported RGBA Color with opacity Fallback to Black</p>
+        <p style="color: rgba(255, 0, 0, 0.5)">Test RGBA Color - Opacity Ignored, RGB Color Kept (Red)</p>
         <p style="color: rgba(A, B, C, D, E)">Test Invalid RGBA Color with letters Fallback to Black</p>
         <p style="color: rgb(255, 0, 0, 0)">Test Invalid RGB Color with extra value Fallback to Black</p>
         <p style="color: invalidcolorname">Test Invalid Color Name Fallback to Black</p>
@@ -2811,7 +2815,9 @@ and blank lines.
         with self.assertLogs(level="WARNING") as log:
             parser.add_html_to_document(html, doc)
 
+        # rgba(255, 0, 0, 0.5): opacity is dropped, RGB (red) is preserved
         self.assertEqual(doc.paragraphs[1].runs[0].font.color.rgb, RGBColor(*Color["red"].value))
+        # All remaining invalid values fall back to black
         for paragraph in doc.paragraphs[2:]:
             self.assertEqual(paragraph.runs[0].font.color.rgb, RGBColor(*Color["black"].value))
 
@@ -3088,12 +3094,9 @@ and blank lines.
         # by verifying that elements with classes have different styling than base tags
         highlight_paras = [p for p in paragraphs if "highlight" in p.text.lower() and p.runs]
         if highlight_paras:
-            # At least one paragraph with highlight class should have bold
+            # At least one paragraph with highlight class should have bold (CSS .highlight { font-weight: bold })
             has_bold = any(p.runs[0].font.bold for p in highlight_paras if p.runs)
-            # This verifies CSS class styles are being applied
-            self.assertTrue(
-                has_bold or len(highlight_paras) > 0, "CSS class styles should be applied to elements with classes"
-            )
+            self.assertTrue(has_bold, "CSS class styles should be applied to elements with classes")
 
     def test_local_css_with_selective_parsing(self):
         """

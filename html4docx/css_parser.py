@@ -2,15 +2,15 @@
 CSS Parser for HTML4DOCX
 
 This module provides functionality to parse CSS from <style> tags and external CSS files.
-It stores CSS rules by selector type (tag, class, id) and provides methods to retrieve
-applicable styles for HTML elements.
+It stores CSS rules by selector type (tag, class, id, compound) and provides methods to
+retrieve applicable styles for HTML elements.
 
 This module is designed to be reusable for both <style> tags and external CSS files
-loaded via <link> tags (future feature).
+loaded via <link> tags.
 """
 
 import re
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class CSSParser:
@@ -21,23 +21,27 @@ class CSSParser:
     - Tag selectors (e.g., 'p', 'h1', 'div')
     - Class selectors (e.g., '.my-class')
     - ID selectors (e.g., '#my-id')
+    - Compound selectors (e.g., 'p.my-class', 'div#header', '.a.b')
 
     Supports basic CSS parsing including:
     - Simple selectors (tag, class, id)
+    - Compound selectors (tag+class, tag+id, multi-class)
     - Multiple selectors separated by commas
     - Style declarations with properties and values
     - !important flags
+    - At-rule skipping (@media, @keyframes, @import, etc.)
     """
 
     def __init__(self):
         """Initialize the CSS parser with empty rule storage."""
-        # Store rules by selector type
-        self.tag_rules: Dict[str, Dict[str, str]] = {}  # tag -> {property: value}
+        # Store rules by selector type (simple selectors)
+        self.tag_rules: Dict[str, Dict[str, str]] = {}    # tag -> {property: value}
         self.class_rules: Dict[str, Dict[str, str]] = {}  # class -> {property: value}
-        self.id_rules: Dict[str, Dict[str, str]] = {}  # id -> {property: value}
+        self.id_rules: Dict[str, Dict[str, str]] = {}     # id -> {property: value}
 
-        # Store all rules with their specificity for proper cascade
-        self._all_rules: List[Tuple[int, str, Dict[str, str]]] = []  # (specificity, selector, styles)
+        # Store compound rules (tag+class, multi-class, tag+id, etc.)
+        # Each entry: (specificity, tag_or_None, [classes], id_or_None, styles)
+        self._compound_rules: List[Tuple[int, Optional[str], List[str], Optional[str], Dict[str, str]]] = []
 
         # Track which elements are used in HTML (for selective CSS loading)
         self._used_tags: set = set()
@@ -73,8 +77,14 @@ class CSSParser:
         # Remove comments
         css_content = self._remove_comments(css_content)
 
+        # Remove standalone @-rules without blocks first (e.g. @import, @charset).
+        # Must be done BEFORE block at-rule removal to avoid [^{;]* crossing semicolons.
+        css_content = re.sub(r'@[\w-]+[^;{]+;', '', css_content)
+        # Remove @-rule blocks (e.g. @media, @keyframes, @supports).
+        # [^{;]* stops at semicolons so we don't accidentally consume subsequent rules.
+        css_content = re.sub(r'@[\w-]+[^{;]*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', '', css_content, flags=re.DOTALL)
+
         # Split by rules (look for selectors followed by { ... })
-        # Pattern matches: selector { declarations }
         rule_pattern = re.compile(
             r'([^{]+)\{([^}]+)\}',
             re.MULTILINE | re.DOTALL
@@ -85,6 +95,10 @@ class CSSParser:
             declarations_str = match.group(2).strip()
 
             if not selectors_str or not declarations_str:
+                continue
+
+            # Skip leftover at-rule artifacts
+            if selectors_str.lstrip().startswith('@'):
                 continue
 
             # Parse declarations into dict
@@ -106,15 +120,11 @@ class CSSParser:
                 # Calculate specificity for cascade order
                 specificity = self._calculate_specificity(selector)
 
-                # Store rule with specificity
-                self._all_rules.append((specificity, selector, styles))
-
-                # Store by selector type for quick lookup
-                self._store_rule(selector, styles)
+                # Store by selector type for lookup
+                self._store_rule(selector, styles, specificity)
 
     def _remove_comments(self, css_content: str) -> str:
         """Remove CSS comments from content."""
-        # Remove /* ... */ comments
         return re.sub(r'/\*.*?\*/', '', css_content, flags=re.DOTALL)
 
     def _parse_declarations(self, declarations: str) -> Dict[str, str]:
@@ -129,13 +139,11 @@ class CSSParser:
         """
         styles = {}
 
-        # Split by semicolon and parse each declaration
         for declaration in declarations.split(';'):
             declaration = declaration.strip()
             if not declaration or ':' not in declaration:
                 continue
 
-            # Split by first colon only (values may contain colons)
             parts = declaration.split(':', 1)
             if len(parts) != 2:
                 continue
@@ -165,58 +173,142 @@ class CSSParser:
         """
         specificity = 0
 
-        # Count IDs
         id_count = len(re.findall(r'#[\w-]+', selector))
         specificity += id_count * 100
 
-        # Count classes and attributes
         class_count = len(re.findall(r'\.[\w-]+', selector))
         attr_count = len(re.findall(r'\[[\w-]+\]', selector))
         specificity += (class_count + attr_count) * 10
 
-        # Count tags
         tag_count = len(re.findall(r'^[\w-]+|(?<=\s)[\w-]+(?=\s|\.|#|\[|$)', selector))
         specificity += tag_count
 
         return specificity
 
-    def _store_rule(self, selector: str, styles: Dict[str, str]) -> None:
+    def _parse_compound_selector(self, selector: str) -> Tuple[Optional[str], List[str], Optional[str], bool]:
         """
-        Store CSS rule by selector type.
+        Parse a CSS selector into its component parts.
+
+        Returns (tag, classes, id, is_contextual) where:
+        - tag: the tag name, or None if no tag restriction
+        - classes: list of required class names
+        - id: the required ID, or None
+        - is_contextual: True if the selector uses combinators (space, >, +, ~)
+          which require contextual matching this parser doesn't support
+
+        Examples:
+            'p'           -> ('p', [], None, False)
+            '.cls'        -> (None, ['cls'], None, False)
+            '#id'         -> (None, [], 'id', False)
+            'p.cls'       -> ('p', ['cls'], None, False)
+            'p#id'        -> ('p', [], 'id', False)
+            'div.a.b'     -> ('div', ['a', 'b'], None, False)
+            '.a.b'        -> (None, ['a', 'b'], None, False)
+            'div > p'     -> (None, [], None, True)   # contextual
+        """
+        cleaned = selector.strip()
+
+        # Remove pseudo-classes/elements (including function-style like :nth-child(2n+1))
+        cleaned = re.sub(r'::?[\w-]+(?:\([^)]*\))?', '', cleaned).strip()
+
+        # Check for combinators that indicate contextual selectors
+        if re.search(r'[\s>+~]', cleaned):
+            return None, [], None, True
+
+        # Extract optional leading tag name
+        tag_match = re.match(r'^([a-zA-Z][\w-]*)', cleaned)
+        tag = tag_match.group(1) if tag_match else None
+
+        # Extract all classes
+        classes = re.findall(r'\.([\w-]+)', cleaned)
+
+        # Extract first id (multiple IDs are invalid CSS; take first)
+        id_matches = re.findall(r'#([\w-]+)', cleaned)
+        element_id = id_matches[0] if id_matches else None
+
+        return tag, classes, element_id, False
+
+    def _store_rule(self, selector: str, styles: Dict[str, str], specificity: int = 0) -> None:
+        """
+        Store a CSS rule in the appropriate bucket based on selector type.
+
+        Simple selectors (pure tag, pure class, pure id) go into fast-lookup dicts.
+        Compound selectors (tag+class, tag+id, multi-class, etc.) go into
+        _compound_rules for matching at retrieval time.
+        Contextual selectors (descendant, child, sibling) fall back to storing
+        only the first simple part as a best-effort approximation.
 
         Args:
             selector (str): CSS selector
             styles (Dict[str, str]): CSS properties and values
+            specificity (int): Pre-computed specificity (0 means compute on demand)
         """
         selector = selector.strip()
 
-        # Handle ID selector (#id)
-        if selector.startswith('#'):
-            id_name = selector[1:].strip()
-            if id_name:
-                if id_name not in self.id_rules:
-                    self.id_rules[id_name] = {}
-                self.id_rules[id_name].update(styles)
+        tag, classes, element_id, is_contextual = self._parse_compound_selector(selector)
 
-        # Handle class selector (.class)
-        elif selector.startswith('.'):
-            class_name = selector[1:].strip()
-            if class_name:
-                if class_name not in self.class_rules:
-                    self.class_rules[class_name] = {}
-                self.class_rules[class_name].update(styles)
+        if is_contextual:
+            # Contextual selector: best-effort — extract and store the first simple part
+            # (e.g. 'div > p' stores under 'div'; context relationship is ignored)
+            first_part = re.split(r'\s*[\s>+~]\s*', selector.strip())[0].strip()
+            if first_part and first_part != selector:
+                self._store_rule(first_part, styles, specificity)
+            return
 
-        # Handle tag selector (tag)
+        is_pure_tag = bool(tag) and not classes and not element_id
+        is_pure_class = not tag and len(classes) == 1 and not element_id
+        is_pure_id = not tag and not classes and bool(element_id)
+
+        if is_pure_tag:
+            if tag not in self.tag_rules:
+                self.tag_rules[tag] = {}
+            self.tag_rules[tag].update(styles)
+
+        elif is_pure_class:
+            class_name = classes[0]
+            if class_name not in self.class_rules:
+                self.class_rules[class_name] = {}
+            self.class_rules[class_name].update(styles)
+
+        elif is_pure_id:
+            if element_id not in self.id_rules:
+                self.id_rules[element_id] = {}
+            self.id_rules[element_id].update(styles)
+
         else:
-            # Remove any pseudo-classes or pseudo-elements
-            tag_name = re.sub(r':[\w-]+', '', selector).strip()
-            # Remove any combinators and keep only the tag
-            tag_name = re.sub(r'[\s>+~].*', '', tag_name).strip()
+            # Compound selector: store for matching at retrieval time
+            spec = specificity if specificity else self._calculate_specificity(selector)
+            self._compound_rules.append((spec, tag, classes, element_id, dict(styles)))
 
-            if tag_name:
-                if tag_name not in self.tag_rules:
-                    self.tag_rules[tag_name] = {}
-                self.tag_rules[tag_name].update(styles)
+    def _match_compound_rules(
+        self,
+        tag: str,
+        attrs: Dict[str, str]
+    ) -> List[Tuple[int, Dict[str, str]]]:
+        """
+        Return a list of (specificity, styles) for compound rules that match this element.
+
+        A compound rule matches if:
+        - Its tag restriction (if any) equals the element's tag
+        - All its required classes are present in the element's class list
+        - Its id restriction (if any) equals the element's id
+        """
+        if not self._compound_rules:
+            return []
+
+        element_classes = set(attrs.get('class', '').split()) if attrs else set()
+        element_id = attrs.get('id', '') if attrs else ''
+
+        matches = []
+        for (specificity, rule_tag, rule_classes, rule_id, rule_styles) in self._compound_rules:
+            if rule_tag and rule_tag != tag:
+                continue
+            if rule_classes and not all(c in element_classes for c in rule_classes):
+                continue
+            if rule_id and rule_id != element_id:
+                continue
+            matches.append((specificity, rule_styles))
+        return matches
 
     def get_styles_for_element(
         self,
@@ -227,27 +319,20 @@ class CSSParser:
         """
         Get all applicable CSS styles for an HTML element.
 
-        Combines styles from:
+        Combines styles from (in order of increasing priority):
         1. Tag selectors
-        2. Class selectors (from class attribute)
-        3. ID selectors (from id attribute)
-        4. Inline styles (highest priority)
-
-        Styles are merged in order of specificity, with inline styles taking precedence.
+        2. Compound selectors (tag+class, multi-class, etc.)
+        3. Class selectors (from class attribute)
+        4. ID selectors (from id attribute)
+        5. Inline styles (highest priority)
 
         Args:
             tag (str): HTML tag name (e.g., 'p', 'div', 'span')
-            attrs (Dict[str, str], optional): HTML attributes (e.g., {'class': 'my-class', 'id': 'my-id'})
+            attrs (Dict[str, str], optional): HTML attributes
             inline_styles (Dict[str, str], optional): Inline styles from style attribute
 
         Returns:
             Dict[str, str]: Combined CSS styles dictionary
-
-        Example:
-            parser = CSSParser()
-            parser.parse_css("p { color: red; } .highlight { font-weight: bold; }")
-            styles = parser.get_styles_for_element('p', {'class': 'highlight'})
-            # Returns: {'color': 'red', 'font-weight': 'bold'}
         """
         combined_styles = {}
 
@@ -258,20 +343,23 @@ class CSSParser:
         if tag in self.tag_rules:
             combined_styles.update(self.tag_rules[tag])
 
-        # 2. Apply class styles
+        # 2. Apply compound rules (specificity-ordered, then class/id on top)
+        for _, rule_styles in sorted(self._match_compound_rules(tag, attrs), key=lambda x: x[0]):
+            combined_styles.update(rule_styles)
+
+        # 3. Apply class styles
         if 'class' in attrs:
-            classes = attrs['class'].split()
-            for class_name in classes:
+            for class_name in attrs['class'].split():
                 if class_name in self.class_rules:
                     combined_styles.update(self.class_rules[class_name])
 
-        # 3. Apply ID styles
+        # 4. Apply ID styles
         if 'id' in attrs:
             element_id = attrs['id']
             if element_id in self.id_rules:
                 combined_styles.update(self.id_rules[element_id])
 
-        # 4. Apply inline styles (highest priority, except !important)
+        # 5. Apply inline styles (highest priority)
         if inline_styles:
             combined_styles.update(inline_styles)
 
@@ -301,18 +389,14 @@ class CSSParser:
         if not attrs:
             attrs = {}
 
-        # Generate unique element_id for this element instance
         self._inline_rule_counter += 1
         element_id = f"__inline_{self._inline_rule_counter}"
 
-        # Store inline styles with very high specificity (1000+)
-        # This ensures inline styles override CSS rules
         self._inline_rules[(tag, element_id)] = (
             inline_normal or {},
             inline_important or {}
         )
 
-        # Also store in attrs for retrieval
         if 'data-inline-id' not in attrs:
             attrs['data-inline-id'] = element_id
 
@@ -322,8 +406,7 @@ class CSSParser:
         """Remove inline styles for a specific element."""
         if not element_id:
             return
-        # Find and remove the rule
-        keys_to_remove = [k for k in self._inline_rules.keys() if k[1] == element_id]
+        keys_to_remove = [k for k in self._inline_rules if k[1] == element_id]
         for key in keys_to_remove:
             self._inline_rules.pop(key, None)
 
@@ -339,7 +422,14 @@ class CSSParser:
         - CSS rules from files and <style> tags
         - Inline styles (stored as temporary rules with high specificity)
 
-        Returns normal styles and important styles separately, following CSS cascade rules.
+        Applies the full CSS cascade:
+        1. Tag rules (lowest specificity)
+        2. Compound rules (tag+class, multi-class, etc.)
+        3. Class rules (medium specificity)
+        4. ID rules (high specificity)
+        5. Inline styles (highest specificity — always wins)
+
+        Returns normal styles and important styles separately.
 
         Args:
             tag (str): HTML tag name
@@ -354,46 +444,45 @@ class CSSParser:
         if not attrs:
             attrs = {}
 
-        # Sort all rules by specificity (ascending) to apply in correct order
+        # Build list of (specificity, styles_dict) for all applicable rules
         applicable_rules = []
 
-        # 1. Collect tag rules (lowest specificity)
+        # 1. Tag rules (lowest specificity)
         if tag in self.tag_rules:
             specificity = self._calculate_specificity(tag)
             applicable_rules.append((specificity, self.tag_rules[tag]))
 
-        # 2. Collect class rules (medium specificity)
+        # 2. Compound rules
+        applicable_rules.extend(self._match_compound_rules(tag, attrs))
+
+        # 3. Class rules
         if 'class' in attrs:
-            classes = attrs['class'].split()
-            for class_name in classes:
+            for class_name in attrs['class'].split():
                 if class_name in self.class_rules:
                     specificity = self._calculate_specificity(f'.{class_name}')
                     applicable_rules.append((specificity, self.class_rules[class_name]))
 
-        # 3. Collect ID rules (high specificity)
+        # 4. ID rules (high specificity)
         if 'id' in attrs:
             element_id = attrs['id']
             if element_id in self.id_rules:
                 specificity = self._calculate_specificity(f'#{element_id}')
                 applicable_rules.append((specificity, self.id_rules[element_id]))
 
-        # 4. Apply CSS rules in order of specificity
-        for specificity, styles in sorted(applicable_rules, key=lambda x: x[0]):
+        # Apply rules in ascending specificity order (higher specificity wins)
+        for _specificity, styles in sorted(applicable_rules, key=lambda x: x[0]):
             for prop, value in styles.items():
                 if '!important' in value.lower():
-                    clean_value = value.replace('!important', '').strip()
+                    clean_value = re.sub(r'!important', '', value, flags=re.IGNORECASE).strip()
                     important_styles[prop] = clean_value
                 else:
                     normal_styles[prop] = value
 
-        # 5. Apply inline styles (highest specificity - 1000+)
-        # Check if this element has inline styles stored
+        # 5. Apply inline styles (highest specificity — overrides everything)
         inline_id = attrs.get('data-inline-id')
         if inline_id:
-            # Try to find inline rules for this element
             for (rule_tag, rule_id), (inline_normal, inline_important) in self._inline_rules.items():
                 if rule_id == inline_id and rule_tag == tag:
-                    # Inline styles override CSS rules
                     if inline_normal:
                         normal_styles.update(inline_normal)
                     if inline_important:
@@ -407,35 +496,40 @@ class CSSParser:
         self.tag_rules.clear()
         self.class_rules.clear()
         self.id_rules.clear()
-        self._all_rules.clear()
+        self._compound_rules.clear()
         self._inline_rules.clear()
         self._inline_rule_counter = 0
         self.clear_used_elements()
 
     def has_rules(self) -> bool:
         """Check if parser has any CSS rules stored."""
-        return bool(self.tag_rules or self.class_rules or self.id_rules)
+        return bool(self.tag_rules or self.class_rules or self.id_rules or self._compound_rules)
 
     def has_rules_for_element(self, tag: str, attrs: Optional[Dict[str, str]] = None) -> bool:
         """Check if parser has any CSS rules stored for an element."""
-        if not self.has_rules() or not attrs:
+        if not self.has_rules():
             return False
 
+        # Tag rules exist for this element?
         if tag in self.tag_rules:
             return True
 
+        # No attrs to check further
+        if not attrs:
+            return False
+
+        # Class rules?
         if 'class' in attrs:
-            classes = attrs['class'].split()
-            for class_name in classes:
+            for class_name in attrs['class'].split():
                 if class_name in self.class_rules:
                     return True
 
-        if 'id' in attrs:
-            element_id = attrs['id']
-            if element_id in self.id_rules:
-                return True
+        # ID rules?
+        if 'id' in attrs and attrs['id'] in self.id_rules:
+            return True
 
-        return False
+        # Compound rules?
+        return bool(self._match_compound_rules(tag, attrs))
 
     def mark_element_used(self, tag: str, attrs: Optional[Dict[str, Any]] = None) -> None:
         """
@@ -448,9 +542,11 @@ class CSSParser:
         if not attrs:
             return
 
-        # Handle class attribute (BeautifulSoup returns a list)
+        # Handle class attribute — BeautifulSoup returns a list, regex fallback returns a string
         classes = attrs.get('class', None)
         if classes:
+            if isinstance(classes, str):
+                classes = classes.split()
             for class_name in classes:
                 if class_name:
                     self._used_classes.add(class_name)
@@ -464,8 +560,6 @@ class CSSParser:
         """
         Check if a CSS selector is relevant based on used elements.
 
-        Uses precise matching to avoid false positives (e.g., "embed" matching "embed-responsive").
-
         Args:
             selector (str): CSS selector to check
 
@@ -477,22 +571,21 @@ class CSSParser:
 
         selector = selector.strip()
 
-        # Check for ID selector (#id) - exact match
+        # Check for ID selector (#id) — exact match
         id_matches = re.findall(r'#([\w-]+)', selector)
         if id_matches:
             for id_match in id_matches:
                 if id_match in self._used_ids:
                     return True
 
-        # Check for class selector (.class) - exact match or as part of class list
+        # Check for class selector (.class) — exact match
         class_matches = re.findall(r'\.([\w-]+)', selector)
         if class_matches:
             for class_match in class_matches:
                 if class_match in self._used_classes:
                     return True
 
-        # Check for tag selector (extract tag name)
-        # Remove pseudo-classes, combinators, etc.
+        # Check for tag selector — strip pseudo-classes, ids, classes, combinators
         tag_name = re.sub(r'[:#>+~\[].*', '', selector).strip()
         tag_name = re.sub(r'[#\.].*', '', tag_name).strip()
         tag_name = re.sub(r':.*', '', tag_name).strip()
@@ -500,23 +593,16 @@ class CSSParser:
         if tag_name and tag_name in self._used_tags:
             return True
 
-        # Check for complex selectors like "div.container" or "p#header"
-        # Split selector into parts and check each
+        # Check parts of complex selectors
         selector_parts = re.split(r'[#>+~\[\s,\.]', selector)
         for part in selector_parts:
             part = part.strip()
             if not part:
                 continue
-
-            # Exact match for tags
             if part in self._used_tags:
                 return True
-
-            # Exact match for classes (without the dot)
             if part in self._used_classes:
                 return True
-
-            # Exact match for IDs (without the hash)
             if part in self._used_ids:
                 return True
 
@@ -527,4 +613,3 @@ class CSSParser:
         self._used_tags.clear()
         self._used_classes.clear()
         self._used_ids.clear()
-

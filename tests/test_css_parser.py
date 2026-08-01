@@ -4,7 +4,9 @@ Tests for CSS Parser functionality
 
 import os
 import unittest
+
 from docx import Document
+
 from html4docx import HtmlToDocx
 from html4docx.css_parser import CSSParser
 

@@ -115,20 +115,21 @@ def fetch_external_css(url: str) -> Optional[str]:
         if is_url(url):
             # Fetch from URL
             with urllib.request.urlopen(url, timeout=5) as response:
-                # Try to decode as UTF-8, fallback to latin-1
+                # Read body once; try UTF-8, fall back to latin-1
+                content = response.read()
                 try:
-                    return response.read().decode('utf-8')
+                    return content.decode('utf-8')
                 except UnicodeDecodeError:
-                    return response.read().decode('latin-1')
+                    return content.decode('latin-1')
         else:
             # Fetch from local file
             try:
-                with open(url, 'r', encoding='utf-8') as f:
+                with open(url, encoding='utf-8') as f:
                     return f.read()
             except UnicodeDecodeError:
-                with open(url, 'r', encoding='latin-1') as f:
+                with open(url, encoding='latin-1') as f:
                     return f.read()
-    except (urllib.error.URLError, FileNotFoundError, IOError, OSError):
+    except (urllib.error.URLError, FileNotFoundError, OSError):
         logging.warning(f"Could not fetch external CSS from: {url}")
         return None
 
