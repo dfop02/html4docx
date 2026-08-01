@@ -318,6 +318,43 @@ document.save('your_file_name.docx')
 
 You can find all available metadata attributes [here](https://python-docx.readthedocs.io/en/latest/dev/analysis/features/coreprops.html).
 
+#### Logging
+
+html4docx uses Python's standard `logging` module with named, hierarchical loggers (for example, `html4docx.h4d`). The library never logs directly to the root logger and installs a `NullHandler` by default, so it remains silent unless your application configures logging.
+
+**Silence all html4docx logs:**
+
+```python
+import logging
+
+logging.getLogger("html4docx").setLevel(logging.ERROR) # suppresses WARNING and below errors
+```
+
+**Enable debug logging:**
+
+```python
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+logging.getLogger("html4docx").setLevel(logging.DEBUG)
+```
+
+**Django / framework `LOGGING` dict** — add an entry for the `html4docx` parent and it applies to all sub-loggers:
+
+```python
+LOGGING = {
+    "version": 1,
+    "loggers": {
+        "html4docx": {
+            "level": "ERROR",   # suppresses WARNING and below
+            "propagate": False,
+        },
+    },
+}
+```
+
+> **Note:** Unrecognised CSS properties (e.g. `letter-spacing`, `margin`, `padding`) are intentionally logged at `DEBUG` level because they are expected skips for any real-world HTML, not problems. Only genuinely unexpected situations (missing styles, unsupported colour formats, etc.) are logged at `WARNING`.
+
 ### Why
 
 My goal in forking and fixing/updating this package was to complete my current task at work, which involves converting HTML to DOCX. The original package lacked a few features and had some bugs, preventing me from completing the task. Instead of creating a new package from scratch, I preferred to update this one.
@@ -338,6 +375,8 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Fixed bug on styles parsing when style contains multiple colon. | [Dfop02](https://github.com/dfop02)
 - Fixed highlighting a single word | [Lynuxen](https://github.com/Lynuxen)
 - Fix color parsing failing due to invalid colors, falling back to black. | [dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/53)
+- Fix logging noise: replace root-logger calls with named module loggers so consumers can silence or configure html4docx output independently. | [dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/80)
+- Fixed non-breaking spaces (`&nbsp;`) being collapsed into ordinary spaces, which let Word break lines inside amounts like `1 000,00 €` | [Lynuxen](https://github.com/Lynuxen)
 
 **New Features**
 - Add Witdh/Height style to images | [maifeeulasad](https://github.com/maifeeulasad) from [PR](https://github.com/pqzx/html2docx/pull/29)

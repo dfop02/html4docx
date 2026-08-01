@@ -8,10 +8,25 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-ignore = [
-    "W292",  # no newline at end of file
-    "E261",  # at least two spaces before inline comment
-    "E302",  # expected 2 blank lines
-    "E305",  # expected 2 blank lines after class or function definition
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
 ]
-
+ignore = [
+    "W292", # no newline at end of file
+    "E261", # at least two spaces before inline comment
+    "E302", # expected 2 blank lines
+    "E305", # expected 2 blank lines after class or function definition
+    "E501", # Line is too long.
+    "B905", # Checks for `zip` calls without an explicit `strict` parameter
+]

@@ -3,6 +3,38 @@
 Release History
 ---------------
 
+1.1.7 (2026-07-31)
+++++++++++++++++++
+
+**Updates**
+
+- None
+
+**Fixes**
+
+- Non-breaking spaces (``&nbsp;``, U+00A0) and other non-ASCII spaces are no longer collapsed into ordinary spaces, so text kept deliberately on one line stays unbroken. | `Lynuxen <https://github.com/Lynuxen>`_
+
+**New Features**
+
+- None
+
+
+1.1.6 (2026-06-24)
+++++++++++++++++++
+
+**Updates**
+
+- Improve code quality with more Ruff linters
+
+**Fixes**
+
+- Fixes `#80 <https://github.com/dfop02/html4docx/issues/80>`_: Update logging to use module-level logger. | `dfop02 <https://github.com/dfop02>`_
+
+**New Features**
+
+- None
+
+
 1.1.5 (2026-04-17)
 ++++++++++++++++++
 
