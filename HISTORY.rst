@@ -3,6 +3,37 @@
 Release History
 ---------------
 
+1.2.0 (unreleased)
+++++++++++++++++++
+
+**Updates**
+
+- Removed dead commented-out tests and tautological assertions. | `dfop02 <https://github.com/dfop02>`_
+- Strengthened weak ``assertIsNotNone`` assertions to ``assertEqual`` with exact expected values. | `dfop02 <https://github.com/dfop02>`_
+- Added 103 new tests covering compound selectors, CSS cascade, loading order, nested spans, @media skipping, and complex nesting scenarios. | `dfop02 <https://github.com/dfop02>`_
+
+**Fixes**
+
+- Inline styles (e.g. ``font-weight: normal``) now correctly override CSS rules instead of being overridden by them — the inline rule cleanup in ``handle_endtag`` was running before styles were applied. | `dfop02 <https://github.com/dfop02>`_
+- CSS ``!important`` removal is now case-insensitive (``!IMPORTANT`` was detected but not stripped). | `dfop02 <https://github.com/dfop02>`_
+- ``has_rules_for_element`` now correctly returns ``True`` for tag rules when ``attrs={}`` (empty dict was short-circuiting the check). | `dfop02 <https://github.com/dfop02>`_
+- ``mark_element_used`` no longer iterates a string class character by character in the regex fallback path. | `dfop02 <https://github.com/dfop02>`_
+- ``fetch_external_css`` no longer double-reads the HTTP response body (latin-1 fallback returned empty string). | `dfop02 <https://github.com/dfop02>`_
+- ``_resolve_custom_style`` now uses the named ``logger`` instead of root ``logging``, keeping it silenceable. | `dfop02 <https://github.com/dfop02>`_
+- Outer span CSS class styles are now applied to nested text (the CSS parser path only read the innermost span). | `dfop02 <https://github.com/dfop02>`_
+- Nested spans no longer leak inline style rules — cleanup now reads ``data-inline-id`` from each span's own attrs instead of a shared dict entry. | `dfop02 <https://github.com/dfop02>`_
+- Div inline styles are now cleaned up from the CSS parser when the div closes. | `dfop02 <https://github.com/dfop02>`_
+- Removed ``_pending_styles`` / ``_pending_important_styles`` dead-code paths that set attributes never consumed. | `dfop02 <https://github.com/dfop02>`_
+- Removed duplicate ``custom_style`` computation and ``self.tags[tag]`` assignment in ``handle_starttag``. | `dfop02 <https://github.com/dfop02>`_
+- Table cell child parsers now share the parent's CSS parser so ``<style>``/``<link>`` rules apply inside cells. | `dfop02 <https://github.com/dfop02>`_
+
+**New Features**
+
+- Support for compound CSS selectors (``p.class``, ``div#id``, ``.a.b``) — previously stored under the wrong key and silently ignored. | `dfop02 <https://github.com/dfop02>`_
+- ``@media``, ``@keyframes``, ``@import``, and other CSS at-rules are now skipped instead of being misparsed as regular rules. | `dfop02 <https://github.com/dfop02>`_
+- ``<style>`` and ``<link rel="stylesheet">`` tags are now processed in document order so later declarations correctly override earlier ones (matching browser cascade behaviour). | `dfop02 <https://github.com/dfop02>`_
+
+
 1.1.7 (2026-07-31)
 ++++++++++++++++++
 
