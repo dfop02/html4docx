@@ -36,6 +36,11 @@ class OutputTest(unittest.TestCase):
         return Path(f"{test_dir}/assets/css") / Path(filename)
 
     @staticmethod
+    def get_css_link_from_assets(filename: str) -> str:
+        base_url = "https://github.com/dfop02/html4docx/blob/main/tests/assets/css/"
+        return f"{base_url}/{filename}?raw=true"
+
+    @staticmethod
     def hexcolor(color: str) -> str:
         """
         Convert a color string to a hex string.
@@ -104,13 +109,9 @@ class OutputTest(unittest.TestCase):
         cls.table2_html = cls.get_html_from_file("tables2.html")
         cls.table3_html = cls.get_html_from_file("tables3.html")
         cls.small_style_css = cls.get_css_path_from_file("small_style.css")
-        cls.small_style_css_url = (
-            "https://github.com/dfop02/html4docx/blob/feature/support-style-tag/tests/assets/css/small_style.css?raw=true"
-        )
+        cls.small_style_css_url = cls.get_css_link_from_assets("small_style.css")
         cls.large_framework_css = cls.get_css_path_from_file("large_framework.css")
-        cls.large_framework_css_url = (
-            "https://github.com/dfop02/html4docx/blob/feature/support-style-tag/tests/assets/css/large_framework.css?raw=true"
-        )
+        cls.large_framework_css_url = cls.get_css_link_from_assets("large_framework.css")
 
     @classmethod
     def tearDownClass(cls):
