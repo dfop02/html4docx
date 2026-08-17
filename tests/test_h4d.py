@@ -180,9 +180,7 @@ class OutputTest(unittest.TestCase):
 
     def test_add_html_with_tables_accent_style(self):
         table_style = "Light Grid Accent 6"
-        self.document.add_heading(
-            "Test: add html with tables with accent",
-        )
+        self.document.add_heading("Test: add html with tables with accent", level=1)
         self.parser.table_style = table_style
         self.parser.add_html_to_document(self.table_html, self.document)
 
@@ -194,9 +192,7 @@ class OutputTest(unittest.TestCase):
 
     def test_add_html_with_tables_basic_style(self):
         table_style = "Table Grid"
-        self.document.add_heading(
-            "Test: add html with tables with basic style",
-        )
+        self.document.add_heading("Test: add html with tables with basic style", level=1)
         self.parser.table_style = table_style
         self.parser.add_html_to_document(self.table_html, self.document)
 
@@ -207,27 +203,22 @@ class OutputTest(unittest.TestCase):
         self.assertEqual(last_table.style.name, table_style, f"Table style does not match expected '{table_style}'")
 
     def test_add_nested_tables(self):
-        self.document.add_heading(
-            "Test: add nested tables",
-        )
+        self.document.add_heading("Test: add nested tables", level=1)
         self.parser.add_html_to_document(self.table2_html, self.document)
 
     def test_add_nested_tables_basic_style(self):
-        self.document.add_heading(
-            "Test: add nested tables with basic style",
-        )
+        self.document.add_heading("Test: add nested tables with basic style", level=1)
         self.parser.table_style = "Table Grid"
         self.parser.add_html_to_document(self.table2_html, self.document)
 
     def test_add_nested_tables_accent_style(self):
-        self.document.add_heading(
-            "Test: add nested tables with accent style",
-        )
+        self.document.add_heading("Test: add nested tables with accent style", level=1)
         self.parser.table_style = "Light Grid Accent 6"
         self.parser.add_html_to_document(self.table2_html, self.document)
 
     def test_add_html_skip_tables(self):
         """When tables option is False, no tables should be added to the document."""
+        self.document.add_heading("Test: add html with table, but skip table option", level=1)
         before_count = len(self.document.tables)
         self.parser.options["tables"] = False
         self.parser.add_html_to_document(self.table_html, self.document)
