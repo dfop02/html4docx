@@ -3,6 +3,18 @@
 Release History
 ---------------
 
+1.2.1 (2026-xx-xx)
+++++++++++++++++++
+
+**Updates**
+- None
+
+**Fixes**
+- None
+
+**New Features**
+- None
+
 1.2.0 (2026-08-16)
 ++++++++++++++++++
 
