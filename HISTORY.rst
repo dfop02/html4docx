@@ -7,7 +7,7 @@ Release History
 ++++++++++++++++++
 
 **Updates**
-- None
+- Explicitly declare the setuptools build backend in `pyproject.toml`.
 
 **Fixes**
 - None

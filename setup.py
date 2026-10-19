@@ -8,7 +8,7 @@ VERSION = '1.2.0'
 setup(
     name                 = 'html-for-docx',
     version              = VERSION,
-    description          = 'Convert HTML to Docx easily and fastly',
+    description          = 'Convert HTML to DOCX easily and quickly',
     long_description     = README,
     license              = 'MIT',
     packages             = find_packages(),
@@ -21,14 +21,13 @@ setup(
     zip_safe             = False,
     url                  = 'https://github.com/dfop02/html4docx',
     project_urls = {
-        "Changelog": "https://github.com/dfop02/html4docx/blob/master/HISTORY.rst",
+        "Changelog": "https://github.com/dfop02/html4docx/blob/main/HISTORY.rst",
         "Bug Tracker": "https://github.com/dfop02/html4docx/issues",
         "Repository": "https://github.com/dfop02/html4docx"
     },
     download_url         = f'https://github.com/dfop02/html4docx/archive/{VERSION}.tar.gz',
     classifiers          = [
         'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
         'Topic :: Software Development :: Build Tools',
         'Topic :: Software Development :: Libraries',
         'Topic :: Text Processing',

@@ -120,7 +120,7 @@ All table styles we support can be found [here](https://python-docx.readthedocs.
 
 ## Options
 
-There is 5 options that you can use to personalize your execution:
+There is 7 options that you can use to personalize your execution:
 - Disable Images: Ignore all images.
 - Disable Tables: If you do it, it will render just the raw tables content
 - Disable Styles: Ignore all CSS styles. Also disables Style-Map.
