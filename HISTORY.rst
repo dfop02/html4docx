@@ -3,17 +3,38 @@
 Release History
 ---------------
 
-1.3.0 (2026-xx-xx)
+1.3.0 (unreleased)
 ++++++++++++++++++
 
+**Security**
+
+- Fixed SSRF (CWE-918) and arbitrary local file read (CWE-73 / CWE-22) when converting untrusted HTML through ``<img src>`` and ``<link rel="stylesheet" href>``. All versions up to and including 1.2.1 are affected. See `GHSA-xh3w-67hm-58x9 <https://github.com/dfop02/html4docx/security/advisories/GHSA-xh3w-67hm-58x9>`_ . | `dfop02 <https://github.com/dfop02>`_
+
+  - Remote fetches are restricted to ``http`` and ``https``. ``file://``, ``ftp://`` and other schemes are refused, including through redirects.
+  - Connections to non-public IPs (loopback, private, link-local/cloud metadata, reserved, multicast) are refused. The check runs on the connected IP for every redirect hop, which also prevents DNS rebinding.
+  - Local files are confined to ``local-files-root``, with ``..`` and symlinks resolved first.
+  - Each resource is capped at ``max-resource-bytes``.
+
+**Breaking changes**
+
+- Local files (paths and ``file://``) are disabled by default. Set ``parser.options['local-files-root']`` to the directory that may be read. Relative paths are now resolved against it instead of the current working directory.
+- Resources on private network addresses (e.g. intranet servers) are blocked by default. Add them to ``parser.options['private-network-allowlist']``.
+- ``HTTP_PROXY`` / ``HTTPS_PROXY`` environment variables are no longer honored when fetching remote resources.
+
 **Updates**
-- None
+
+- Resource fetching moved from ``html4docx.utils`` to the new ``html4docx.resources`` module. ``utils.fetch_image``, ``utils.fetch_image_data`` and ``utils.fetch_external_css`` are still importable for backward compatibility and accept an optional ``policy`` argument. | `dfop02 <https://github.com/dfop02>`_
+- README: options reorganized, new external resources security and migration sections, and outdated examples fixed. | `dfop02 <https://github.com/dfop02>`_
+- Add ``pytest-xdist`` to ``pyproject.toml`` and ``requirements_test.txt`` to speed up tests on CI. | `dfop02 <https://github.com/dfop02>`_
+- Add Python 3.15 to the CI tests matrix and add 3.15 to the package classifiers. | `dfop02 <https://github.com/dfop02>`_
 
 **Fixes**
-- None
+
+- Malformed ``data:image`` URIs no longer raise an exception; the image is skipped and a warning is logged. | `dfop02 <https://github.com/dfop02>`_
 
 **New Features**
-- None
+
+- New options: ``allow-remote-resources``, ``allow-private-network``, ``private-network-allowlist``, ``local-files-root`` and ``max-resource-bytes``. | `dfop02 <https://github.com/dfop02>`_
 
 1.2.1 (2026-10-19)
 ++++++++++++++++++

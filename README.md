@@ -4,9 +4,9 @@
 ![Version](https://img.shields.io/pypi/v/html-for-docx.svg)
 ![Supported Versions](https://img.shields.io/pypi/pyversions/html-for-docx.svg)
 
-Convert html to docx, this project is a fork from descontinued [pqzx/html2docx](https://github.com/pqzx/html2docx).
+Convert html to docx, this project is a fork from the discontinued [pqzx/html2docx](https://github.com/pqzx/html2docx).
 
-## How install
+## How to install
 
 `pip install html-for-docx`
 
@@ -17,11 +17,14 @@ Convert html to docx, this project is a fork from descontinued [pqzx/html2docx](
 Add HTML-formatted content to an existing `.docx` document
 
 ```python
+from docx import Document
 from html4docx import HtmlToDocx
 
+document = Document('existing_file.docx')
 parser = HtmlToDocx()
 html_string = '<h1>Hello world</h1>'
-parser.add_html_to_document(html_string, filename_docx)
+parser.add_html_to_document(html_string, document)
+document.save('existing_file.docx')
 ```
 
 You can use `python-docx` to manipulate directly the file, here an example
@@ -54,9 +57,9 @@ for part in ['First', 'Second', 'Third']:
 parser.save('your_file_name.docx')
 ```
 
-When you pass a `Document` object, you can either use `document.save()` from python-docx or `parser.save()` from html4docx, both works well.
+When you pass a `Document` object, you can either use `document.save()` from python-docx or `parser.save()` from html4docx, both work well.
 
-Both supports saving it in-memory, using `BytesIO`.
+Both support saving it in-memory, using `BytesIO`.
 
 ```python
 from io import BytesIO
@@ -87,6 +90,15 @@ parser = HtmlToDocx()
 parser.parse_html_file(input_html_file_path, output_docx_file_path)
 # You can also define a encoding, by default is utf-8
 parser.parse_html_file(input_html_file_path, output_docx_file_path, 'utf-8')
+```
+
+If the HTML file references local images or stylesheets, allow the folder that holds them (see [External resources security](#external-resources-security)):
+
+```python
+import os
+
+parser.options['local-files-root'] = os.path.dirname(os.path.abspath(input_html_file_path))
+parser.parse_html_file(input_html_file_path, output_docx_file_path)
 ```
 
 #### Convert files from a string
@@ -120,30 +132,61 @@ All table styles we support can be found [here](https://python-docx.readthedocs.
 
 ## Options
 
-There is 7 options that you can use to personalize your execution:
-- Disable Images: Ignore all images.
-- Disable Tables: If you do it, it will render just the raw tables content
-- Disable Styles: Ignore all CSS styles. Also disables Style-Map.
-- Disable Fix-HTML: Use BeautifulSoap to Fix possible HTML missing tags.
-- Disable Style-Map: Ignore CSS classes to word styles mapping
-- Disable Tag-Override: Ignore html tag overrides.
-- Disable HTML-Comments: Ignore all "<!-- ... -->" comments from HTML.
-
-This is how you could disable them if you want:
+All options are set through `parser.options` before parsing. Copy only the ones you need to change:
 
 ```python
 from html4docx import HtmlToDocx
 
 parser = HtmlToDocx()
-parser.options['images'] = False # Default True
-parser.options['tables'] = False # Default True
-parser.options['styles'] = False # Default True
-parser.options['fix-html'] = False # Default True
-parser.options['html-comments'] = False # Default False
-parser.options['style-map'] = False # Default True
-parser.options['tag-override'] = False # Default True
+
+# --- Rendering ---
+parser.options['images'] = False         # Default True.  False ignores all images.
+parser.options['tables'] = False         # Default True.  False renders only the raw table content.
+parser.options['styles'] = False         # Default True.  False ignores all CSS (also disables 'style-map').
+parser.options['fix-html'] = False       # Default True.  False skips BeautifulSoup fixing of missing HTML tags.
+parser.options['style-map'] = False      # Default True.  False ignores CSS class to Word style mapping.
+parser.options['tag-override'] = False   # Default True.  False ignores HTML tag overrides.
+parser.options['html-comments'] = True   # Default False. True renders "<!-- ... -->" comments.
+
+# --- External resources security (see the section below) ---
+parser.options['allow-remote-resources'] = False                    # Default True.  False skips all http(s) images and stylesheets.
+parser.options['private-network-allowlist'] = ["10.0.5.20", "192.168.10.0/24"]  # Default []. Private IPs/CIDRs that may be fetched.
+parser.options['local-files-root'] = '/srv/app/assets'              # Default None.  Directory local files may be read from (None = disabled).
+parser.options['max-resource-bytes'] = 5 * 1024 * 1024              # Default 10 MB. Maximum size of each fetched resource.
+parser.options['allow-private-network'] = False                     # Default False. True allows EVERY private address and ignores the allowlist: trusted HTML only!
+
 docx = parser.parse_html_string(input_html_file_string)
 ```
+
+### External resources security
+
+HTML is often untrusted input, so images (`<img src>`) and stylesheets (`<link rel="stylesheet">`) are fetched under a restrictive policy by default:
+
+- **Remote resources:** only `http`/`https` are fetched. `file://`, `ftp://` and any other scheme are always refused. Inline images (`data:image/...`) keep working.
+- **Private network:** requests to non-public addresses (loopback, private ranges, link-local such as the cloud metadata endpoint `169.254.169.254`, reserved, multicast) are refused. The check is applied to the IP actually connected to, on every redirect hop, so DNS rebinding and open redirects can't bypass it.
+- **Local files:** disabled by default. When `local-files-root` is set, only files inside that directory (after resolving `..` and symlinks) can be read, and relative paths are resolved against it.
+- **Size:** each resource, remote or local, is limited to `max-resource-bytes`.
+
+**Reaching an internal server.** Add its addresses to `private-network-allowlist`. Only those IPs/CIDRs are opened, and everything else stays blocked. Public addresses (CDNs, websites) never need to be listed. Keep entries as narrow as possible: a broad range such as `169.254.0.0/16` also opens cloud metadata endpoints. Invalid entries raise `ValueError` instead of being silently ignored. `allow-private-network` opens every private address at once and should only be used when the HTML is fully trusted.
+
+> **Converting HTML from users?** Keep `allow-private-network` disabled, keep `private-network-allowlist` as small as possible and never point `local-files-root` at a directory containing sensitive files. If you don't need external images or stylesheets at all, set `allow-remote-resources` to `False`.
+
+Blocked or unavailable resources are skipped and a warning is logged (logger `html4docx.resources`); the conversion itself does not fail.
+
+#### Migrating from <=1.2.x
+
+Public `http`/`https` URLs and `data:image/...` images work as before. What changed:
+
+- **Local paths** in `<img src>` and `<link href>` are disabled by default. Set `local-files-root` to the folder that holds your assets. Relative paths are now resolved against it, not the current working directory:
+
+```python
+import os
+
+parser.options['local-files-root'] = os.path.abspath('./assets')
+```
+
+- **Private network addresses** (e.g. an intranet server) are blocked. Add them to `private-network-allowlist`.
+- **Proxies:** `HTTP_PROXY` / `HTTPS_PROXY` environment variables are ignored, because routing through a proxy would bypass the private network protection. If your server can only reach the internet through a proxy, remote resources will not load. Embed images as `data:image/...` URIs, put CSS in an inline `<style>` tag, or serve the files from `local-files-root`.
 
 ## Extended Styling Features
 
@@ -198,11 +241,11 @@ If a referenced custom style does not exist in the document at generation time, 
 Set custom default paragraph style:
 
 ```python
-# Use 'Body' as default (default behavior)
-parser = HtmlToDocx(default_paragraph_style='Body')
+# Word's 'Normal' style is used by default
+parser = HtmlToDocx()
 
-# Use Word's default 'Normal' style
-parser = HtmlToDocx(default_paragraph_style=None)
+# Use a custom style, e.g. 'Body', as default
+parser = HtmlToDocx(default_paragraph_style='Body')
 ```
 
 ## CSS
@@ -218,7 +261,7 @@ Full support for inline CSS styles on any element:
 
 #### External CSS Styles
 
-Limited support for external CSS styles (local or url):
+Limited support for external CSS styles (local or url). Remote stylesheets follow the [External resources security](#external-resources-security) rules, and local ones require `local-files-root`:
 
 **HTML**
 
@@ -227,8 +270,8 @@ Limited support for external CSS styles (local or url):
     <title>My page</title>
     <!-- Must contain rel="stylesheet" otherwise will be ignored -->
     <link rel="stylesheet" href="https://my-external-css.domain.com/style.css">
-    <!-- OR -->
-    <link rel="stylesheet" href="../my_local/css/style.css">
+    <!-- OR, a file inside local-files-root -->
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div class="classFromExternalCss">
@@ -267,7 +310,7 @@ p {
 - text-align
 - background-color
 - Border (for tables)
-- Verticial Align (for tables)
+- Vertical Align (for tables)
 
 ### !important Flag Support
 
@@ -305,22 +348,23 @@ parser = HtmlToDocx()
 parser.set_initial_attrs(document)
 metadata = parser.metadata
 
+# Set new metadata
+metadata.set_metadata(author="Jane", created="2025-07-18T09:30:00")
+
 # You can get metadata as dict
 metadata_json = metadata.get_metadata()
 print(metadata_json['author']) # Jane
-# or just print all metadata if if you want
+# or just print all metadata if you want
 metadata.get_metadata(print_result=True)
 
-# Set new metadata
-metadata.set_metadata(author="Jane", created="2025-07-18T09:30:00")
 document.save('your_file_name.docx')
 ```
 
 You can find all available metadata attributes [here](https://python-docx.readthedocs.io/en/latest/dev/analysis/features/coreprops.html).
 
-#### Logging
+## Logging
 
-html4docx uses Python's standard `logging` module with named, hierarchical loggers (for example, `html4docx.h4d`). The library never logs directly to the root logger and installs a `NullHandler` by default, so it remains silent unless your application configures logging.
+html4docx uses Python's standard `logging` module with named, hierarchical loggers (for example, `html4docx.h4d` and `html4docx.resources`). The library never logs directly to the root logger and installs a `NullHandler` by default, so it remains silent unless your application configures logging.
 
 **Silence all html4docx logs:**
 
@@ -353,13 +397,13 @@ LOGGING = {
 }
 ```
 
-> **Note:** Unrecognised CSS properties (e.g. `letter-spacing`, `margin`, `padding`) are intentionally logged at `DEBUG` level because they are expected skips for any real-world HTML, not problems. Only genuinely unexpected situations (missing styles, unsupported colour formats, etc.) are logged at `WARNING`.
+> **Note:** Unrecognised CSS properties (e.g. `letter-spacing`, `margin`, `padding`) are intentionally logged at `DEBUG` level because they are expected skips for any real-world HTML, not problems. Only genuinely unexpected situations (missing styles, unsupported colour formats, blocked external resources, etc.) are logged at `WARNING`.
 
-### Why
+## Why
 
 My goal in forking and fixing/updating this package was to complete my current task at work, which involves converting HTML to DOCX. The original package lacked a few features and had some bugs, preventing me from completing the task. Instead of creating a new package from scratch, I preferred to update this one.
 
-### Differences (fixes and new features)
+## Differences (fixes and new features)
 
 **Fixes**
 - Fix `table_style` not working | [Dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/11)
@@ -377,9 +421,10 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Fix color parsing failing due to invalid colors, falling back to black. | [dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/53)
 - Fix logging noise: replace root-logger calls with named module loggers so consumers can silence or configure html4docx output independently. | [dfop02](https://github.com/dfop02) from [Issue](https://github.com/dfop02/html4docx/issues/80)
 - Fixed non-breaking spaces (`&nbsp;`) being collapsed into ordinary spaces, which let Word break lines inside amounts like `1 000,00 €` | [Lynuxen](https://github.com/Lynuxen)
+- Fix SSRF and arbitrary local file read through `<img src>` and `<link rel="stylesheet">` when converting untrusted HTML | [dfop02](https://github.com/dfop02)
 
 **New Features**
-- Add Witdh/Height style to images | [maifeeulasad](https://github.com/maifeeulasad) from [PR](https://github.com/pqzx/html2docx/pull/29)
+- Add Width/Height style to images | [maifeeulasad](https://github.com/maifeeulasad) from [PR](https://github.com/pqzx/html2docx/pull/29)
 - Support px, cm, pt, in, rem, em, mm, pc and % units for styles | [Dfop02](https://github.com/dfop02)
 - Improve performance on large tables | [dashingdove](https://github.com/dashingdove) from [PR](https://github.com/pqzx/html2docx/pull/58)
 - Support for HTML Pagination | [Evilran](https://github.com/Evilran) from [PR](https://github.com/pqzx/html2docx/pull/39)
@@ -393,11 +438,12 @@ My goal in forking and fixing/updating this package was to complete my current t
 - Support to metadata | [Dfop02](https://github.com/dfop02)
 - Add support to table cells style (border, background-color, width, height, margin) | [Dfop02](https://github.com/dfop02)
 - Being able to use inline images on same paragraph. | [Dfop02](https://github.com/dfop02)
-- Refactory Tests to be more consistent and less 'human validation' | [Dfop02](https://github.com/dfop02)
+- Refactor Tests to be more consistent and less 'human validation' | [Dfop02](https://github.com/dfop02)
 - Support for common CSS properties for text | [Lynuxen](https://github.com/Lynuxen)
 - Support for CSS classes to Word Styles | [raithedavion](https://github.com/raithedavion)
 - Support for HTML tag style overrides | [raithedavion](https://github.com/raithedavion)
 - Support style tag and external CSS styles | [Dfop02](https://github.com/dfop02)
+- Security policy for external resources (`allow-remote-resources`, `private-network-allowlist`, `allow-private-network`, `local-files-root`, `max-resource-bytes`) | [dfop02](https://github.com/dfop02)
 
 ## To-Do
 
@@ -427,14 +473,25 @@ These are the ideas I'm planning to work on in the future to make this project e
    - Would be necessary a responsive CSS, that's not applied to Docx.
 
 4. **@import:**
-   - Do not support `@import` em CSS.
+   - Do not support `@import` in CSS.
    - We can try implement it in future if necessary.
+
+5. **CSS Variables:**
+   - Do not support `var(--name)` values. Frameworks that define colors through variables (e.g. Bootstrap 5 `text-danger`) fall back to black.
+
+### External resources
+- Proxies configured through `HTTP_PROXY` / `HTTPS_PROXY` are not used (see [Migrating from <=1.2.x](#migrating-from-12x)).
+- `data:` URIs are only supported for images. Stylesheets must be remote, local (inside `local-files-root`) or inline in a `<style>` tag.
 
 ## Project Guidelines
 
 This project is primarily designed for compatibility with Microsoft Word, but it currently works well with LibreOffice and Google Docs, based on our testing. The goal is to maintain this cross-platform harmony while continuing to implement fixes and updates.
 
 > ⚠️ However, please note that Microsoft Word is the priority. Bugs or issues specific to other editors (e.g., LibreOffice or Google Docs) may be considered, but fixing them is secondary to maintaining full compatibility with Word.
+
+## Security
+
+If you find a security vulnerability, please **do not open a public issue**. Report it privately through [GitHub Security Advisories](https://github.com/dfop02/html4docx/security/advisories/new).
 
 ## License
 

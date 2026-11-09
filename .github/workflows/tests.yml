@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false # IMPORTANT: run all Python versions even if one fails
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
 
     steps:
     - uses: actions/checkout@v4
@@ -34,7 +34,7 @@ jobs:
         ruff check . --output-format=concise
     - name: Run tests
       run: |
-        python -m pytest
+        python -m pytest -n auto --dist loadscope
     - name: Upload test.docx
       uses: actions/upload-artifact@v4
       with:

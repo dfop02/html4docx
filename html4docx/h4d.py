@@ -15,7 +15,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import RGBColor
 
-from html4docx import constants, utils
+from html4docx import constants, resources, utils
 from html4docx.css_parser import CSSParser
 from html4docx.metadata import Metadata
 
@@ -36,6 +36,10 @@ class HtmlToDocx(HTMLParser):
         self.style_map = style_map or constants.DEFAULT_STYLE_MAP
         self.tag_style_overrides = tag_style_overrides or constants.DEFAULT_TAG_OVERRIDES
         self.default_paragraph_style = default_paragraph_style or constants.DEFAULT_PARAGRAPH_STYLE
+
+    def _resource_policy(self) -> resources.ResourcePolicy:
+        """Security policy for external resources, built from self.options."""
+        return resources.ResourcePolicy.from_options(self.options)
 
     def set_initial_attrs(self, document=None):
         self.tags = {
@@ -1230,7 +1234,7 @@ class HtmlToDocx(HTMLParser):
         width = utils.unit_converter(utils.add_px(current_attrs["width"])) if "width" in current_attrs else None
 
         # fetch image
-        image = utils.fetch_image_data(src)
+        image = resources.fetch_image_data(src, self._resource_policy())
 
         if not self.paragraph:
             self.paragraph = self.doc.add_paragraph()
@@ -2121,7 +2125,7 @@ class HtmlToDocx(HTMLParser):
                 continue
 
             # Fetch external CSS
-            css_content = utils.fetch_external_css(href)
+            css_content = resources.fetch_external_css(href, self._resource_policy())
             if css_content:
                 # Use selective parsing to only load relevant rules
                 # This prevents loading thousands of unused CSS rules from frameworks
@@ -2140,7 +2144,7 @@ class HtmlToDocx(HTMLParser):
         for match in link_pattern.finditer(html):
             href = match.group(1)
             if href:
-                css_content = utils.fetch_external_css(href)
+                css_content = resources.fetch_external_css(href, self._resource_policy())
                 if css_content:
                     # Use selective parsing
                     self.css_parser.parse_css(css_content, selective=True)
@@ -2169,7 +2173,7 @@ class HtmlToDocx(HTMLParser):
                     continue
                 href = element.get("href") or element.get("data-href")
                 if href:
-                    css_content = utils.fetch_external_css(href)
+                    css_content = resources.fetch_external_css(href, self._resource_policy())
                     if css_content:
                         self.css_parser.parse_css(css_content, selective=True)
                 element.decompose()

@@ -362,6 +362,7 @@ class ExternalCSSTest(unittest.TestCase):
         self.document = Document()
         self.parser = HtmlToDocx()
         self.test_dir = os.path.abspath(os.path.dirname(__file__))
+        self.parser.options["local-files-root"] = self.test_dir
 
     def test_external_css_from_local_file(self):
         """Test loading CSS from local file via <link> tag"""
@@ -530,4 +531,3 @@ class ExternalCSSTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -1,12 +1,7 @@
-import base64
 import logging
 import os
 import re
-import urllib
-import urllib.request
 from enum import Enum
-from io import BytesIO
-from typing import Optional
 from urllib.parse import urlparse
 
 from docx.shared import Cm, Inches, Mm, Pt, RGBColor
@@ -62,76 +57,6 @@ def adapt_font_size(size: str):
 
 def remove_important_from_style(text: str):
     return re.sub("!important", "", text, flags=re.IGNORECASE).strip()
-
-
-def fetch_image(url: str):
-    """
-    Attempts to fetch an image from a url, with 5s timeout.
-    If successful returns a bytes object, else returns None
-
-    :return:
-    """
-    try:
-        with urllib.request.urlopen(url, timeout=5) as response:
-            return BytesIO(response.read())
-    except urllib.error.URLError:
-        return None
-
-
-def fetch_image_data(src: str):
-    """Fetches image data from a URL or local file."""
-    if src.startswith("data:image/"):  # Handle Base64
-        _, encoded = src.split(",", 1)
-        return BytesIO(base64.b64decode(encoded))
-
-    elif is_url(src):  # Handle URLs
-        return fetch_image(src)
-
-    else:  # Handle Local Files
-        try:
-            return open(src, "rb")
-        except FileNotFoundError:
-            return None
-
-
-def fetch_external_css(url: str) -> Optional[str]:
-    """
-    Fetch external CSS from URL or local file.
-
-    Args:
-        url (str): URL or local file path to CSS file
-
-    Returns:
-        Optional[str]: CSS content as string, or None if fetch fails
-
-    Example:
-        css = fetch_external_css('https://example.com/style.css')
-        css = fetch_external_css('./styles/custom.css')
-    """
-    if not url:
-        return None
-
-    try:
-        if is_url(url):
-            # Fetch from URL
-            with urllib.request.urlopen(url, timeout=5) as response:
-                # Read body once; try UTF-8, fall back to latin-1
-                content = response.read()
-                try:
-                    return content.decode('utf-8')
-                except UnicodeDecodeError:
-                    return content.decode('latin-1')
-        else:
-            # Fetch from local file
-            try:
-                with open(url, encoding='utf-8') as f:
-                    return f.read()
-            except UnicodeDecodeError:
-                with open(url, encoding='latin-1') as f:
-                    return f.read()
-    except (urllib.error.URLError, FileNotFoundError, OSError):
-        logging.warning(f"Could not fetch external CSS from: {url}")
-        return None
 
 
 def parse_dict_string(string: str, separator: str = ";"):

@@ -529,8 +529,9 @@ class TestCSSLoadingOrder(unittest.TestCase):
     def setUp(self):
         self.css_dir = os.path.join(test_dir, "assets", "css")
 
-    def _parse(self, html):
+    def _parse(self, html, local_root=test_dir):
         parser = HtmlToDocx()
+        parser.options["local-files-root"] = local_root
         return parser.parse_html_string(html)
 
     def test_style_tag_before_link_tag(self):
@@ -543,6 +544,7 @@ class TestCSSLoadingOrder(unittest.TestCase):
         <p>Test</p>
         """
         parser = HtmlToDocx()
+        parser.options["local-files-root"] = test_dir
         parser.add_html_to_document(html, Document())
 
         # Both style tag and CSS file have p rule.
@@ -563,6 +565,7 @@ class TestCSSLoadingOrder(unittest.TestCase):
         <p>Test</p>
         """
         parser = HtmlToDocx()
+        parser.options["local-files-root"] = test_dir
         parser.add_html_to_document(html, Document())
 
         self.assertIn("p", parser.css_parser.tag_rules)
@@ -576,6 +579,7 @@ class TestCSSLoadingOrder(unittest.TestCase):
         <p>Test</p>
         """
         parser = HtmlToDocx()
+        parser.options["local-files-root"] = test_dir
         parser.add_html_to_document(html, Document())
         # Second style tag overrides first
         self.assertEqual(parser.css_parser.tag_rules["p"]["color"], "blue")
@@ -592,6 +596,7 @@ class TestCSSLoadingOrder(unittest.TestCase):
         <p>Test</p>
         """
         parser = HtmlToDocx()
+        parser.options["local-files-root"] = test_dir
         parser.add_html_to_document(html, Document())
         # test_styles.css loaded second → its p color wins
         self.assertEqual(parser.css_parser.tag_rules["p"]["color"], "blue")
@@ -605,6 +610,7 @@ class TestCSSLoadingOrder(unittest.TestCase):
         </body>
         """
         parser = HtmlToDocx()
+        parser.options["local-files-root"] = test_dir
         parser.add_html_to_document(html, Document())
         self.assertTrue(parser.css_parser.has_rules())
         self.assertIn("p", parser.css_parser.tag_rules)
@@ -793,8 +799,9 @@ class TestExternalCSSBehavior(unittest.TestCase):
     def setUp(self):
         self.css_dir = os.path.join(test_dir, "assets", "css")
 
-    def _parse(self, html):
+    def _parse(self, html, local_root=test_dir):
         parser = HtmlToDocx()
+        parser.options["local-files-root"] = local_root
         return parser.parse_html_string(html)
 
     def test_external_css_applied_to_output(self):
@@ -867,7 +874,7 @@ class TestExternalCSSBehavior(unittest.TestCase):
             tmp_path = f.name
         try:
             html = f'<link rel="stylesheet" href="{tmp_path}"><p>Temp CSS</p>'
-            doc = self._parse(html)
+            doc = self._parse(html, local_root=os.path.dirname(tmp_path))
             run = _run_for_text(doc, "Temp CSS")
             self.assertIsNotNone(run)
             self.assertEqual(_run_color(run), RGBColor(255, 0, 0))
@@ -1130,8 +1137,9 @@ class TestCSSWithExistingFeaturesRegression(unittest.TestCase):
 class TestComplexCSSScenarios(unittest.TestCase):
     """Complex nesting, compound selectors, and multi-level CSS interactions."""
 
-    def _parse(self, html):
+    def _parse(self, html, local_root=test_dir):
         parser = HtmlToDocx()
+        parser.options["local-files-root"] = local_root
         return parser.parse_html_string(html)
 
     def test_span_compound_selector(self):
@@ -1333,7 +1341,7 @@ class TestComplexCSSScenarios(unittest.TestCase):
             <link rel="stylesheet" href="{tmp}">
             <p class="style-tag ext-class" style="font-weight: bold;">Triple styled</p>
             """
-            doc = self._parse(html)
+            doc = self._parse(html, local_root=os.path.dirname(tmp))
             run = _run_for_text(doc, "Triple styled")
             self.assertIsNotNone(run)
             # From <style> tag

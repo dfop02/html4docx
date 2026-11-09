@@ -10,6 +10,9 @@ MAX_INDENT = 5.5  # To stop indents going off the page
 # Style to use with tables. By default no style is used.
 DEFAULT_TABLE_STYLE = None
 
+DEFAULT_MAX_RESOURCE_BYTES = 10 * 1024 * 1024
+REMOTE_RESOURCE_SCHEMES = ("http", "https")
+
 DEFAULT_OPTIONS = {
     'fix-html': True,
     'images': True,
@@ -18,6 +21,12 @@ DEFAULT_OPTIONS = {
     'html-comments': False,
     "style-map": True,
     "tag-override": True,
+    # Security of external resources (<img src>, <link rel="stylesheet">)
+    "allow-remote-resources": True,   # fetch http(s) resources
+    "allow-private-network": False,   # allow loopback/private/link-local/metadata IPs (SSRF!)
+    "private-network-allowlist": [],  # IPs/CIDRs allowed even when private, e.g. ["10.0.5.20/32"]
+    "local-files-root": None,         # directory allowed for local files; None = local files disabled
+    "max-resource-bytes": 10 * 1024 * 1024,
 }
 
 DEFAULT_TABLE_ROW_SELECTORS = [
