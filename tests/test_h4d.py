@@ -120,6 +120,7 @@ class OutputTest(unittest.TestCase):
 
     def setUp(self):
         self.parser = HtmlToDocx()
+        self.parser.options["local-files-root"] = os.path.dirname(test_dir)
 
     # ============================== Tests ============================== #
     def test_save_docx_by_filename(self):
@@ -3110,6 +3111,7 @@ and blank lines.
         """
 
         parser = HtmlToDocx()
+        parser.options["local-files-root"] = test_dir
         parser.add_html_to_document(html, self.document)
 
         # Verify CSS was loaded
